@@ -94,7 +94,6 @@ yarn-cache/
 
 # Docs and Workflow Outputs
 docs/
-.github/workflows/
 
 # Compiled Razor Views
 scopedcss/
