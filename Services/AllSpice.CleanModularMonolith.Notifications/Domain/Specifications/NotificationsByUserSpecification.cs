@@ -8,7 +8,7 @@ public sealed class NotificationsByUserSpecification : Specification<Notificatio
     public NotificationsByUserSpecification(string userId)
     {
         Query.Where(notification => notification.Recipient.UserId == userId)
-             .OrderByDescending(notification => notification.CreatedUtc);
+             .OrderByDescending(notification => notification.CreatedUtc.UtcDateTime);
     }
 }
 

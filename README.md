@@ -116,7 +116,7 @@ The solution includes configuration placeholders for Microsoft Entra External ID
 
 ## License
 
-Choose a license that matches your organization's needs and update this section.
+MIT
 
 ---
 
