@@ -1,0 +1,24 @@
+<Solution>
+  <Folder Name="/BFF/" />
+  <Folder Name="/Gateway/">
+    <Project Path="AllSpice.CleanModularMonolith.ApiGateway/AllSpice.CleanModularMonolith.ApiGateway.csproj" />
+  </Folder>
+  <Folder Name="/Services/">
+    <Project Path="Services/AllSpice.CleanModularMonolith.Notifications/AllSpice.CleanModularMonolith.Notifications.csproj" />
+  </Folder>
+  <Folder Name="/Shared/">
+    <Project Path="Shared/AllSpice.CleanModularMonolith.Notifications.Contracts/AllSpice.CleanModularMonolith.Notifications.Contracts.csproj" />
+    <Project Path="Shared/AllSpice.CleanModularMonolith.RealTime/AllSpice.CleanModularMonolith.RealTime.csproj" />
+    <Project Path="Shared/AllSpice.CleanModularMonolith.SharedKernel/AllSpice.CleanModularMonolith.SharedKernel.csproj" />
+  </Folder>
+  <Folder Name="/_Host/">
+    <Project Path="AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModularMonolith.AppHost.csproj" />
+    <Project Path="AllSpice.CleanModularMonolith.ServiceDefaults/AllSpice.CleanModularMonolith.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/__SolutionItems/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+</Solution>

@@ -1,0 +1,7 @@
+@AllSpice.CleanModularMonolith.ApiGateway_HostAddress = http://localhost:5120
+
+GET {{AllSpice.CleanModularMonolith.ApiGateway_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+

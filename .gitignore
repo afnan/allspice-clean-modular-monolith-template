@@ -1,0 +1,110 @@
+# Logs and Operating System Files
+*.log
+*.DS_Store
+Thumbs.db
+.cursor/*
+
+# User-Specific Files
+*.suo
+*.user
+*.userosscache
+*.userprefs
+
+# Build Folders
+bin/
+obj/
+**/obj/**/
+**/tests/Debug//**/
+Debug/
+
+Release/
+dist/
+publish/
+
+# Static Web Assets
+src/Handel360.Frontend/Handel360.Frontend.Shared/wwwroot/css/tailwind.css
+**/wwwroot/css/tailwind.css
+
+wwwroot/**/*.map
+wwwroot/**/*.gz
+wwwroot/**/*.br
+src/Handel360.ApiService/wwwroot/uploads/
+src/Handel360.ApiService/**.txt
+
+# Node.js Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE Settings
+.vscode/
+.idea/
+*.iml
+.vs/
+
+# Generated Files
+*.dll
+*.exe
+*.pdb
+*.cache
+*.ilk
+*.idb
+*.tlog
+*.csproj.user
+*.rsuser
+*.sln.docstates
+*.tmp
+
+# Entity Framework
+# Migrations/
+App_Data/
+
+# Rider Ignore Rules
+.idea/
+*.iml
+
+# Coverage and Testing
+coverage/
+TestResults/
+*.coverage
+*.coveragexml
+*.trx
+*.testlog
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+packages/
+
+# Configuration Files
+*.config
+*.local.json
+*.env
+*.local.settings.json
+
+# # Tailwind and PostCSS
+# tailwind.config.js
+# postcss.config.js
+
+# Cache Files
+.cache/
+npm-cache/
+yarn-cache/
+
+# Docs and Workflow Outputs
+docs/
+.github/workflows/
+
+# Compiled Razor Views
+scopedcss/
+staticwebassets/
+
+# Specific to Blazor and WASM Projects
+**/wwwroot/_framework/
+**/wwwroot/_content/
+.azure
+
+# Custom
+.cursor/
+.cursor/
