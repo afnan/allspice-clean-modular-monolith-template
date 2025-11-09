@@ -5,17 +5,20 @@
   </Folder>
   <Folder Name="/Services/">
     <Project Path="Services/AllSpice.CleanModularMonolith.Notifications/AllSpice.CleanModularMonolith.Notifications.csproj" />
+    <Project Path="Services/AllSpice.CleanModularMonolith.Identity/AllSpice.CleanModularMonolith.Identity.csproj" />
   </Folder>
   <Folder Name="/Shared/">
     <Project Path="Shared/AllSpice.CleanModularMonolith.Notifications.Contracts/AllSpice.CleanModularMonolith.Notifications.Contracts.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.RealTime/AllSpice.CleanModularMonolith.RealTime.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.SharedKernel/AllSpice.CleanModularMonolith.SharedKernel.csproj" />
+    <Project Path="Shared/AllSpice.CleanModularMonolith.Identity.Abstractions/AllSpice.CleanModularMonolith.Identity.Abstractions.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="tests/AllSpice.CleanModularMonolith.SharedKernel.UnitTests/AllSpice.CleanModularMonolith.SharedKernel.UnitTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests/AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.Notifications.Application.UnitTests/AllSpice.CleanModularMonolith.Notifications.Application.UnitTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.Notifications.Infrastructure.IntegrationTests/AllSpice.CleanModularMonolith.Notifications.Infrastructure.IntegrationTests.csproj" />
+    <Project Path="tests/AllSpice.CleanModularMonolith.Identity.Domain.UnitTests/AllSpice.CleanModularMonolith.Identity.Domain.UnitTests.csproj" />
   </Folder>
   <Folder Name="/_Host/">
     <Project Path="AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModularMonolith.AppHost.csproj" />

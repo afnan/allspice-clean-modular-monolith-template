@@ -1,6 +1,6 @@
 ﻿# AllSpice Clean Modular Monolith (Work in Progress)
 
-> **Status:** Authentication with Microsoft Entra ID is scaffolded but not fully wired yet. The template ships with a complete notifications module, real-time infrastructure, and shared service defaults. The original HR sample is kept only for reference and is excluded when you scaffold a new solution.
+> **Status:** Authentication with Authentik is scaffolded but not fully wired yet. The template ships with a complete notifications module, real-time infrastructure, and shared service defaults. The original HR sample is kept only for reference and is excluded when you scaffold a new solution.
 
 ## Description
 
@@ -94,7 +94,7 @@ The repository also contains `samples/AllSpice.CleanModularMonolith.HR/` as an i
 | **RealTime** | `AppHub` SignalR hub with automatic `user:{id}` groups, `IRealtimePublisher` abstraction for broadcasting payloads or notifications to users/groups. |
 | **ServiceDefaults** | Shared OpenTelemetry logging/metrics, HTTP resilience, service discovery, Quartz hosting defaults. |
 | **ApiGateway** | YARP reverse proxy, FastEndpoints registration, SignalR hub mapping, rate limiting, Redis output caching, Serilog, OpenTelemetry. |
-| **AppHost** | Aspire orchestrator wiring PostgreSQL, Redis, Papercut SMTP, and environment parameters (Sinch credentials, CORS origins, Entra placeholders). |
+| **AppHost** | Aspire orchestrator wiring PostgreSQL, Redis, Papercut SMTP, and environment parameters (Sinch credentials, CORS origins, Authentik placeholders). |
 
 ## Scheduler & Background Jobs
 
@@ -102,13 +102,16 @@ The repository also contains `samples/AllSpice.CleanModularMonolith.HR/` as an i
 - The template ships with `NotificationDailyDigestJob` as a sample (currently logs pending notifications older than 24 hours).
 - Add new jobs in each module by calling `.AddQuartz(...)` inside that module's extension method.
 
-## Authentication (Work in Progress)
+## Identity & Authentication
 
-The solution includes configuration placeholders for Microsoft Entra External ID (authority + audience). The authentication middleware is registered, but no login UI or token issuance pipeline is provided yet. Future iterations will wire full JWT issuance and client onboarding.
+- Authentik acts as the identity provider. Configure separate applications for ERP (enterprise SSO via upstream Azure AD) and Public (customer/social login) portals.
+- `Shared/AllSpice.CleanModularMonolith.Identity.Abstractions` provides portal-aware JWT registration helpers (`AddIdentityPortals`), claims utilities, and module-role authorization requirements.
+- `Services/AllSpice.CleanModularMonolith.Identity` owns module role assignments, Authentik directory lookups/invitations, and seeds baseline modules (HR, Finance, Events).
+- AppHost wiring injects Authentik authority/audience and API tokens via environment variables so the gateway and modules validate the correct issuer. For local development the Aspire AppHost spins up Authentik (Postgres + server container); provide `authentik-secret-key`, `authentik-db-password`, and `authentik-bootstrap-password` via Aspire parameters or secrets before running. In production plan a dedicated Authentik deployment and point the same settings at that instance.
 
 ## Roadmap
 
-- Finish Entra ID integration (tokens, user provisioning, UI samples).
+- Finish Authentik integration (tokens, user provisioning, UI samples).
 - Add persistence for in-app inbox (read/unread state) and admin endpoints.
 - Publish reusable SignalR client helper (TypeScript/C#) for dashboards.
 - Replace SMS stub with production gateway adapters (Sinch/Twilio) and rate limiting.

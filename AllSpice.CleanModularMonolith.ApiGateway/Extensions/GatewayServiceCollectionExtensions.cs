@@ -2,10 +2,10 @@ using System;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.RateLimiting;
-using FastEndpoints;
 using AllSpice.CleanModularMonolith.ApiGateway.RealTime;
+using AllSpice.CleanModularMonolith.Identity.Abstractions.Authentication;
 using AllSpice.CleanModularMonolith.RealTime;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using FastEndpoints;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.OutputCaching;
@@ -15,7 +15,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.ServiceDiscovery.Yarp;
-using Microsoft.IdentityModel.Tokens;
 
 namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
 
@@ -199,36 +198,38 @@ public static class GatewayServiceCollectionExtensions
         });
     }
 
-    /// <summary>
-    /// Configures JWT bearer authentication using Entra settings supplied via configuration or Aspire.
-    /// </summary>
-    /// <param name="builder">The web application builder.</param>
     private static void ConfigureAuthentication(this WebApplicationBuilder builder)
     {
-        var entraAuthority = builder.Configuration["EntraExternalID:Authority"]
-            ?? Environment.GetEnvironmentVariable("ENTRAEXTERNALID__AUTHORITY")
+        var erpAuthority = builder.Configuration["Authentik:Portals:Erp:Authority"]
+            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__ERP__AUTHORITY")
             ?? string.Empty;
 
-        var entraAudience = builder.Configuration["EntraExternalID:Audience"]
-            ?? Environment.GetEnvironmentVariable("ENTRAEXTERNALID__AUDIENCE")
+        var erpAudience = builder.Configuration["Authentik:Portals:Erp:Audience"]
+            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__ERP__AUDIENCE")
             ?? string.Empty;
 
-        if (!string.IsNullOrEmpty(entraAuthority) && !string.IsNullOrEmpty(entraAudience))
+        var publicAuthority = builder.Configuration["Authentik:Portals:Public:Authority"]
+            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__PUBLIC__AUTHORITY")
+            ?? string.Empty;
+
+        var publicAudience = builder.Configuration["Authentik:Portals:Public:Audience"]
+            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__PUBLIC__AUDIENCE")
+            ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(erpAuthority) || string.IsNullOrWhiteSpace(erpAudience))
         {
-            builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
-                {
-                    options.Authority = entraAuthority;
-                    options.Audience = entraAudience;
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true
-                    };
-                });
+            return;
         }
+
+        builder.Services.AddAuthentication()
+            .AddIdentityPortals(options =>
+            {
+                options.ErpAuthority = erpAuthority;
+                options.ErpAudience = erpAudience;
+                options.PublicAuthority = publicAuthority;
+                options.PublicAudience = publicAudience;
+                options.UsePublicAsDefaultChallenge = !string.IsNullOrWhiteSpace(publicAuthority) && !string.IsNullOrWhiteSpace(publicAudience);
+            });
     }
 
     /// <summary>
