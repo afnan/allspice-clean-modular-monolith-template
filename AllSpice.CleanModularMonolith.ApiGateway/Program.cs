@@ -1,9 +1,3 @@
-using FastEndpoints;
-using Serilog;
-using AllSpice.CleanModularMonolith.ApiGateway.Extensions;
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
-using AllSpice.CleanModularMonolith.RealTime;
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure Serilog

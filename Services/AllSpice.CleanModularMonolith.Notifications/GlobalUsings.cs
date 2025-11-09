@@ -1,0 +1,28 @@
+global using System.Net.Http.Headers;
+global using Ardalis.GuardClauses;
+global using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
+global using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services;
+global using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services.Channels;
+global using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
+global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Jobs;
+global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consumers;
+global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Options;
+global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
+global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Repositories;
+global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
+global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Channels;
+global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Email;
+global using FluentValidation;
+global using MassTransit;
+global using Mediator;
+global using Microsoft.AspNetCore.Builder;
+global using Microsoft.Extensions.Configuration;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Hosting;
+global using Microsoft.Extensions.Logging;
+global using Quartz;
+global using Npgsql;
+global using System.Threading;
+global using AppAssemblyReference = AllSpice.CleanModularMonolith.Notifications.Application.AssemblyReference;
+

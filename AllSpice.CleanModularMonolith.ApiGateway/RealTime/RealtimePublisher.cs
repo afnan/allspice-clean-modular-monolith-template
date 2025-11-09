@@ -1,6 +1,3 @@
-using AllSpice.CleanModularMonolith.RealTime;
-using Microsoft.AspNetCore.SignalR;
-
 namespace AllSpice.CleanModularMonolith.ApiGateway.RealTime;
 
 public sealed class RealtimePublisher : IRealtimePublisher

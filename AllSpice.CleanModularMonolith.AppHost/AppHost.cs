@@ -1,20 +1,26 @@
 using System.Net.Sockets;
 using Azure.Provisioning.PostgreSql;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Define parameters for PostgreSQL and admin details
+static string GetParameter(IConfigurationSection section, string key, string defaultValue = "")
+    => section[key] ?? defaultValue;
+
+var parameters = builder.Configuration.GetSection("Parameters");
+
+// Define parameters for PostgreSQL
 var postgresUser = builder.AddParameter("postgres-user");
 var postgresPassword = builder.AddParameter("postgres-password");
 
-var sinchProjectId = builder.AddParameter("sinch-project-id");
-var sinchApiKey = builder.AddParameter("sinch-api-key");
-var sinchServicePlanId = builder.AddParameter("sinch-service-plan-id");
-var sinchFromNumber = builder.AddParameter("sinch-from-number");
-var authentikSecretKey = builder.AddParameter("authentik-secret-key");
-var authentikBootstrapPassword = builder.AddParameter("authentik-bootstrap-password");
-var authentikDbPassword = builder.AddParameter("authentik-db-password");
+var sinchProjectId = GetParameter(parameters, "sinch-project-id");
+var sinchApiKey = GetParameter(parameters, "sinch-api-key");
+var sinchServicePlanId = GetParameter(parameters, "sinch-service-plan-id");
+var sinchFromNumber = GetParameter(parameters, "sinch-from-number");
+var authentikSecretKey = GetParameter(parameters, "authentik-secret-key");
+var authentikBootstrapPassword = GetParameter(parameters, "authentik-bootstrap-password");
+var authentikDbPassword = GetParameter(parameters, "authentik-db-password");
 
 #region Local Email Container
 // Papercut SMTP container for email testing
@@ -99,12 +105,10 @@ if (builder.Environment.IsDevelopment())
       })
       .WithEnvironment("POSTGRES_DB", "authentik")
       .WithEnvironment("POSTGRES_USER", "authentik")
-      .WithEnvironment("POSTGRES_PASSWORD", authentikDbPassword)
+        .WithEnvironment("POSTGRES_PASSWORD", authentikDbPassword)
       .WithVolume("authentik-db-data", "/var/lib/postgresql/data");
 
   builder.AddContainer("authentik", "ghcr.io/goauthentik/server", "2024.6.2")
-      .WithReference(authentikDb)
-      .WithReference(redis)
       .WithEndpoint("http", e =>
       {
         e.TargetPort = 9000;

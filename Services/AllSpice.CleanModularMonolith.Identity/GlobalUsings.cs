@@ -1,0 +1,22 @@
+global using System.Net.Http.Headers;
+global using Ardalis.GuardClauses;
+global using Aspire.Npgsql.EntityFrameworkCore.PostgreSQL;
+global using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
+global using AllSpice.CleanModularMonolith.Identity.Application.Contracts.External;
+global using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
+global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
+global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
+global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Repositories;
+global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
+global using FluentValidation;
+global using Mediator;
+global using Microsoft.AspNetCore.Builder;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.Configuration;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Hosting;
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.Options;
+global using AppAssemblyReference = AllSpice.CleanModularMonolith.Identity.Application.AssemblyReference;
+global using DomainModuleDefinition = AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleDefinition.ModuleDefinition;
+

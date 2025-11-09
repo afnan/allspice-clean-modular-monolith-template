@@ -1,0 +1,24 @@
+global using System.Diagnostics;
+global using System.IO.Compression;
+global using System.Net;
+global using System.Text.Json;
+global using System.Threading.RateLimiting;
+global using AllSpice.CleanModularMonolith.ApiGateway.Extensions;
+global using AllSpice.CleanModularMonolith.ApiGateway.Middleware;
+global using AllSpice.CleanModularMonolith.ApiGateway.RealTime;
+global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
+global using AllSpice.CleanModularMonolith.RealTime;
+global using AllSpice.CleanModularMonolith.Identity.Abstractions.Authentication;
+global using FastEndpoints;
+global using Microsoft.AspNetCore.Authorization;
+global using Microsoft.AspNetCore.Builder;
+global using Microsoft.AspNetCore.Http;
+global using Microsoft.AspNetCore.Mvc;
+global using Microsoft.AspNetCore.RateLimiting;
+global using Microsoft.AspNetCore.ResponseCompression;
+global using Microsoft.AspNetCore.SignalR;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Hosting;
+global using Microsoft.Extensions.Logging;
+global using Serilog;
+

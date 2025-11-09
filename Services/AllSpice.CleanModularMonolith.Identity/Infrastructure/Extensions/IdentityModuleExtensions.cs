@@ -1,26 +1,3 @@
-using System;
-using System.Net.Http.Headers;
-using Ardalis.GuardClauses;
-using Aspire.Npgsql.EntityFrameworkCore.PostgreSQL;
-using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
-using AllSpice.CleanModularMonolith.Identity.Application.Contracts.External;
-using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
-using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
-using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
-using AllSpice.CleanModularMonolith.Identity.Infrastructure.Repositories;
-using AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
-using FluentValidation;
-using Mediator;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using AppAssemblyReference = AllSpice.CleanModularMonolith.Identity.Application.AssemblyReference;
-using DomainModuleDefinition = AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleDefinition.ModuleDefinition;
-
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 
 public static class IdentityModuleExtensions
@@ -37,10 +14,7 @@ public static class IdentityModuleExtensions
         builder.Services.AddScoped<IModuleRoleAssignmentRepository, ModuleRoleAssignmentRepository>();
         builder.Services.AddScoped<IExternalDirectoryClient, AuthentikDirectoryClient>();
 
-        builder.Services.AddMediator(options =>
-        {
-            options.ServiceLifetime = ServiceLifetime.Scoped;
-        });
+        builder.Services.AddMediator();
 
         builder.Services.AddValidatorsFromAssembly(AppAssemblyReference.Assembly);
         builder.Services.AddModuleRoleAuthorization();
@@ -79,7 +53,10 @@ public static class IdentityModuleExtensions
     {
         await using var scope = app.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        await context.Database.EnsureCreatedAsync();
+        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger("IdentityDatabaseInitialization");
+
+        await EnsureDatabaseCreatedWithRetryAsync(context, logger, app.Lifetime.ApplicationStopping);
 
         if (!await context.ModuleDefinitions.AnyAsync())
         {
@@ -100,6 +77,45 @@ public static class IdentityModuleExtensions
         }
 
         return app;
+    }
+
+    private static async Task EnsureDatabaseCreatedWithRetryAsync<TContext>(
+        TContext context,
+        ILogger logger,
+        CancellationToken cancellationToken) where TContext : DbContext
+    {
+        const int maxAttempts = 10;
+        var delay = TimeSpan.FromSeconds(2);
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await context.Database.EnsureCreatedAsync(cancellationToken);
+                return;
+            }
+            catch (PostgresException ex) when (ex.SqlState == "57P03")
+            {
+                logger.LogWarning(ex,
+                    "Identity database is not ready (attempt {Attempt}/{MaxAttempts}). Retrying in {Delay}...",
+                    attempt,
+                    maxAttempts,
+                    delay);
+            }
+            catch (NpgsqlException ex) when (ex.InnerException is PostgresException inner && inner.SqlState == "57P03")
+            {
+                logger.LogWarning(ex,
+                    "Identity database connection failed because it is starting up (attempt {Attempt}/{MaxAttempts}). Retrying in {Delay}...",
+                    attempt,
+                    maxAttempts,
+                    delay);
+            }
+
+            await Task.Delay(delay, cancellationToken);
+            delay = TimeSpan.FromSeconds(Math.min(delay.TotalSeconds * 1.5, 10));
+        }
+
+        throw new InvalidOperationException("Unable to initialize Identity database after multiple attempts.");
     }
 }
 

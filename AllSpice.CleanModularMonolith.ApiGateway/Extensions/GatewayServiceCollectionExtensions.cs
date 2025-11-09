@@ -1,22 +1,4 @@
-using System;
-using System.IO.Compression;
-using System.Linq;
-using System.Threading.RateLimiting;
-using AllSpice.CleanModularMonolith.ApiGateway.RealTime;
-using AllSpice.CleanModularMonolith.Identity.Abstractions.Authentication;
-using AllSpice.CleanModularMonolith.RealTime;
-using FastEndpoints;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.OutputCaching;
-using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.AspNetCore.ResponseCompression;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.ServiceDiscovery.Yarp;
-
-namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
+﻿namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
 
 /// <summary>
 /// Provides extension methods that encapsulate all service registrations required by the gateway.

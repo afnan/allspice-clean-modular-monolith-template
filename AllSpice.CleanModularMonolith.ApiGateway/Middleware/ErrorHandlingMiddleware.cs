@@ -1,8 +1,3 @@
-using System.Net;
-using System.Text.Json;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-
 namespace AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 
 public class ErrorHandlingMiddleware
@@ -52,7 +47,7 @@ public class ErrorHandlingMiddleware
             _ => HttpStatusCode.InternalServerError
         };
 
-        var problemDetails = new ProblemDetails
+        var problemDetails = new GatewayProblemDetails
         {
             Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
             Title = "An error occurred while processing your request.",
@@ -79,6 +74,14 @@ public class ErrorHandlingMiddleware
         context.Response.StatusCode = (int)statusCode;
         return context.Response.WriteAsync(result);
     }
+    
+    private sealed class GatewayProblemDetails
+    {
+        public string Type { get; init; } = string.Empty;
+        public string Title { get; init; } = string.Empty;
+        public int Status { get; init; }
+        public string Detail { get; init; } = string.Empty;
+        public string Instance { get; init; } = string.Empty;
+        public IDictionary<string, object?> Extensions { get; } = new Dictionary<string, object?>(StringComparer.Ordinal);
+    }
 }
-
-

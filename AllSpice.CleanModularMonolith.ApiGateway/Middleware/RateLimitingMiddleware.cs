@@ -1,5 +1,3 @@
-using System.Threading.RateLimiting;
-
 namespace AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 
 public class RateLimitingMiddleware

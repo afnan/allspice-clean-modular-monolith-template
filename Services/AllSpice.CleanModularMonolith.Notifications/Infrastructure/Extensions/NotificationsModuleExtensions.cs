@@ -1,29 +1,3 @@
-using System.Net.Http.Headers;
-using Ardalis.GuardClauses;
-using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
-using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services;
-using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services.Channels;
-using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Options;
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Repositories;
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Channels;
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Email;
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consumers;
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Jobs;
-using FluentValidation;
-using MassTransit;
-using Mediator;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using AppAssemblyReference = AllSpice.CleanModularMonolith.Notifications.Application.AssemblyReference;
-using Quartz;
-
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
 
 public static class NotificationsModuleExtensions
@@ -41,10 +15,7 @@ public static class NotificationsModuleExtensions
         builder.Services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
         builder.Services.AddScoped<INotificationPreferenceRepository, NotificationPreferenceRepository>();
 
-        builder.Services.AddMediator(options =>
-        {
-            options.ServiceLifetime = ServiceLifetime.Scoped;
-        });
+        builder.Services.AddMediator();
 
         builder.Services.AddValidatorsFromAssembly(typeof(AppAssemblyReference).Assembly);
 
@@ -108,7 +79,10 @@ public static class NotificationsModuleExtensions
     {
         using var scope = app.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
-        await context.Database.EnsureCreatedAsync();
+        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger("NotificationsDatabaseInitialization");
+
+        await EnsureDatabaseCreatedWithRetryAsync(context, logger, app.Lifetime.ApplicationStopping);
 
         if (!await context.NotificationTemplates.AnyAsync(template => template.Key == "hr.welcome"))
         {
@@ -123,6 +97,45 @@ public static class NotificationsModuleExtensions
         }
 
         return app;
+    }
+
+    private static async Task EnsureDatabaseCreatedWithRetryAsync<TContext>(
+        TContext context,
+        ILogger logger,
+        CancellationToken cancellationToken) where TContext : DbContext
+    {
+        const int maxAttempts = 10;
+        var delay = TimeSpan.FromSeconds(2);
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                await context.Database.EnsureCreatedAsync(cancellationToken);
+                return;
+            }
+            catch (PostgresException ex) when (ex.SqlState == "57P03")
+            {
+                logger.LogWarning(ex,
+                    "Database is not ready (attempt {Attempt}/{MaxAttempts}). Retrying in {Delay}...",
+                    attempt,
+                    maxAttempts,
+                    delay);
+            }
+            catch (NpgsqlException ex) when (ex.InnerException is PostgresException inner && inner.SqlState == "57P03")
+            {
+                logger.LogWarning(ex,
+                    "Database connection failed because it is starting up (attempt {Attempt}/{MaxAttempts}). Retrying in {Delay}...",
+                    attempt,
+                    maxAttempts,
+                    delay);
+            }
+
+            await Task.Delay(delay, cancellationToken);
+            delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 1.5, 10));
+        }
+
+        throw new InvalidOperationException("Unable to initialize Notifications database after multiple attempts.");
     }
 }
 

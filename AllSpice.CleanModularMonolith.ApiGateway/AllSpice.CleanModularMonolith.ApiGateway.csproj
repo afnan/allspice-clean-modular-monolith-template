@@ -25,6 +25,7 @@
     <ProjectReference Include="..\AllSpice.CleanModularMonolith.ServiceDefaults\AllSpice.CleanModularMonolith.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Services\AllSpice.CleanModularMonolith.Notifications\AllSpice.CleanModularMonolith.Notifications.csproj" />
     <ProjectReference Include="..\Shared\AllSpice.CleanModularMonolith.RealTime\AllSpice.CleanModularMonolith.RealTime.csproj" />
+    <ProjectReference Include="..\Shared\AllSpice.CleanModularMonolith.Identity.Abstractions\AllSpice.CleanModularMonolith.Identity.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

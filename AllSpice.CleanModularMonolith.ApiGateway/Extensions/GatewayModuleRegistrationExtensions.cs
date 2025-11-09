@@ -1,7 +1,3 @@
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Logging;
-
 namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
 
 /// <summary>
