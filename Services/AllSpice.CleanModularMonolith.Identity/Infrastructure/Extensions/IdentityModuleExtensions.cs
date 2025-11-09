@@ -53,10 +53,7 @@ public static class IdentityModuleExtensions
     {
         await using var scope = app.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
-        var logger = loggerFactory.CreateLogger("IdentityDatabaseInitialization");
-
-        await EnsureDatabaseCreatedWithRetryAsync(context, logger, app.Lifetime.ApplicationStopping);
+        await context.Database.EnsureCreatedAsync(app.Lifetime.ApplicationStopping);
 
         if (!await context.ModuleDefinitions.AnyAsync())
         {
@@ -77,45 +74,6 @@ public static class IdentityModuleExtensions
         }
 
         return app;
-    }
-
-    private static async Task EnsureDatabaseCreatedWithRetryAsync<TContext>(
-        TContext context,
-        ILogger logger,
-        CancellationToken cancellationToken) where TContext : DbContext
-    {
-        const int maxAttempts = 10;
-        var delay = TimeSpan.FromSeconds(2);
-
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                await context.Database.EnsureCreatedAsync(cancellationToken);
-                return;
-            }
-            catch (PostgresException ex) when (ex.SqlState == "57P03")
-            {
-                logger.LogWarning(ex,
-                    "Identity database is not ready (attempt {Attempt}/{MaxAttempts}). Retrying in {Delay}...",
-                    attempt,
-                    maxAttempts,
-                    delay);
-            }
-            catch (NpgsqlException ex) when (ex.InnerException is PostgresException inner && inner.SqlState == "57P03")
-            {
-                logger.LogWarning(ex,
-                    "Identity database connection failed because it is starting up (attempt {Attempt}/{MaxAttempts}). Retrying in {Delay}...",
-                    attempt,
-                    maxAttempts,
-                    delay);
-            }
-
-            await Task.Delay(delay, cancellationToken);
-            delay = TimeSpan.FromSeconds(Math.min(delay.TotalSeconds * 1.5, 10));
-        }
-
-        throw new InvalidOperationException("Unable to initialize Identity database after multiple attempts.");
     }
 }
 

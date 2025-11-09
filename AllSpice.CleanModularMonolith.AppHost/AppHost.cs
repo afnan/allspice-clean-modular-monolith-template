@@ -14,13 +14,18 @@ var parameters = builder.Configuration.GetSection("Parameters");
 var postgresUser = builder.AddParameter("postgres-user");
 var postgresPassword = builder.AddParameter("postgres-password");
 
+var postgresUserValue = builder.Configuration["Parameters:postgres-user"] ?? "postgres";
+var postgresPasswordValue = builder.Configuration["Parameters:postgres-password"] ?? "pass!";
+
 var sinchProjectId = GetParameter(parameters, "sinch-project-id");
 var sinchApiKey = GetParameter(parameters, "sinch-api-key");
 var sinchServicePlanId = GetParameter(parameters, "sinch-service-plan-id");
 var sinchFromNumber = GetParameter(parameters, "sinch-from-number");
 var authentikSecretKey = GetParameter(parameters, "authentik-secret-key");
 var authentikBootstrapPassword = GetParameter(parameters, "authentik-bootstrap-password");
-var authentikDbPassword = GetParameter(parameters, "authentik-db-password");
+
+var authentikImage = builder.Configuration["Authentik:Image"] ?? "ghcr.io/goauthentik/server";
+var authentikTag = builder.Configuration["Authentik:Tag"] ?? "2025.10.1";
 
 #region Local Email Container
 // Papercut SMTP container for email testing
@@ -78,6 +83,7 @@ var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
 #region Database Creation
 var notificationsDatabase = postgres.AddDatabase("notificationsdb");
 var identityDatabase = postgres.AddDatabase("identitydb");
+var authentikDb = postgres.AddDatabase("authentikdb");
 #endregion
 
 #region Redis Cache
@@ -95,20 +101,13 @@ var redisEndpoint = redis.GetEndpoint("tcp");
 #region Authentik Identity Provider (Local Dev)
 if (builder.Environment.IsDevelopment())
 {
-  var authentikDb = builder.AddContainer("authentik-db", "postgres", "16-alpine")
-      .WithEndpoint("postgres", e =>
-      {
-        e.TargetPort = 5432;
-        e.Port = 5433;
-        e.Protocol = ProtocolType.Tcp;
-        e.UriScheme = "postgres";
-      })
-      .WithEnvironment("POSTGRES_DB", "authentik")
-      .WithEnvironment("POSTGRES_USER", "authentik")
-        .WithEnvironment("POSTGRES_PASSWORD", authentikDbPassword)
-      .WithVolume("authentik-db-data", "/var/lib/postgresql/data");
+  const string authentikDbHost = "postgres";
+  const string authentikDbPort = "5432";
 
-  builder.AddContainer("authentik", "ghcr.io/goauthentik/server", "2024.6.2")
+  var authentikServer = builder.AddContainer("authentik-server", authentikImage, authentikTag)
+      .WithArgs("server")
+      .WithReference(authentikDb)
+      .WithReference(postgres)
       .WithEndpoint("http", e =>
       {
         e.TargetPort = 9000;
@@ -121,19 +120,38 @@ if (builder.Environment.IsDevelopment())
         e.Port = 9443;
         e.UriScheme = "https";
       })
+      .WaitFor(postgres)
       .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
       .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", authentikBootstrapPassword)
       .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", builder.Configuration["Authentik:Bootstrap:Email"] ?? "admin@example.com")
       .WithEnvironment("AUTHENTIK_BOOTSTRAP_USERNAME", builder.Configuration["Authentik:Bootstrap:Username"] ?? "admin")
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", "authentik-db")
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", "5432")
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", "authentik")
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", authentikDbPassword)
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "authentik")
+      .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", authentikDbHost)
+      .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", authentikDbPort)
+      .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgresUserValue)
+      .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgresPasswordValue)
+      .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "authentikdb")
       .WithEnvironment("AUTHENTIK_REDIS__HOST", "redis")
       .WithEnvironment("AUTHENTIK_REDIS__PORT", "6379")
       .WithEnvironment("AUTHENTIK_DISABLE_UPDATE_CHECK", "true")
-      .WithEnvironment("AUTHENTIK_LOGGING__LEVEL", builder.Configuration["Authentik:Logging:Level"] ?? "INFO");
+      .WithEnvironment("AUTHENTIK_LOGGING__LEVEL", builder.Configuration["Authentik:Logging:Level"] ?? "INFO")
+      ;
+
+  var authentikWorker = builder.AddContainer("authentik-worker", authentikImage, authentikTag)
+      .WithArgs("worker")
+      .WithReference(authentikDb)
+      .WithReference(postgres)
+      .WaitFor(postgres)
+      .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
+      .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", authentikDbHost)
+      .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", authentikDbPort)
+      .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgresUserValue)
+      .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgresPasswordValue)
+      .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "authentikdb")
+      .WithEnvironment("AUTHENTIK_REDIS__HOST", "redis")
+      .WithEnvironment("AUTHENTIK_REDIS__PORT", "6379")
+      .WithEnvironment("AUTHENTIK_DISABLE_UPDATE_CHECK", "true")
+      .WithEnvironment("AUTHENTIK_LOGGING__LEVEL", builder.Configuration["Authentik:Logging:Level"] ?? "INFO")
+      .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock");
 }
 #endregion
 
@@ -156,7 +174,8 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
     .WithEnvironment("Notifications__Sinch__ProjectId", sinchProjectId)
     .WithEnvironment("Notifications__Sinch__ApiKey", sinchApiKey)
     .WithEnvironment("Notifications__Sinch__Sms__ServicePlanId", sinchServicePlanId)
-    .WithEnvironment("Notifications__Sinch__Sms__FromNumber", sinchFromNumber);
+    .WithEnvironment("Notifications__Sinch__Sms__FromNumber", sinchFromNumber)
+    .WaitFor(postgres);
 #endregion
 
 

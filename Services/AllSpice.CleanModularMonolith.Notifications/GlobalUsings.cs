@@ -22,7 +22,5 @@ global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.Hosting;
 global using Microsoft.Extensions.Logging;
 global using Quartz;
-global using Npgsql;
-global using System.Threading;
 global using AppAssemblyReference = AllSpice.CleanModularMonolith.Notifications.Application.AssemblyReference;
 
