@@ -7,6 +7,7 @@ global using AllSpice.CleanModularMonolith.ApiGateway.Extensions;
 global using AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 global using AllSpice.CleanModularMonolith.ApiGateway.RealTime;
 global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
+global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 global using AllSpice.CleanModularMonolith.RealTime;
 global using AllSpice.CleanModularMonolith.Identity.Abstractions.Authentication;
 global using FastEndpoints;

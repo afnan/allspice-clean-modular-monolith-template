@@ -15,6 +15,7 @@ public static class GatewayModuleRegistrationExtensions
         var logger = loggerFactory.CreateLogger("Program");
 
         builder.AddNotificationsModuleServices(logger);
+        builder.AddIdentityModuleServices(logger);
     }
 }
 

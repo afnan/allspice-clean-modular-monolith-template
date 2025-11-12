@@ -17,6 +17,7 @@ try
 
   // Ensure module databases
   await app.EnsureNotificationsModuleDatabaseAsync();
+  await app.EnsureIdentityModuleDatabaseAsync();
 
   app.UseGatewayPipeline();
   app.MapHub<AppHub>("/hubs/app");

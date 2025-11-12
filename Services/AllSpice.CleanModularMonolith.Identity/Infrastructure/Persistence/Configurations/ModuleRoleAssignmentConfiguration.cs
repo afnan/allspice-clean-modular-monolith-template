@@ -1,5 +1,9 @@
+using System;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleAssignment;
+using AllSpice.CleanModularMonolith.Identity.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence.Configurations;
@@ -32,17 +36,27 @@ public sealed class ModuleRoleAssignmentConfiguration : IEntityTypeConfiguration
 
         builder.Property(assignment => assignment.RevokedUtc);
 
-        builder.ComplexProperty(
-            assignment => assignment.UserId,
-            complexBuilder =>
-            {
-                complexBuilder.Property(userId => userId.Value)
-                    .HasColumnName("UserObjectId")
-                    .HasMaxLength(128)
-                    .IsRequired();
-            });
+        var userIdConverter = new ValueConverter<ExternalUserId, string>(
+            userId => userId.Value,
+            value => ExternalUserId.From(value));
 
-        builder.HasIndex("UserObjectId", nameof(ModuleRoleAssignment.ModuleKey), nameof(ModuleRoleAssignment.RoleKey))
+        var userIdComparer = new ValueComparer<ExternalUserId>(
+            (left, right) => left.Value.Equals(right.Value, StringComparison.Ordinal),
+            userId => userId.Value.GetHashCode(StringComparison.Ordinal),
+            value => ExternalUserId.From(value.Value));
+
+        var userIdProperty = builder.Property(assignment => assignment.UserId)
+            .HasConversion(userIdConverter)
+            .HasColumnName("UserObjectId")
+            .HasMaxLength(128)
+            .IsRequired();
+
+        userIdProperty.Metadata.SetValueComparer(userIdComparer);
+
+        builder.HasIndex(
+                nameof(ModuleRoleAssignment.UserId),
+                nameof(ModuleRoleAssignment.ModuleKey),
+                nameof(ModuleRoleAssignment.RoleKey))
             .IsUnique()
             .HasDatabaseName("UX_ModuleRoleAssignment_UserModuleRole");
 
