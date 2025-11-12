@@ -9,11 +9,19 @@ using Microsoft.Extensions.Logging;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Channels;
 
+/// <summary>
+/// Notification channel that pushes messages to connected clients via SignalR.
+/// </summary>
 public sealed class InAppNotificationChannel : INotificationChannel
 {
     private readonly IRealtimePublisher _realtimePublisher;
     private readonly ILogger<InAppNotificationChannel> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InAppNotificationChannel"/> class.
+    /// </summary>
+    /// <param name="realtimePublisher">Realtime publisher used to broadcast events.</param>
+    /// <param name="logger">Logger used for delivery diagnostics.</param>
     public InAppNotificationChannel(
         IRealtimePublisher realtimePublisher,
         ILogger<InAppNotificationChannel> logger)
@@ -22,8 +30,10 @@ public sealed class InAppNotificationChannel : INotificationChannel
         _logger = logger;
     }
 
+    /// <inheritdoc />
     public NotificationChannel Channel => NotificationChannel.InApp;
 
+    /// <inheritdoc />
     public async Task<Result> SendAsync(Notification notification, NotificationContent content, CancellationToken cancellationToken = default)
     {
         Guard.Against.Null(notification);

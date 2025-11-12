@@ -7,17 +7,26 @@ using AllSpice.CleanModularMonolith.Notifications.Domain.Enums;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Channels;
 
+/// <summary>
+/// Notification channel that sends email via the configured <see cref="IEmailSender"/>.
+/// </summary>
 public sealed class EmailNotificationChannel : INotificationChannel
 {
     private readonly IEmailSender _emailSender;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="EmailNotificationChannel"/> class.
+    /// </summary>
+    /// <param name="emailSender">Low-level email sender abstraction.</param>
     public EmailNotificationChannel(IEmailSender emailSender)
     {
         _emailSender = emailSender;
     }
 
+    /// <inheritdoc />
     public NotificationChannel Channel => NotificationChannel.Email;
 
+    /// <inheritdoc />
     public async Task<Result> SendAsync(Notification notification, NotificationContent content, CancellationToken cancellationToken = default)
     {
         Guard.Against.Null(notification);

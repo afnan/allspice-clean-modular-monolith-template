@@ -13,6 +13,8 @@ public static class GatewayServiceCollectionExtensions
     {
         builder.AddServiceDefaults();
 
+        var applicationName = builder.Configuration["Application:Name"] ?? "API Gateway";
+
         builder.Services.AddOpenApi();
         builder.Services
             .AddFastEndpoints()
@@ -20,7 +22,7 @@ public static class GatewayServiceCollectionExtensions
             {
                 options.DocumentSettings = settings =>
                 {
-                    settings.Title = "AllSpice Gateway";
+                    settings.Title = applicationName;
                     settings.Version = "v1";
                 };
             });
@@ -47,6 +49,10 @@ public static class GatewayServiceCollectionExtensions
     /// Configures output caching, wiring up Redis if Aspire provides a connection string.
     /// </summary>
     /// <param name="builder">The web application builder.</param>
+    /// <remarks>
+    /// When a Redis connection string is supplied via configuration or environment variables, the gateway uses
+    /// distributed output caching; otherwise, in-memory caching is applied.
+    /// </remarks>
     private static void ConfigureOutputCaching(this WebApplicationBuilder builder)
     {
         var redisConnectionString = builder.Configuration.GetConnectionString("redis");
@@ -76,6 +82,7 @@ public static class GatewayServiceCollectionExtensions
     /// Enables Brotli and Gzip compression with tuned defaults for JSON payloads.
     /// </summary>
     /// <param name="services">The service collection into which the compression components are registered.</param>
+    /// <returns>The service collection to allow fluent registration.</returns>
     private static IServiceCollection ConfigureResponseCompressionDefaults(this IServiceCollection services)
     {
         services.AddResponseCompression(options =>
@@ -104,6 +111,7 @@ public static class GatewayServiceCollectionExtensions
     /// Sets up global and named rate limiting policies along with rejection messaging.
     /// </summary>
     /// <param name="services">The service collection.</param>
+    /// <returns>The service collection to support fluent chaining.</returns>
     private static IServiceCollection ConfigureRateLimiting(this IServiceCollection services)
     {
         services.AddRateLimiter(options =>
@@ -160,6 +168,7 @@ public static class GatewayServiceCollectionExtensions
     /// Configures CORS policies for web and mobile clients, honoring Aspire-provided overrides.
     /// </summary>
     /// <param name="builder">The web application builder.</param>
+    /// <remarks>Origins can be overridden via configuration keys such as <c>Cors:WebOrigin</c>.</remarks>
     private static void ConfigureCorsPolicies(this WebApplicationBuilder builder)
     {
         var webOrigin = builder.Configuration["Cors:WebOrigin"]
@@ -192,6 +201,12 @@ public static class GatewayServiceCollectionExtensions
         });
     }
 
+    /// <summary>
+    /// Attempts to configure authentication based on Authentik portal settings.
+    /// </summary>
+    /// <param name="builder">The web application builder.</param>
+    /// <returns><see langword="true"/> when authentication is configured; otherwise <see langword="false"/>.</returns>
+    /// <remarks>The ERP authority and audience are required; public portal settings are optional.</remarks>
     private static bool ConfigureAuthentication(this WebApplicationBuilder builder)
     {
         var erpAuthority = builder.Configuration["Authentik:Portals:Erp:Authority"]
@@ -233,6 +248,15 @@ public static class GatewayServiceCollectionExtensions
     /// </summary>
     /// <param name="builder">The web application builder.</param>
     /// <param name="authenticationEnabled">Indicates whether authentication has been configured.</param>
+    /// <summary>
+    /// Establishes authorization policies, including the authenticated fallback and an allow-anonymous policy.
+    /// </summary>
+    /// <param name="builder">The web application builder.</param>
+    /// <param name="authenticationEnabled">Indicates whether authentication has been configured.</param>
+    /// <remarks>
+    /// When authentication is enabled, the fallback policy enforces authenticated access by default while retaining
+    /// an <c>allow-anonymous</c> policy for health checks and public endpoints.
+    /// </remarks>
     private static void ConfigureAuthorization(this WebApplicationBuilder builder, bool authenticationEnabled)
     {
         builder.Services.AddAuthorization(options =>
@@ -258,6 +282,10 @@ public static class GatewayServiceCollectionExtensions
 
 }
 
+/// <summary>
+/// Represents whether authentication middleware was configured for the gateway.
+/// </summary>
+/// <param name="Enabled">Indicates that authentication services were registered.</param>
 internal sealed record GatewayAuthenticationState(bool Enabled);
 
 

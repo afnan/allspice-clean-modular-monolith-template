@@ -6,15 +6,23 @@ using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Identity.Application.Features.ModuleAssignments.Queries.GetUserAssignments;
 
+/// <summary>
+/// Handles retrieval of active module role assignments for a given user.
+/// </summary>
 public sealed class GetUserAssignmentsQueryHandler : IRequestHandler<GetUserAssignmentsQuery, Result<IReadOnlyCollection<ModuleRoleAssignmentDto>>>
 {
     private readonly IModuleRoleAssignmentRepository _moduleRoleAssignmentRepository;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GetUserAssignmentsQueryHandler"/> class.
+    /// </summary>
+    /// <param name="moduleRoleAssignmentRepository">Repository used to query assignments.</param>
     public GetUserAssignmentsQueryHandler(IModuleRoleAssignmentRepository moduleRoleAssignmentRepository)
     {
         _moduleRoleAssignmentRepository = moduleRoleAssignmentRepository;
     }
 
+    /// <inheritdoc />
     public async ValueTask<Result<IReadOnlyCollection<ModuleRoleAssignmentDto>>> Handle(GetUserAssignmentsQuery request, CancellationToken cancellationToken)
     {
         var userId = ExternalUserId.From(request.UserId);

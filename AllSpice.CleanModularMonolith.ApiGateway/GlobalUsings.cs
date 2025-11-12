@@ -11,6 +11,7 @@ global using AllSpice.CleanModularMonolith.RealTime;
 global using AllSpice.CleanModularMonolith.Identity.Abstractions.Authentication;
 global using FastEndpoints;
 global using FastEndpoints.Swagger;
+global using Microsoft.Extensions.Configuration;
 global using Microsoft.AspNetCore.Authorization;
 global using Microsoft.AspNetCore.Builder;
 global using Microsoft.AspNetCore.Http;

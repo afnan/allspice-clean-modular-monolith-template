@@ -6,15 +6,23 @@ using Microsoft.AspNetCore.Http;
 
 namespace AllSpice.CleanModularMonolith.Identity.Api.Endpoints.ModuleAssignments;
 
+/// <summary>
+/// API endpoint that assigns a module role to an Authentik user.
+/// </summary>
 public sealed class AssignModuleRoleEndpoint : Endpoint<AssignModuleRoleRequest, ModuleRoleAssignmentResponse>
 {
     private readonly IMediator _mediator;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AssignModuleRoleEndpoint"/> class.
+    /// </summary>
+    /// <param name="mediator">Mediator used to dispatch the assignment command.</param>
     public AssignModuleRoleEndpoint(IMediator mediator)
     {
         _mediator = mediator;
     }
 
+    /// <inheritdoc />
     public override void Configure()
     {
         Post("/api/identity/module-assignments");
@@ -26,6 +34,7 @@ public sealed class AssignModuleRoleEndpoint : Endpoint<AssignModuleRoleRequest,
         });
     }
 
+    /// <inheritdoc />
     public override async Task HandleAsync(AssignModuleRoleRequest req, CancellationToken ct)
     {
         var command = new AssignModuleRoleCommand(req.UserId, req.ModuleKey, req.RoleKey, req.AssignedBy);

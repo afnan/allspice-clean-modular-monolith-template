@@ -1,9 +1,18 @@
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 
+/// <summary>
+/// Composition helpers for wiring the identity module into a host application.
+/// </summary>
 public static class IdentityModuleExtensions
 {
     private const string DatabaseResourceName = "identitydb";
 
+    /// <summary>
+    /// Registers identity module services including persistence, external directory integration, and authorization helpers.
+    /// </summary>
+    /// <param name="builder">The host application builder.</param>
+    /// <param name="logger">Logger used to record registration diagnostics.</param>
+    /// <returns>The same builder instance for fluent chaining.</returns>
     public static IHostApplicationBuilder AddIdentityModuleServices(
         this IHostApplicationBuilder builder,
         ILogger logger)
@@ -49,6 +58,11 @@ public static class IdentityModuleExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Ensures the identity database exists and seeds default module definitions when empty.
+    /// </summary>
+    /// <param name="app">The web application instance.</param>
+    /// <returns>The application instance to continue fluent configuration.</returns>
     public static async Task<WebApplication> EnsureIdentityModuleDatabaseAsync(this WebApplication app)
     {
         await using var scope = app.Services.CreateAsyncScope();

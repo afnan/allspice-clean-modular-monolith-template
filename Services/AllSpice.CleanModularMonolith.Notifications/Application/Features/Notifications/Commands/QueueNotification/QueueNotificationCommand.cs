@@ -4,6 +4,9 @@ using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Commands.QueueNotification;
 
+/// <summary>
+/// Command that encapsulates all data required to persist a notification for delivery.
+/// </summary>
 public sealed record QueueNotificationCommand(
     string RecipientUserId,
     string? RecipientEmail,

@@ -1,9 +1,18 @@
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
 
+/// <summary>
+/// Provides composition helpers for wiring the notifications module into the hosting application.
+/// </summary>
 public static class NotificationsModuleExtensions
 {
     private const string DatabaseResourceName = "notificationsdb";
 
+    /// <summary>
+    /// Registers notifications module services including persistence, messaging, and background workers.
+    /// </summary>
+    /// <param name="builder">The host application builder.</param>
+    /// <param name="logger">Logger used to emit registration diagnostics.</param>
+    /// <returns>The same builder instance for fluent chaining.</returns>
     public static IHostApplicationBuilder AddNotificationsModuleServices(
         this IHostApplicationBuilder builder,
         ILogger logger)
@@ -75,6 +84,11 @@ public static class NotificationsModuleExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Ensures the notifications database exists and seeds default templates if necessary.
+    /// </summary>
+    /// <param name="app">The web application instance.</param>
+    /// <returns>The application instance to support fluent configuration.</returns>
     public static async Task<WebApplication> EnsureNotificationsModuleDatabaseAsync(this WebApplication app)
     {
         using var scope = app.Services.CreateScope();

@@ -8,11 +8,19 @@ using Microsoft.Extensions.Options;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 
+/// <summary>
+/// Concrete <see cref="IExternalDirectoryClient"/> implementation backed by Authentik's REST API.
+/// </summary>
 public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
 {
     private readonly HttpClient _httpClient;
     private readonly AuthentikOptions _options;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AuthentikDirectoryClient"/> class.
+    /// </summary>
+    /// <param name="httpClient">Configured HTTP client targeting Authentik.</param>
+    /// <param name="options">Auth options governing lookups and invitations.</param>
     public AuthentikDirectoryClient(HttpClient httpClient, IOptions<AuthentikOptions> options)
     {
         Guard.Against.Null(httpClient);
@@ -22,6 +30,7 @@ public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
         _options = options.Value;
     }
 
+    /// <inheritdoc />
     public async Task<bool> UserExistsAsync(string userId, CancellationToken cancellationToken = default)
     {
         Guard.Against.NullOrWhiteSpace(userId);
@@ -37,6 +46,7 @@ public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
         return true;
     }
 
+    /// <inheritdoc />
     public async Task<string?> GetUserDisplayNameAsync(string userId, CancellationToken cancellationToken = default)
     {
         Guard.Against.NullOrWhiteSpace(userId);
@@ -67,6 +77,7 @@ public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
         return userId;
     }
 
+    /// <inheritdoc />
     public async Task InviteUserAsync(string email, string displayName, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(_options.InvitationEndpoint))
@@ -88,6 +99,11 @@ public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>
+    /// Builds the user lookup endpoint path based on current configuration.
+    /// </summary>
+    /// <param name="userId">User identifier.</param>
+    /// <returns>Resolved endpoint URL.</returns>
     private string BuildUserLookupUrl(string userId)
     {
         if (!string.IsNullOrWhiteSpace(_options.UserLookupTemplate) && _options.UserLookupTemplate.Contains("{0}", StringComparison.Ordinal))
