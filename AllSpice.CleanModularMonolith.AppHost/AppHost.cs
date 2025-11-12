@@ -1,4 +1,4 @@
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using Azure.Provisioning.PostgreSql;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -23,6 +23,9 @@ var sinchServicePlanId = GetParameter(parameters, "sinch-service-plan-id");
 var sinchFromNumber = GetParameter(parameters, "sinch-from-number");
 var authentikSecretKey = GetParameter(parameters, "authentik-secret-key");
 var authentikBootstrapPassword = GetParameter(parameters, "authentik-bootstrap-password");
+
+//var authentikClientSecret = builder.AddParameter("identity-authentik-client-secret");
+
 
 var authentikImage = builder.Configuration["Authentik:Image"] ?? "ghcr.io/goauthentik/server";
 var authentikTag = builder.Configuration["Authentik:Tag"] ?? "2025.10.1";
@@ -121,6 +124,7 @@ if (builder.Environment.IsDevelopment())
         e.UriScheme = "https";
       })
       .WaitFor(postgres)
+      .WithEnvironment("AUTHENTIK_HOST", "localhost:9443")
       .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
       .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", authentikBootstrapPassword)
       .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", builder.Configuration["Authentik:Bootstrap:Email"] ?? "admin@example.com")
@@ -141,6 +145,7 @@ if (builder.Environment.IsDevelopment())
       .WithReference(authentikDb)
       .WithReference(postgres)
       .WaitFor(postgres)
+      .WithEnvironment("AUTHENTIK_HOST", "localhost:9443")
       .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
       .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", authentikBootstrapPassword)
       .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", builder.Configuration["Authentik:Bootstrap:Email"] ?? "admin@example.com")

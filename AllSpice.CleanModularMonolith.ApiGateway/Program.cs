@@ -25,7 +25,8 @@ try
   // OpenAPI/Swagger for development
   if (app.Environment.IsDevelopment())
   {
-    app.MapOpenApi();
+    app.MapOpenApi()
+       .RequireAuthorization("allow-anonymous");
   }
 
   app.Run();

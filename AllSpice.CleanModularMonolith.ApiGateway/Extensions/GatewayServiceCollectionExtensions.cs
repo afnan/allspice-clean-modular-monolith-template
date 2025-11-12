@@ -14,7 +14,16 @@ public static class GatewayServiceCollectionExtensions
         builder.AddServiceDefaults();
 
         builder.Services.AddOpenApi();
-        builder.Services.AddFastEndpoints();
+        builder.Services
+            .AddFastEndpoints()
+            .SwaggerDocument(options =>
+            {
+                options.DocumentSettings = settings =>
+                {
+                    settings.Title = "AllSpice Gateway";
+                    settings.Version = "v1";
+                };
+            });
         builder.Services.AddSignalR();
         builder.Services.AddSingleton<IRealtimePublisher, RealtimePublisher>();
 
@@ -22,8 +31,11 @@ public static class GatewayServiceCollectionExtensions
         builder.ConfigureOutputCaching();
         builder.Services.ConfigureRateLimiting();
         builder.ConfigureCorsPolicies();
-        builder.ConfigureAuthentication();
-        builder.ConfigureAuthorization();
+
+        var authenticationEnabled = builder.ConfigureAuthentication();
+        builder.Services.AddSingleton(new GatewayAuthenticationState(authenticationEnabled));
+
+        builder.ConfigureAuthorization(authenticationEnabled);
 
         builder.Services
             .AddReverseProxy()
@@ -180,7 +192,7 @@ public static class GatewayServiceCollectionExtensions
         });
     }
 
-    private static void ConfigureAuthentication(this WebApplicationBuilder builder)
+    private static bool ConfigureAuthentication(this WebApplicationBuilder builder)
     {
         var erpAuthority = builder.Configuration["Authentik:Portals:Erp:Authority"]
             ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__ERP__AUTHORITY")
@@ -200,7 +212,7 @@ public static class GatewayServiceCollectionExtensions
 
         if (string.IsNullOrWhiteSpace(erpAuthority) || string.IsNullOrWhiteSpace(erpAudience))
         {
-            return;
+            return false;
         }
 
         builder.Services.AddAuthentication()
@@ -212,24 +224,30 @@ public static class GatewayServiceCollectionExtensions
                 options.PublicAudience = publicAudience;
                 options.UsePublicAsDefaultChallenge = !string.IsNullOrWhiteSpace(publicAuthority) && !string.IsNullOrWhiteSpace(publicAudience);
             });
+
+        return true;
     }
 
     /// <summary>
     /// Establishes authorization policies, including the authenticated fallback and an allow-anonymous policy.
     /// </summary>
     /// <param name="builder">The web application builder.</param>
-    private static void ConfigureAuthorization(this WebApplicationBuilder builder)
+    /// <param name="authenticationEnabled">Indicates whether authentication has been configured.</param>
+    private static void ConfigureAuthorization(this WebApplicationBuilder builder, bool authenticationEnabled)
     {
         builder.Services.AddAuthorization(options =>
         {
-            options.FallbackPolicy = new AuthorizationPolicyBuilder()
-                .RequireAuthenticatedUser()
-                .Build();
-
-            options.AddPolicy("authenticated", policy =>
+            if (authenticationEnabled)
             {
-                policy.RequireAuthenticatedUser();
-            });
+                options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .Build();
+
+                options.AddPolicy("authenticated", policy =>
+                {
+                    policy.RequireAuthenticatedUser();
+                });
+            }
 
             options.AddPolicy("allow-anonymous", policy =>
             {
@@ -237,6 +255,9 @@ public static class GatewayServiceCollectionExtensions
             });
         });
     }
+
 }
+
+internal sealed record GatewayAuthenticationState(bool Enabled);
 
 

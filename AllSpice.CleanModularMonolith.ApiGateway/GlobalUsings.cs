@@ -10,6 +10,7 @@ global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensio
 global using AllSpice.CleanModularMonolith.RealTime;
 global using AllSpice.CleanModularMonolith.Identity.Abstractions.Authentication;
 global using FastEndpoints;
+global using FastEndpoints.Swagger;
 global using Microsoft.AspNetCore.Authorization;
 global using Microsoft.AspNetCore.Builder;
 global using Microsoft.AspNetCore.Http;

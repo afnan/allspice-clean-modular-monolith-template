@@ -1,4 +1,4 @@
-namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
+﻿namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
 
 /// <summary>
 /// Provides extensions that encapsulate the API gateway's middleware pipeline configuration.
@@ -26,8 +26,26 @@ public static class GatewayApplicationExtensions
         app.UseRateLimiter();
         app.UseOutputCache();
         app.UseRequestBuffering();
-        app.UseAuthentication();
+
+        var authenticationState = app.Services.GetService<GatewayAuthenticationState>();
+        if (authenticationState?.Enabled == true)
+        {
+            app.UseAuthentication();
+        }
+
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseSwaggerGen();
+            app.UseSwaggerUi(options =>
+            {
+                options.ConfigureDefaults();
+                options.DocumentTitle = "AllSpice Gateway";
+                options.Path = "/swagger";
+            });
+        }
+
         app.UseAuthorization();
+        app.UseFastEndpoints();
     }
 
     /// <summary>

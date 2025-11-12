@@ -22,6 +22,10 @@ public sealed class AssignModuleRoleCommandHandler : IRequestHandler<AssignModul
         IModuleRoleAssignmentRepository moduleRoleAssignmentRepository,
         IExternalDirectoryClient externalDirectoryClient)
     {
+        Guard.Against.Null(moduleDefinitionRepository);
+        Guard.Against.Null(moduleRoleAssignmentRepository);
+        Guard.Against.Null(externalDirectoryClient);
+
         _moduleDefinitionRepository = moduleDefinitionRepository;
         _moduleRoleAssignmentRepository = moduleRoleAssignmentRepository;
         _externalDirectoryClient = externalDirectoryClient;

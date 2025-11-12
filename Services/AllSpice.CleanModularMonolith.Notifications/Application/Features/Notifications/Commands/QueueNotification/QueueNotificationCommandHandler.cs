@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Ardalis.GuardClauses;
 using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
@@ -13,6 +14,8 @@ public sealed class QueueNotificationCommandHandler : IRequestHandler<QueueNotif
 
     public QueueNotificationCommandHandler(INotificationRepository notificationRepository)
     {
+        Guard.Against.Null(notificationRepository);
+
         _notificationRepository = notificationRepository;
     }
 
