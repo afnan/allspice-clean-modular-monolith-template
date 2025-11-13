@@ -27,6 +27,7 @@ public sealed class AssignModuleRoleEndpoint : Endpoint<AssignModuleRoleRequest,
     {
         Post("/api/identity/module-assignments");
         Roles("Identity.Admin");
+        Tags("Identity");
         Summary(summary =>
         {
             summary.Summary = "Assigns a module role to a user.";

@@ -1,5 +1,6 @@
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleDefinition;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleAssignment;
+using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleTemplate;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,6 +16,8 @@ public sealed class IdentityDbContext : DbContext
     public DbSet<ModuleDefinition> ModuleDefinitions => Set<ModuleDefinition>();
 
     public DbSet<ModuleRoleAssignment> ModuleRoleAssignments => Set<ModuleRoleAssignment>();
+
+    public DbSet<ModuleRoleTemplate> ModuleRoleTemplates => Set<ModuleRoleTemplate>();
 
     public DbSet<IdentitySyncHistory> IdentitySyncHistories => Set<IdentitySyncHistory>();
 

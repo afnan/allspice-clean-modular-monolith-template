@@ -1,5 +1,8 @@
 ﻿using System.Net.Http;
+using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleDefinition;
+using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleTemplate;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
+using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 using Quartz;
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 
@@ -26,6 +29,13 @@ public static class IdentityModuleExtensions
         builder.Services.AddScoped<IModuleDefinitionRepository, ModuleDefinitionRepository>();
         builder.Services.AddScoped<IModuleRoleAssignmentRepository, ModuleRoleAssignmentRepository>();
         builder.Services.AddScoped<IExternalDirectoryClient, AuthentikDirectoryClient>();
+        builder.Services.AddScoped<IRepository<ModuleRoleTemplate>>(sp =>
+        {
+            var context = sp.GetRequiredService<IdentityDbContext>();
+            return new EfRepository<IdentityDbContext, ModuleRoleTemplate>(context);
+        });
+        builder.Services.AddScoped<IReadRepository<ModuleRoleTemplate>>(sp =>
+            (IReadRepository<ModuleRoleTemplate>)sp.GetRequiredService<IRepository<ModuleRoleTemplate>>());
 
         builder.Services.AddMediator();
 

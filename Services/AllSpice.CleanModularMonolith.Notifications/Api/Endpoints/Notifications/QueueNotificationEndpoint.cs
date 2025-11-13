@@ -26,6 +26,7 @@ public sealed class QueueNotificationEndpoint : Endpoint<QueueNotificationReques
     public override void Configure()
     {
         Post("/api/notifications");
+        Tags("Notifications");
     }
 
     /// <inheritdoc />

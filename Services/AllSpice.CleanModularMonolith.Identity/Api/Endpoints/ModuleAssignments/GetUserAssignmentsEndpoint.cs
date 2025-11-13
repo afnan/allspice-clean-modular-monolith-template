@@ -27,6 +27,7 @@ public sealed class GetUserAssignmentsEndpoint : EndpointWithoutRequest<IReadOnl
     {
         Get("/api/identity/module-assignments/{userId}");
         Roles("Identity.Admin");
+        Tags("Identity");
         Summary(summary =>
         {
             summary.Summary = "Returns the active module role assignments for a user.";
