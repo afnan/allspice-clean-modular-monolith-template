@@ -1,3 +1,6 @@
+﻿using System.Net.Http;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
+using Quartz;
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 
 /// <summary>
@@ -6,6 +9,7 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 public static class IdentityModuleExtensions
 {
     private const string DatabaseResourceName = "identitydb";
+    internal const string AuthentikHttpClientName = "authentik-directory";
 
     /// <summary>
     /// Registers identity module services including persistence, external directory integration, and authorization helpers.
@@ -29,33 +33,68 @@ public static class IdentityModuleExtensions
         builder.Services.AddModuleRoleAuthorization();
 
         builder.Services.Configure<AuthentikOptions>(builder.Configuration.GetSection("Identity:Authentik"));
+        builder.Services.Configure<IdentitySyncOptions>(builder.Configuration.GetSection(IdentitySyncOptions.ConfigurationSectionName));
 
-        builder.Services.AddHttpClient<AuthentikDirectoryClient>((sp, client) =>
-        {
-            var options = sp.GetRequiredService<IOptions<AuthentikOptions>>().Value;
-            Guard.Against.NullOrWhiteSpace(options.BaseUrl, nameof(options.BaseUrl));
-            Guard.Against.NullOrWhiteSpace(options.ApiToken, nameof(options.ApiToken));
+        builder.Services.AddHttpClient(AuthentikHttpClientName, ConfigureAuthentikClient)
+            .ConfigurePrimaryHttpMessageHandler(CreateAuthentikHandler);
 
-            client.BaseAddress = new Uri(options.BaseUrl, UriKind.Absolute);
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiToken);
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        }).ConfigurePrimaryHttpMessageHandler(sp =>
-        {
-            var options = sp.GetRequiredService<IOptions<AuthentikOptions>>().Value;
-            if (!options.AllowUntrustedCertificates)
-            {
-                return new HttpClientHandler();
-            }
+        builder.Services.AddHttpClient<AuthentikDirectoryClient>(ConfigureAuthentikClient)
+            .ConfigurePrimaryHttpMessageHandler(CreateAuthentikHandler);
 
-            return new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-            };
-        });
+        builder.Services.AddHealthChecks()
+            .AddCheck<AuthentikHealthCheck>("authentik")
+            .AddCheck<IdentitySyncHealthCheck>("identity-sync")
+            .AddCheck<IdentityOrphanHealthCheck>("identity-orphans");
+
+        RegisterAuthentikSync(builder);
 
         logger.LogInformation("Identity module services registered");
 
         return builder;
+    }
+
+    private static void RegisterAuthentikSync(IHostApplicationBuilder builder)
+    {
+        var cronExpression = builder.Configuration[$"{IdentitySyncOptions.ConfigurationSectionName}:CronExpression"]
+            ?? new IdentitySyncOptions().CronExpression;
+
+        builder.Services.AddQuartz(q =>
+        {
+            var jobKey = new JobKey(AuthentikUserSyncJob.JobIdentity);
+
+            q.AddJob<AuthentikUserSyncJob>(opts => opts.WithIdentity(jobKey));
+
+            q.AddTrigger(opts => opts
+                .ForJob(jobKey)
+                .WithIdentity($"{AuthentikUserSyncJob.JobIdentity}-trigger")
+                .WithCronSchedule(cronExpression, builder =>
+                    builder.InTimeZone(TimeZoneInfo.Utc)));
+        });
+    }
+
+    private static void ConfigureAuthentikClient(IServiceProvider serviceProvider, HttpClient client)
+    {
+        var options = serviceProvider.GetRequiredService<IOptions<AuthentikOptions>>().Value;
+        Guard.Against.NullOrWhiteSpace(options.BaseUrl, nameof(options.BaseUrl));
+        Guard.Against.NullOrWhiteSpace(options.ApiToken, nameof(options.ApiToken));
+
+        client.BaseAddress = new Uri(options.BaseUrl, UriKind.Absolute);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiToken);
+        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+    }
+
+    private static HttpMessageHandler CreateAuthentikHandler(IServiceProvider serviceProvider)
+    {
+        var options = serviceProvider.GetRequiredService<IOptions<AuthentikOptions>>().Value;
+        if (!options.AllowUntrustedCertificates)
+        {
+            return new HttpClientHandler();
+        }
+
+        return new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        };
     }
 
     /// <summary>

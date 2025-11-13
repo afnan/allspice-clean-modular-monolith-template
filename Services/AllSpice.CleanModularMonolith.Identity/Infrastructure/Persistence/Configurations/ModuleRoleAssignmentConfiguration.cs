@@ -38,7 +38,7 @@ public sealed class ModuleRoleAssignmentConfiguration : IEntityTypeConfiguration
 
         var userIdConverter = new ValueConverter<ExternalUserId, string>(
             userId => userId.Value,
-            value => ExternalUserId.From(value));
+            value => ExternalUserId.From(value!));
 
         var userIdComparer = new ValueComparer<ExternalUserId>(
             (left, right) => left.Value.Equals(right.Value, StringComparison.Ordinal),
