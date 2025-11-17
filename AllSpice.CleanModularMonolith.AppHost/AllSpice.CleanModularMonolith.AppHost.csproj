@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AllSpice.CleanModularMonolith.ApiGateway\AllSpice.CleanModularMonolith.ApiGateway.csproj" />
+    <ProjectReference Include="..\AllSpice.CleanModularMonolith.ErpPortal\AllSpice.CleanModularMonolith.ErpPortal\AllSpice.CleanModularMonolith.ErpPortal.csproj" />
     <ProjectReference Include="..\AllSpice.CleanModularMonolith.ServiceDefaults\AllSpice.CleanModularMonolith.ServiceDefaults.csproj">
       <IsAspireProjectResource>false</IsAspireProjectResource>
     </ProjectReference>

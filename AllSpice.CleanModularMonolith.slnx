@@ -1,5 +1,9 @@
 <Solution>
   <Folder Name="/BFF/" />
+  <Folder Name="/Frontends/">
+    <Project Path="AllSpice.CleanModularMonolith.ErpPortal/AllSpice.CleanModularMonolith.ErpPortal.Client/AllSpice.CleanModularMonolith.ErpPortal.Client.csproj" />
+    <Project Path="AllSpice.CleanModularMonolith.ErpPortal/AllSpice.CleanModularMonolith.ErpPortal/AllSpice.CleanModularMonolith.ErpPortal.csproj" />
+  </Folder>
   <Folder Name="/Gateway/">
     <Project Path="AllSpice.CleanModularMonolith.ApiGateway/AllSpice.CleanModularMonolith.ApiGateway.csproj" />
   </Folder>

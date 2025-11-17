@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\AllSpice.CleanModularMonolith.ServiceDefaults\AllSpice.CleanModularMonolith.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\AllSpice.CleanModularMonolith.ErpPortal.Client\AllSpice.CleanModularMonolith.ErpPortal.Client.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server"/>
+  </ItemGroup>
+
+</Project>

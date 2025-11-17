@@ -187,5 +187,9 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
 #endregion
 
 
+builder.AddProject<Projects.AllSpice_CleanModularMonolith_ErpPortal>("allspice-cleanmodularmonolith-erpportal");
+
+
+
 builder.Build().Run();
 
