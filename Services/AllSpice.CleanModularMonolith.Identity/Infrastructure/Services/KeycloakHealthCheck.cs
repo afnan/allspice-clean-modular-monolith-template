@@ -7,21 +7,21 @@ using Microsoft.Extensions.Logging;
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 
 /// <summary>
-/// Health check that verifies connectivity to the backing Authentik instance.
+/// Health check that verifies connectivity to the backing Keycloak instance.
 /// </summary>
-public sealed class AuthentikHealthCheck : IHealthCheck
+public sealed class KeycloakHealthCheck : IHealthCheck
 {
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<AuthentikHealthCheck> _logger;
+    private readonly ILogger<KeycloakHealthCheck> _logger;
 
-    private static readonly Uri HealthEndpoint = new("/api/v3/core/users/?limit=1", UriKind.Relative);
+    private static readonly Uri HealthEndpoint = new("/users?max=1", UriKind.Relative);
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AuthentikHealthCheck"/> class.
+    /// Initializes a new instance of the <see cref="KeycloakHealthCheck"/> class.
     /// </summary>
-    public AuthentikHealthCheck(
+    public KeycloakHealthCheck(
         IHttpClientFactory httpClientFactory,
-        ILogger<AuthentikHealthCheck> logger)
+        ILogger<KeycloakHealthCheck> logger)
     {
         _httpClientFactory = httpClientFactory;
         _logger = logger;
@@ -32,7 +32,7 @@ public sealed class AuthentikHealthCheck : IHealthCheck
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
-        var client = _httpClientFactory.CreateClient(IdentityModuleExtensions.AuthentikHttpClientName);
+        var client = _httpClientFactory.CreateClient(IdentityModuleExtensions.KeycloakHttpClientName);
 
         try
         {
@@ -43,17 +43,17 @@ public sealed class AuthentikHealthCheck : IHealthCheck
 
             if (response.IsSuccessStatusCode)
             {
-                return HealthCheckResult.Healthy("Authenticated request to Authentik succeeded.");
+                return HealthCheckResult.Healthy("Authenticated request to Keycloak succeeded.");
             }
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogWarning(
-                "Authentik health request failed with status {Status}. Response: {ResponseBody}",
+                "Keycloak health request failed with status {Status}. Response: {ResponseBody}",
                 response.StatusCode,
                 body);
 
             return HealthCheckResult.Unhealthy(
-                $"Authentik responded with status {(int)response.StatusCode}",
+                $"Keycloak responded with status {(int)response.StatusCode}",
                 data: new Dictionary<string, object>
                 {
                     ["statusCode"] = (int)response.StatusCode,
@@ -62,13 +62,12 @@ public sealed class AuthentikHealthCheck : IHealthCheck
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Authentik health check failed.");
-            return HealthCheckResult.Unhealthy("Exception while reaching Authentik.", ex);
+            _logger.LogError(ex, "Keycloak health check failed.");
+            return HealthCheckResult.Unhealthy("Exception while reaching Keycloak.", ex);
         }
     }
 
     private static string Truncate(string value, int maxLength)
         => value.Length <= maxLength ? value : value[..maxLength];
 }
-
 

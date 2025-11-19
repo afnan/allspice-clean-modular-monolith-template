@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\AllSpice.CleanModularMonolith.ServiceDefaults\AllSpice.CleanModularMonolith.ServiceDefaults.csproj" />
     <ProjectReference Include="..\AllSpice.CleanModularMonolith.ErpPortal.Client\AllSpice.CleanModularMonolith.ErpPortal.Client.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server"/>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect"/>
   </ItemGroup>
 
 </Project>

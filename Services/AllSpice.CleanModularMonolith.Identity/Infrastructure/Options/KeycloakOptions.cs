@@ -1,21 +1,26 @@
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 
-public sealed class AuthentikOptions
+public sealed class KeycloakOptions
 {
     /// <summary>
-    /// Base URL of the Authentik instance (e.g. https://auth.example.com).
+    /// Base URL of the Keycloak instance (e.g. http://localhost:8080).
     /// </summary>
     public string BaseUrl { get; set; } = string.Empty;
 
     /// <summary>
-    /// Personal access token or API token with rights to query users and send invitations.
+    /// Keycloak realm name (e.g. allspice).
+    /// </summary>
+    public string Realm { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Admin client secret or service account token with rights to query users and send invitations.
     /// </summary>
     public string ApiToken { get; set; } = string.Empty;
 
     /// <summary>
-    /// Template used to look up users. Defaults to /api/v3/core/users/{0}/.
+    /// Template used to look up users. Defaults to /admin/realms/{realm}/users/{0}.
     /// </summary>
-    public string UserLookupTemplate { get; set; } = "/api/v3/core/users/{0}/";
+    public string UserLookupTemplate { get; set; } = "/admin/realms/{realm}/users/{0}";
 
     /// <summary>
     /// Endpoint used to invite new users. Optional.
@@ -27,5 +32,4 @@ public sealed class AuthentikOptions
     /// </summary>
     public bool AllowUntrustedCertificates { get; set; }
 }
-
 

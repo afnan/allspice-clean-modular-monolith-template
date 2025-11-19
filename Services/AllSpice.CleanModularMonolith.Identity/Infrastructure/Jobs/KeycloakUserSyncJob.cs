@@ -11,24 +11,24 @@ using Quartz;
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
 
 /// <summary>
-/// Reconciles Authentik users with local module-role assignments to detect orphaned accounts.
+/// Reconciles Keycloak users with local module-role assignments to detect orphaned accounts.
 /// </summary>
 [DisallowConcurrentExecution]
-public sealed class AuthentikUserSyncJob : IJob
+public sealed class KeycloakUserSyncJob : IJob
 {
-    public const string JobIdentity = "AuthentikUserSyncJob";
-    private const string IssueType = "AuthentikUserSync";
+    public const string JobIdentity = "KeycloakUserSyncJob";
+    private const string IssueType = "KeycloakUserSync";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOptions<IdentitySyncOptions> _options;
-    private readonly ILogger<AuthentikUserSyncJob> _logger;
+    private readonly ILogger<KeycloakUserSyncJob> _logger;
 
-    public AuthentikUserSyncJob(
+    public KeycloakUserSyncJob(
         IHttpClientFactory httpClientFactory,
         IServiceScopeFactory scopeFactory,
         IOptions<IdentitySyncOptions> options,
-        ILogger<AuthentikUserSyncJob> logger)
+        ILogger<KeycloakUserSyncJob> logger)
     {
         _httpClientFactory = httpClientFactory;
         _scopeFactory = scopeFactory;
@@ -51,7 +51,7 @@ public sealed class AuthentikUserSyncJob : IJob
         try
         {
             var cancellationToken = context.CancellationToken;
-            var httpClient = _httpClientFactory.CreateClient(IdentityModuleExtensions.AuthentikHttpClientName);
+            var httpClient = _httpClientFactory.CreateClient(IdentityModuleExtensions.KeycloakHttpClientName);
             var assignments = await dbContext.ModuleRoleAssignments
                 .Where(a => a.RevokedUtc == null)
                 .Select(a => a.UserId.Value)
@@ -61,49 +61,67 @@ public sealed class AuthentikUserSyncJob : IJob
             var orphanCandidates = new Dictionary<string, OrphanCandidate>(StringComparer.OrdinalIgnoreCase);
 
             var pageSize = Math.Max(1, _options.Value.PageSize);
-            var next = $"/api/v3/core/users/?ordering=pk&limit={pageSize}";
+            var first = 0;
+            var max = pageSize;
 
-            while (!string.IsNullOrEmpty(next))
+            while (true)
             {
+                var next = $"/users?first={first}&max={max}";
+
                 using var response = await httpClient.GetAsync(next, cancellationToken);
+                
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    break;
+                }
+                
                 response.EnsureSuccessStatusCode();
 
                 await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
                 using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
 
-                if (document.RootElement.TryGetProperty("results", out var results))
+                var users = document.RootElement;
+                if (users.ValueKind == JsonValueKind.Array)
                 {
-                    foreach (var element in results.EnumerateArray())
+                    foreach (var element in users.EnumerateArray())
                     {
                         history.ProcessedCount++;
 
-                        var uuid = element.TryGetProperty("uuid", out var uuidElement)
-                            ? uuidElement.GetString()
-                            : element.TryGetProperty("pk", out var pkElement)
-                                ? pkElement.GetRawText()
-                                : null;
+                        var userId = element.TryGetProperty("id", out var idElement)
+                            ? idElement.GetString()
+                            : null;
 
-                        if (string.IsNullOrWhiteSpace(uuid))
+                        if (string.IsNullOrWhiteSpace(userId))
                         {
                             continue;
                         }
 
-                        if (activeAssignmentSet.Contains(uuid))
+                        if (activeAssignmentSet.Contains(userId))
                         {
                             continue;
                         }
 
-                        orphanCandidates[uuid] = new OrphanCandidate(
-                            uuid,
+                        orphanCandidates[userId] = new OrphanCandidate(
+                            userId,
                             element.TryGetProperty("username", out var usernameElement) ? usernameElement.GetString() : null,
                             element.TryGetProperty("email", out var emailElement) ? emailElement.GetString() : null,
-                            element.TryGetProperty("name", out var nameElement) ? nameElement.GetString() : null);
+                            element.TryGetProperty("firstName", out var firstNameElement) && element.TryGetProperty("lastName", out var lastNameElement)
+                                ? $"{firstNameElement.GetString()} {lastNameElement.GetString()}".Trim()
+                                : null);
                     }
-                }
 
-                next = document.RootElement.TryGetProperty("next", out var nextElement) && nextElement.ValueKind != JsonValueKind.Null
-                    ? nextElement.GetString()
-                    : null;
+                    // If we got fewer results than requested, we've reached the end
+                    if (users.GetArrayLength() < max)
+                    {
+                        break;
+                    }
+
+                    first += max;
+                }
+                else
+                {
+                    break;
+                }
             }
 
             history.OrphanCount = orphanCandidates.Count;
@@ -124,7 +142,7 @@ public sealed class AuthentikUserSyncJob : IJob
             var failureContext = failureScope.ServiceProvider.GetRequiredService<IdentityDbContext>();
             await RecordSyncIssueAsync(failureContext, ex, context.CancellationToken);
 
-            _logger.LogError(ex, "Authentik user sync job failed with correlation id {CorrelationId}", history.CorrelationId);
+            _logger.LogError(ex, "Keycloak user sync job failed with correlation id {CorrelationId}", history.CorrelationId);
 
             throw new JobExecutionException(ex, false);
         }
@@ -235,5 +253,4 @@ public sealed class AuthentikUserSyncJob : IJob
 
     private sealed record OrphanCandidate(string UserId, string? Username, string? Email, string? DisplayName);
 }
-
 

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 
 /// <summary>
-/// Health check that ensures the Authentik synchronization job has succeeded recently.
+/// Health check that ensures the Keycloak synchronization job has succeeded recently.
 /// </summary>
 public sealed class IdentitySyncHealthCheck : IHealthCheck
 {
@@ -30,13 +30,13 @@ public sealed class IdentitySyncHealthCheck : IHealthCheck
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         var lastSuccess = await _dbContext.IdentitySyncHistories
-            .Where(history => history.JobName == AuthentikUserSyncJob.JobIdentity && history.Succeeded)
+            .Where(history => history.JobName == KeycloakUserSyncJob.JobIdentity && history.Succeeded)
             .OrderByDescending(history => history.FinishedUtc)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (lastSuccess is null)
         {
-            const string description = "No successful Authentik syncs have been recorded.";
+            const string description = "No successful Keycloak syncs have been recorded.";
             _logger.LogWarning(description);
             return HealthCheckResult.Unhealthy(description);
         }
@@ -44,7 +44,7 @@ public sealed class IdentitySyncHealthCheck : IHealthCheck
         var age = DateTimeOffset.UtcNow - lastSuccess.FinishedUtc;
         if (age > _options.Value.MaxSuccessAge)
         {
-            var message = $"Last Authentik sync succeeded {age:g} ago which exceeds the allowed threshold.";
+            var message = $"Last Keycloak sync succeeded {age:g} ago which exceeds the allowed threshold.";
             _logger.LogWarning(message);
             return HealthCheckResult.Degraded(
                 message,

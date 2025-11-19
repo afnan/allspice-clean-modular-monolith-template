@@ -12,7 +12,7 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 public static class IdentityModuleExtensions
 {
     private const string DatabaseResourceName = "identitydb";
-    internal const string AuthentikHttpClientName = "authentik-directory";
+    internal const string KeycloakHttpClientName = "keycloak-directory";
 
     /// <summary>
     /// Registers identity module services including persistence, external directory integration, and authorization helpers.
@@ -28,7 +28,7 @@ public static class IdentityModuleExtensions
 
         builder.Services.AddScoped<IModuleDefinitionRepository, ModuleDefinitionRepository>();
         builder.Services.AddScoped<IModuleRoleAssignmentRepository, ModuleRoleAssignmentRepository>();
-        builder.Services.AddScoped<IExternalDirectoryClient, AuthentikDirectoryClient>();
+        builder.Services.AddScoped<IExternalDirectoryClient, KeycloakDirectoryClient>();
         builder.Services.AddScoped<IRepository<ModuleRoleTemplate>>(sp =>
         {
             var context = sp.GetRequiredService<IdentityDbContext>();
@@ -42,60 +42,63 @@ public static class IdentityModuleExtensions
         builder.Services.AddValidatorsFromAssembly(AppAssemblyReference.Assembly);
         builder.Services.AddModuleRoleAuthorization();
 
-        builder.Services.Configure<AuthentikOptions>(builder.Configuration.GetSection("Identity:Authentik"));
+        builder.Services.Configure<KeycloakOptions>(builder.Configuration.GetSection("Identity:Keycloak"));
         builder.Services.Configure<IdentitySyncOptions>(builder.Configuration.GetSection(IdentitySyncOptions.ConfigurationSectionName));
 
-        builder.Services.AddHttpClient(AuthentikHttpClientName, ConfigureAuthentikClient)
-            .ConfigurePrimaryHttpMessageHandler(CreateAuthentikHandler);
+        builder.Services.AddHttpClient(KeycloakHttpClientName, ConfigureKeycloakClient)
+            .ConfigurePrimaryHttpMessageHandler(CreateKeycloakHandler);
 
-        builder.Services.AddHttpClient<AuthentikDirectoryClient>(ConfigureAuthentikClient)
-            .ConfigurePrimaryHttpMessageHandler(CreateAuthentikHandler);
+        builder.Services.AddHttpClient<KeycloakDirectoryClient>(ConfigureKeycloakClient)
+            .ConfigurePrimaryHttpMessageHandler(CreateKeycloakHandler);
 
         builder.Services.AddHealthChecks()
-            .AddCheck<AuthentikHealthCheck>("authentik")
+            .AddCheck<KeycloakHealthCheck>("keycloak")
             .AddCheck<IdentitySyncHealthCheck>("identity-sync")
             .AddCheck<IdentityOrphanHealthCheck>("identity-orphans");
 
-        RegisterAuthentikSync(builder);
+        RegisterKeycloakSync(builder);
 
         logger.LogInformation("Identity module services registered");
 
         return builder;
     }
 
-    private static void RegisterAuthentikSync(IHostApplicationBuilder builder)
+    private static void RegisterKeycloakSync(IHostApplicationBuilder builder)
     {
         var cronExpression = builder.Configuration[$"{IdentitySyncOptions.ConfigurationSectionName}:CronExpression"]
             ?? new IdentitySyncOptions().CronExpression;
 
         builder.Services.AddQuartz(q =>
         {
-            var jobKey = new JobKey(AuthentikUserSyncJob.JobIdentity);
+            var jobKey = new JobKey(KeycloakUserSyncJob.JobIdentity);
 
-            q.AddJob<AuthentikUserSyncJob>(opts => opts.WithIdentity(jobKey));
+            q.AddJob<KeycloakUserSyncJob>(opts => opts.WithIdentity(jobKey));
 
             q.AddTrigger(opts => opts
                 .ForJob(jobKey)
-                .WithIdentity($"{AuthentikUserSyncJob.JobIdentity}-trigger")
+                .WithIdentity($"{KeycloakUserSyncJob.JobIdentity}-trigger")
                 .WithCronSchedule(cronExpression, builder =>
                     builder.InTimeZone(TimeZoneInfo.Utc)));
         });
     }
 
-    private static void ConfigureAuthentikClient(IServiceProvider serviceProvider, HttpClient client)
+    private static void ConfigureKeycloakClient(IServiceProvider serviceProvider, HttpClient client)
     {
-        var options = serviceProvider.GetRequiredService<IOptions<AuthentikOptions>>().Value;
+        var options = serviceProvider.GetRequiredService<IOptions<KeycloakOptions>>().Value;
         Guard.Against.NullOrWhiteSpace(options.BaseUrl, nameof(options.BaseUrl));
+        Guard.Against.NullOrWhiteSpace(options.Realm, nameof(options.Realm));
         Guard.Against.NullOrWhiteSpace(options.ApiToken, nameof(options.ApiToken));
 
-        client.BaseAddress = new Uri(options.BaseUrl, UriKind.Absolute);
+        // Keycloak Admin API base URL includes the realm
+        var baseUrl = $"{options.BaseUrl.TrimEnd('/')}/admin/realms/{options.Realm}";
+        client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiToken);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 
-    private static HttpMessageHandler CreateAuthentikHandler(IServiceProvider serviceProvider)
+    private static HttpMessageHandler CreateKeycloakHandler(IServiceProvider serviceProvider)
     {
-        var options = serviceProvider.GetRequiredService<IOptions<AuthentikOptions>>().Value;
+        var options = serviceProvider.GetRequiredService<IOptions<KeycloakOptions>>().Value;
         if (!options.AllowUntrustedCertificates)
         {
             return new HttpClientHandler();

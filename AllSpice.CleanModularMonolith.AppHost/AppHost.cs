@@ -21,14 +21,8 @@ var sinchProjectId = GetParameter(parameters, "sinch-project-id");
 var sinchApiKey = GetParameter(parameters, "sinch-api-key");
 var sinchServicePlanId = GetParameter(parameters, "sinch-service-plan-id");
 var sinchFromNumber = GetParameter(parameters, "sinch-from-number");
-var authentikSecretKey = GetParameter(parameters, "authentik-secret-key");
-var authentikBootstrapPassword = GetParameter(parameters, "authentik-bootstrap-password");
-
-//var authentikClientSecret = builder.AddParameter("identity-authentik-client-secret");
-
-
-var authentikImage = builder.Configuration["Authentik:Image"] ?? "ghcr.io/goauthentik/server";
-var authentikTag = builder.Configuration["Authentik:Tag"] ?? "2025.10.1";
+var keycloakAdminUser = GetParameter(parameters, "keycloak-admin-user");
+var keycloakAdminPassword = GetParameter(parameters, "keycloak-admin-password");
 
 #region Local Email Container
 // Papercut SMTP container for email testing
@@ -86,7 +80,7 @@ var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
 #region Database Creation
 var notificationsDatabase = postgres.AddDatabase("notificationsdb");
 var identityDatabase = postgres.AddDatabase("identitydb");
-var authentikDb = postgres.AddDatabase("authentikdb");
+var keycloakDb = postgres.AddDatabase("keycloakdb");
 #endregion
 
 #region Redis Cache
@@ -101,65 +95,87 @@ var redis = builder.AddContainer("redis", "redis", "latest")
 var redisEndpoint = redis.GetEndpoint("tcp");
 #endregion
 
-#region Authentik Identity Provider (Local Dev)
+#region Keycloak Identity Provider
+// Development mode: Uses start-dev with HTTP only, relaxed hostname settings
+// Production mode: Use start with HTTPS, proper hostname, and optimized build
+const string keycloakDbHost = "postgres";
+const string keycloakDbPort = "5432";
+var keycloakRealm = builder.Configuration["Keycloak:Realm"] ?? "allspice";
+
 if (builder.Environment.IsDevelopment())
 {
-  const string authentikDbHost = "postgres";
-  const string authentikDbPort = "5432";
 
-  var authentikServer = builder.AddContainer("authentik-server", authentikImage, authentikTag)
-      .WithArgs("server")
-      .WithReference(authentikDb)
+  var keycloak = builder.AddContainer("keycloak", "quay.io/keycloak/keycloak", "latest")
+      .WithArgs("start-dev")
+      .WithReference(keycloakDb)
       .WithReference(postgres)
       .WithEndpoint("http", e =>
       {
-        e.TargetPort = 9000;
-        e.Port = 9000;
+        e.TargetPort = 8080;
+        e.Port = 8080;
+        e.UriScheme = "http";
+      })
+      .WaitFor(postgres)
+      .WithEnvironment("KC_DB", "postgres")
+      .WithEnvironment("KC_DB_URL_HOST", keycloakDbHost)
+      .WithEnvironment("KC_DB_URL_PORT", keycloakDbPort)
+      .WithEnvironment("KC_DB_URL_DATABASE", "keycloakdb")
+      .WithEnvironment("KC_DB_USERNAME", postgresUserValue)
+      .WithEnvironment("KC_DB_PASSWORD", postgresPasswordValue)
+      // Use v2 hostname options to avoid deprecation warnings
+      .WithEnvironment("KC_HOSTNAME_STRICT", "false")
+      .WithEnvironment("KC_HOSTNAME_STRICT_BACKEND", "false")
+      .WithEnvironment("KC_HTTP_ENABLED", "true")
+      .WithEnvironment("KC_HTTPS_ENABLED", "false")
+      .WithEnvironment("KC_HEALTH_ENABLED", "true")
+      .WithEnvironment("KC_METRICS_ENABLED", "true")
+      .WithEnvironment("KEYCLOAK_ADMIN", keycloakAdminUser ?? "admin")
+      .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword ?? "admin");
+}
+else
+{
+  // Production mode: use optimized start with HTTPS support
+  var keycloakImage = builder.Configuration["Keycloak:Image"] ?? "quay.io/keycloak/keycloak";
+  var keycloakTag = builder.Configuration["Keycloak:Tag"] ?? "latest";
+  var keycloakHostname = builder.Configuration["Keycloak:Hostname"] ?? "";
+  var proxyMode = builder.Configuration["Keycloak:Proxy"] ?? "edge";
+  
+  var keycloak = builder.AddContainer("keycloak", keycloakImage, keycloakTag)
+      .WithArgs("start", "--optimized")
+      .WithReference(keycloakDb)
+      .WithReference(postgres)
+      .WithEndpoint("http", e =>
+      {
+        e.TargetPort = 8080;
         e.UriScheme = "http";
       })
       .WithEndpoint("https", e =>
       {
-        e.TargetPort = 9443;
-        e.Port = 9443;
+        e.TargetPort = 8443;
         e.UriScheme = "https";
       })
       .WaitFor(postgres)
-      .WithEnvironment("AUTHENTIK_HOST", "localhost:9443")
-      .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
-      .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", authentikBootstrapPassword)
-      .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", builder.Configuration["Authentik:Bootstrap:Email"] ?? "admin@example.com")
-      .WithEnvironment("AUTHENTIK_BOOTSTRAP_USERNAME", builder.Configuration["Authentik:Bootstrap:Username"] ?? "admin")
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", authentikDbHost)
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", authentikDbPort)
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgresUserValue)
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgresPasswordValue)
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "authentikdb")
-      .WithEnvironment("AUTHENTIK_REDIS__HOST", "redis")
-      .WithEnvironment("AUTHENTIK_REDIS__PORT", "6379")
-      .WithEnvironment("AUTHENTIK_DISABLE_UPDATE_CHECK", "true")
-      .WithEnvironment("AUTHENTIK_LOGGING__LEVEL", builder.Configuration["Authentik:Logging:Level"] ?? "INFO")
-      ;
-
-  var authentikWorker = builder.AddContainer("authentik-worker", authentikImage, authentikTag)
-      .WithArgs("worker")
-      .WithReference(authentikDb)
-      .WithReference(postgres)
-      .WaitFor(postgres)
-      .WithEnvironment("AUTHENTIK_HOST", "localhost:9443")
-      .WithEnvironment("AUTHENTIK_SECRET_KEY", authentikSecretKey)
-      .WithEnvironment("AUTHENTIK_BOOTSTRAP_PASSWORD", authentikBootstrapPassword)
-      .WithEnvironment("AUTHENTIK_BOOTSTRAP_EMAIL", builder.Configuration["Authentik:Bootstrap:Email"] ?? "admin@example.com")
-      .WithEnvironment("AUTHENTIK_BOOTSTRAP_USERNAME", builder.Configuration["Authentik:Bootstrap:Username"] ?? "admin")
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__HOST", authentikDbHost)
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__PORT", authentikDbPort)
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__USER", postgresUserValue)
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__PASSWORD", postgresPasswordValue)
-      .WithEnvironment("AUTHENTIK_POSTGRESQL__NAME", "authentikdb")
-      .WithEnvironment("AUTHENTIK_REDIS__HOST", "redis")
-      .WithEnvironment("AUTHENTIK_REDIS__PORT", "6379")
-      .WithEnvironment("AUTHENTIK_DISABLE_UPDATE_CHECK", "true")
-      .WithEnvironment("AUTHENTIK_LOGGING__LEVEL", builder.Configuration["Authentik:Logging:Level"] ?? "INFO")
-      .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock");
+      .WithEnvironment("KC_DB", "postgres")
+      .WithEnvironment("KC_DB_URL_HOST", keycloakDbHost)
+      .WithEnvironment("KC_DB_URL_PORT", keycloakDbPort)
+      .WithEnvironment("KC_DB_URL_DATABASE", "keycloakdb")
+      .WithEnvironment("KC_DB_USERNAME", postgresUserValue)
+      .WithEnvironment("KC_DB_PASSWORD", postgresPasswordValue)
+      .WithEnvironment("KC_HOSTNAME_STRICT", builder.Configuration["Keycloak:HostnameStrict"] ?? "true")
+      .WithEnvironment("KC_HOSTNAME_STRICT_BACKEND", builder.Configuration["Keycloak:HostnameStrictBackend"] ?? "false")
+      .WithEnvironment("KC_HTTP_ENABLED", builder.Configuration["Keycloak:HttpEnabled"] ?? "true")
+      .WithEnvironment("KC_HTTPS_ENABLED", builder.Configuration["Keycloak:HttpsEnabled"] ?? "true")
+      .WithEnvironment("KC_HTTPS_PORT", builder.Configuration["Keycloak:HttpsPort"] ?? "8443")
+      .WithEnvironment("KC_HEALTH_ENABLED", "true")
+      .WithEnvironment("KC_METRICS_ENABLED", "true")
+      .WithEnvironment("KC_PROXY", proxyMode)
+      .WithEnvironment("KEYCLOAK_ADMIN", keycloakAdminUser ?? "admin")
+      .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword ?? "admin");
+  
+  if (!string.IsNullOrWhiteSpace(keycloakHostname))
+  {
+    keycloak = keycloak.WithEnvironment("KC_HOSTNAME", keycloakHostname);
+  }
 }
 #endregion
 
@@ -170,15 +186,18 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
     .WithEnvironment("ConnectionStrings__redis", redisEndpoint)
     .WithEnvironment("Cors__WebOrigin", builder.Configuration["Cors:WebOrigin"] ?? "https://localhost:7001")
     .WithEnvironment("Cors__MobileOrigin", builder.Configuration["Cors:MobileOrigin"] ?? "https://localhost:7002")
-    .WithEnvironment("Authentik__Portals__Erp__Authority", builder.Configuration["Authentik:Portals:Erp:Authority"] ?? "")
-    .WithEnvironment("Authentik__Portals__Erp__Audience", builder.Configuration["Authentik:Portals:Erp:Audience"] ?? "")
-    .WithEnvironment("Authentik__Portals__Public__Authority", builder.Configuration["Authentik:Portals:Public:Authority"] ?? "")
-    .WithEnvironment("Authentik__Portals__Public__Audience", builder.Configuration["Authentik:Portals:Public:Audience"] ?? "")
-    .WithEnvironment("Identity__Authentik__BaseUrl", builder.Configuration["Identity:Authentik:BaseUrl"] ?? "")
-    .WithEnvironment("Identity__Authentik__ApiToken", builder.Configuration["Identity:Authentik:ApiToken"] ?? "")
-    .WithEnvironment("Identity__Authentik__UserLookupTemplate", builder.Configuration["Identity:Authentik:UserLookupTemplate"] ?? "/api/v3/core/users/{0}/")
-    .WithEnvironment("Identity__Authentik__InvitationEndpoint", builder.Configuration["Identity:Authentik:InvitationEndpoint"] ?? "")
-    .WithEnvironment("Identity__Authentik__AllowUntrustedCertificates", builder.Configuration["Identity:Authentik:AllowUntrustedCertificates"] ?? "false")
+    .WithEnvironment("Keycloak__BaseUrl", builder.Configuration["Keycloak:BaseUrl"] ?? "http://localhost:8080")
+    .WithEnvironment("Keycloak__Realm", builder.Configuration["Keycloak:Realm"] ?? "allspice")
+    .WithEnvironment("Keycloak__Portals__Erp__Authority", builder.Configuration["Keycloak:Portals:Erp:Authority"] ?? "")
+    .WithEnvironment("Keycloak__Portals__Erp__ClientId", builder.Configuration["Keycloak:Portals:Erp:ClientId"] ?? "")
+    .WithEnvironment("Keycloak__Portals__MainWebsite__Authority", builder.Configuration["Keycloak:Portals:MainWebsite:Authority"] ?? "")
+    .WithEnvironment("Keycloak__Portals__MainWebsite__ClientId", builder.Configuration["Keycloak:Portals:MainWebsite:ClientId"] ?? "")
+    .WithEnvironment("Identity__Keycloak__BaseUrl", builder.Configuration["Identity:Keycloak:BaseUrl"] ?? "")
+    .WithEnvironment("Identity__Keycloak__Realm", builder.Configuration["Identity:Keycloak:Realm"] ?? "")
+    .WithEnvironment("Identity__Keycloak__ApiToken", builder.Configuration["Identity:Keycloak:ApiToken"] ?? "")
+    .WithEnvironment("Identity__Keycloak__UserLookupTemplate", builder.Configuration["Identity:Keycloak:UserLookupTemplate"] ?? "/admin/realms/{realm}/users/{0}")
+    .WithEnvironment("Identity__Keycloak__InvitationEndpoint", builder.Configuration["Identity:Keycloak:InvitationEndpoint"] ?? "")
+    .WithEnvironment("Identity__Keycloak__AllowUntrustedCertificates", builder.Configuration["Identity:Keycloak:AllowUntrustedCertificates"] ?? "false")
     .WithEnvironment("Notifications__Sinch__ProjectId", sinchProjectId)
     .WithEnvironment("Notifications__Sinch__ApiKey", sinchApiKey)
     .WithEnvironment("Notifications__Sinch__Sms__ServicePlanId", sinchServicePlanId)
@@ -186,8 +205,22 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
     .WaitFor(postgres);
 #endregion
 
+#region Portal Applications
+var erpPortal = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ErpPortal>("allspice-cleanmodularmonolith-erpportal")
+    .WithEnvironment("Keycloak__Portals__Erp__Authority", builder.Configuration["Keycloak:Portals:Erp:Authority"] ?? "")
+    .WithEnvironment("Keycloak__Portals__Erp__ClientId", builder.Configuration["Keycloak:Portals:Erp:ClientId"] ?? "")
+    .WithEnvironment("Keycloak__Portals__Erp__ClientSecret", builder.Configuration["Keycloak:Portals:Erp:ClientSecret"] ?? "")
+    .WithEnvironment("Keycloak__Portals__Erp__CallbackPath", builder.Configuration["Keycloak:Portals:Erp:CallbackPath"] ?? "/signin-oidc")
+    .WithEnvironment("Keycloak__Portals__Erp__SignedOutCallbackPath", builder.Configuration["Keycloak:Portals:Erp:SignedOutCallbackPath"] ?? "/signout-callback-oidc");
 
-builder.AddProject<Projects.AllSpice_CleanModularMonolith_ErpPortal>("allspice-cleanmodularmonolith-erpportal");
+// MainWebsite project not yet created - uncomment when project is added to solution
+//var mainWebsite = builder.AddProject<Projects.AllSpice_CleanModularMonolith_MainWebsite>("allspice-cleanmodularmonolith-mainwebsite")
+//    .WithEnvironment("Keycloak__Portals__MainWebsite__Authority", builder.Configuration["Keycloak:Portals:MainWebsite:Authority"] ?? "")
+//    .WithEnvironment("Keycloak__Portals__MainWebsite__ClientId", builder.Configuration["Keycloak:Portals:MainWebsite:ClientId"] ?? "")
+//    .WithEnvironment("Keycloak__Portals__MainWebsite__ClientSecret", builder.Configuration["Keycloak:Portals:MainWebsite:ClientSecret"] ?? "")
+//    .WithEnvironment("Keycloak__Portals__MainWebsite__CallbackPath", builder.Configuration["Keycloak:Portals:MainWebsite:CallbackPath"] ?? "/signin-oidc")
+//    .WithEnvironment("Keycloak__Portals__MainWebsite__SignedOutCallbackPath", builder.Configuration["Keycloak:Portals:MainWebsite:SignedOutCallbackPath"] ?? "/signout-callback-oidc");
+#endregion
 
 
 

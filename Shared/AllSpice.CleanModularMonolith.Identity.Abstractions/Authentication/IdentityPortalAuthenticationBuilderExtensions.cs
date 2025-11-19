@@ -13,7 +13,7 @@ namespace AllSpice.CleanModularMonolith.Identity.Abstractions.Authentication;
 public static class IdentityPortalAuthenticationBuilderExtensions
 {
     /// <summary>
-    /// Registers JWT bearer handlers for ERP/public portals and configures default schemes.
+    /// Registers JWT bearer handlers for ERP/public portals using Keycloak and configures default schemes.
     /// </summary>
     /// <param name="builder">The ASP.NET authentication builder.</param>
     /// <param name="configure">Callback used to configure portal options.</param>

@@ -1,7 +1,7 @@
 namespace AllSpice.CleanModularMonolith.Identity.Application.Contracts.External;
 
 /// <summary>
-/// Abstraction over external identity directories (e.g., Authentik).
+/// Abstraction over external identity directories (e.g., Keycloak).
 /// </summary>
 public interface IExternalDirectoryClient
 {

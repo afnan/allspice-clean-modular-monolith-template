@@ -202,30 +202,30 @@ public static class GatewayServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Attempts to configure authentication based on Authentik portal settings.
+    /// Attempts to configure authentication based on Keycloak portal settings.
     /// </summary>
     /// <param name="builder">The web application builder.</param>
     /// <returns><see langword="true"/> when authentication is configured; otherwise <see langword="false"/>.</returns>
-    /// <remarks>The ERP authority and audience are required; public portal settings are optional.</remarks>
+    /// <remarks>The ERP authority and client ID are required; MainWebsite portal settings are optional.</remarks>
     private static bool ConfigureAuthentication(this WebApplicationBuilder builder)
     {
-        var erpAuthority = builder.Configuration["Authentik:Portals:Erp:Authority"]
-            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__ERP__AUTHORITY")
+        var erpAuthority = builder.Configuration["Keycloak:Portals:Erp:Authority"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__ERP__AUTHORITY")
             ?? string.Empty;
 
-        var erpAudience = builder.Configuration["Authentik:Portals:Erp:Audience"]
-            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__ERP__AUDIENCE")
+        var erpClientId = builder.Configuration["Keycloak:Portals:Erp:ClientId"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__ERP__CLIENTID")
             ?? string.Empty;
 
-        var publicAuthority = builder.Configuration["Authentik:Portals:Public:Authority"]
-            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__PUBLIC__AUTHORITY")
+        var mainWebsiteAuthority = builder.Configuration["Keycloak:Portals:MainWebsite:Authority"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__MAINWEBSITE__AUTHORITY")
             ?? string.Empty;
 
-        var publicAudience = builder.Configuration["Authentik:Portals:Public:Audience"]
-            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__PUBLIC__AUDIENCE")
+        var mainWebsiteClientId = builder.Configuration["Keycloak:Portals:MainWebsite:ClientId"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__MAINWEBSITE__CLIENTID")
             ?? string.Empty;
 
-        if (string.IsNullOrWhiteSpace(erpAuthority) || string.IsNullOrWhiteSpace(erpAudience))
+        if (string.IsNullOrWhiteSpace(erpAuthority) || string.IsNullOrWhiteSpace(erpClientId))
         {
             return false;
         }
@@ -234,10 +234,10 @@ public static class GatewayServiceCollectionExtensions
             .AddIdentityPortals(options =>
             {
                 options.ErpAuthority = erpAuthority;
-                options.ErpAudience = erpAudience;
-                options.PublicAuthority = publicAuthority;
-                options.PublicAudience = publicAudience;
-                options.UsePublicAsDefaultChallenge = !string.IsNullOrWhiteSpace(publicAuthority) && !string.IsNullOrWhiteSpace(publicAudience);
+                options.ErpAudience = erpClientId;
+                options.PublicAuthority = mainWebsiteAuthority;
+                options.PublicAudience = mainWebsiteClientId;
+                options.UsePublicAsDefaultChallenge = !string.IsNullOrWhiteSpace(mainWebsiteAuthority) && !string.IsNullOrWhiteSpace(mainWebsiteClientId);
             });
 
         return true;
