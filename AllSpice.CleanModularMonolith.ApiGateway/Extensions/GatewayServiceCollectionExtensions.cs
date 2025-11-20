@@ -209,9 +209,17 @@ public static class GatewayServiceCollectionExtensions
     /// <remarks>The ERP authority and client ID are required; MainWebsite portal settings are optional.</remarks>
     private static bool ConfigureAuthentication(this WebApplicationBuilder builder)
     {
+        // Try to get authority directly, or construct from BaseUrl and Realm
+        var keycloakBaseUrl = builder.Configuration["Keycloak:BaseUrl"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__BASEURL")
+            ?? string.Empty;
+        var keycloakRealm = builder.Configuration["Keycloak:Realm"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__REALM")
+            ?? "allspice";
+        
         var erpAuthority = builder.Configuration["Keycloak:Portals:Erp:Authority"]
             ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__ERP__AUTHORITY")
-            ?? string.Empty;
+            ?? (string.IsNullOrWhiteSpace(keycloakBaseUrl) ? string.Empty : $"{keycloakBaseUrl.TrimEnd('/')}/realms/{keycloakRealm}");
 
         var erpClientId = builder.Configuration["Keycloak:Portals:Erp:ClientId"]
             ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__ERP__CLIENTID")
@@ -219,7 +227,7 @@ public static class GatewayServiceCollectionExtensions
 
         var mainWebsiteAuthority = builder.Configuration["Keycloak:Portals:MainWebsite:Authority"]
             ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__MAINWEBSITE__AUTHORITY")
-            ?? string.Empty;
+            ?? (string.IsNullOrWhiteSpace(keycloakBaseUrl) ? string.Empty : $"{keycloakBaseUrl.TrimEnd('/')}/realms/{keycloakRealm}");
 
         var mainWebsiteClientId = builder.Configuration["Keycloak:Portals:MainWebsite:ClientId"]
             ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__MAINWEBSITE__CLIENTID")
@@ -261,16 +269,22 @@ public static class GatewayServiceCollectionExtensions
     {
         builder.Services.AddAuthorization(options =>
         {
+            // Always add the 'authenticated' policy (required by YARP routes)
+            // It will only enforce authentication if authentication is enabled
+            options.AddPolicy("authenticated", policy =>
+            {
+                if (authenticationEnabled)
+                {
+                    policy.RequireAuthenticatedUser();
+                }
+                // If authentication is not enabled, the policy allows all (no requirements)
+            });
+
             if (authenticationEnabled)
             {
                 options.FallbackPolicy = new AuthorizationPolicyBuilder()
                     .RequireAuthenticatedUser()
                     .Build();
-
-                options.AddPolicy("authenticated", policy =>
-                {
-                    policy.RequireAuthenticatedUser();
-                });
             }
 
             options.AddPolicy("allow-anonymous", policy =>

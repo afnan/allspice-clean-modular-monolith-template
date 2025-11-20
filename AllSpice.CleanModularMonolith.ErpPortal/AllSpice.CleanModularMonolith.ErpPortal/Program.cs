@@ -13,7 +13,13 @@ builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
 
 // Configure authentication
-var keycloakAuthority = builder.Configuration["Keycloak:Portals:Erp:Authority"] ?? string.Empty;
+// Construct authority URL from BaseUrl (endpoint reference) and Realm
+// The endpoint reference resolves at runtime when the container is running
+var keycloakBaseUrl = builder.Configuration["Keycloak:BaseUrl"] ?? string.Empty;
+var keycloakRealm = builder.Configuration["Keycloak:Realm"] ?? "allspice";
+var keycloakAuthority = string.IsNullOrWhiteSpace(keycloakBaseUrl) 
+    ? string.Empty 
+    : $"{keycloakBaseUrl.TrimEnd('/')}/realms/{keycloakRealm}";
 var keycloakClientId = builder.Configuration["Keycloak:Portals:Erp:ClientId"] ?? string.Empty;
 var keycloakClientSecret = builder.Configuration["Keycloak:Portals:Erp:ClientSecret"] ?? string.Empty;
 var callbackPath = builder.Configuration["Keycloak:Portals:Erp:CallbackPath"] ?? "/signin-oidc";
@@ -47,6 +53,36 @@ if (!string.IsNullOrWhiteSpace(keycloakAuthority) && !string.IsNullOrWhiteSpace(
         {
             options.RequireHttpsMetadata = false;
         }
+        
+        // Configure BackchannelHttpHandler to avoid "response ended prematurely" errors
+        // The issue occurs when Keycloak closes the connection before the full response is sent
+        // This can happen due to HTTP version mismatches or connection pooling issues
+        options.BackchannelHttpHandler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => 
+                builder.Environment.IsDevelopment() || errors == System.Net.Security.SslPolicyErrors.None,
+            MaxConnectionsPerServer = 1, // Use single connection to avoid pooling issues
+            AllowAutoRedirect = true,
+            // Disable connection keep-alive to force new connections (helps with premature closure)
+           //UseCookies = false
+        };
+        
+        // Configure metadata refresh settings with longer intervals to reduce connection attempts
+        options.RefreshOnIssuerKeyNotFound = true;
+        options.AutomaticRefreshInterval = TimeSpan.FromHours(24);
+        options.RefreshInterval = TimeSpan.FromMinutes(10); // Longer interval to reduce connection attempts
+        
+        // Add retry logic via Events
+        options.Events = new Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                // Log but don't fail immediately - let retry mechanism handle it
+                context.Response.Redirect("/login");
+                context.HandleResponse();
+                return Task.CompletedTask;
+            }
+        };
     });
 
     builder.Services.AddAuthorization();

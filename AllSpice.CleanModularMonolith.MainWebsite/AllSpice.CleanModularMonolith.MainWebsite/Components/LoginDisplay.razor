@@ -1,0 +1,27 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
+<AuthorizeView>
+    <Authorized>
+        <div class="d-flex align-items-center gap-2">
+            @{
+                var userName = context.User.Identity?.Name 
+                    ?? context.User.FindFirst("preferred_username")?.Value
+                    ?? context.User.FindFirst("name")?.Value
+                    ?? context.User.FindFirst("email")?.Value
+                    ?? "User";
+            }
+            <span>Hello, @userName!</span>
+            <form method="post" action="/logout">
+                <button type="submit" class="btn btn-link">Log out</button>
+            </form>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        @* Use a form with GET method to force full page navigation *@
+        @* This bypasses Blazor's navigation interception and ensures the 302 redirect to Keycloak is followed *@
+        <form method="get" action="/login">
+            <button type="submit" class="btn btn-primary">Log in</button>
+        </form>
+    </NotAuthorized>
+</AuthorizeView>
+

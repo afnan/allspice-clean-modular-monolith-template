@@ -85,12 +85,17 @@ public static class IdentityModuleExtensions
     private static void ConfigureKeycloakClient(IServiceProvider serviceProvider, HttpClient client)
     {
         var options = serviceProvider.GetRequiredService<IOptions<KeycloakOptions>>().Value;
-        Guard.Against.NullOrWhiteSpace(options.BaseUrl, nameof(options.BaseUrl));
         Guard.Against.NullOrWhiteSpace(options.Realm, nameof(options.Realm));
         Guard.Against.NullOrWhiteSpace(options.ApiToken, nameof(options.ApiToken));
 
-        // Keycloak Admin API base URL includes the realm
-        var baseUrl = $"{options.BaseUrl.TrimEnd('/')}/admin/realms/{options.Realm}";
+        // Use service discovery if ServiceName is provided, otherwise use BaseUrl
+        // Service discovery will automatically resolve the service name to the actual endpoint
+        var baseUrl = !string.IsNullOrWhiteSpace(options.ServiceName)
+            ? $"http://{options.ServiceName}/admin/realms/{options.Realm}"
+            : (string.IsNullOrWhiteSpace(options.BaseUrl)
+                ? throw new InvalidOperationException("Either ServiceName or BaseUrl must be provided for Keycloak configuration")
+                : $"{options.BaseUrl.TrimEnd('/')}/admin/realms/{options.Realm}");
+        
         client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiToken);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));

@@ -23,6 +23,17 @@ var sinchServicePlanId = GetParameter(parameters, "sinch-service-plan-id");
 var sinchFromNumber = GetParameter(parameters, "sinch-from-number");
 var keycloakAdminUser = GetParameter(parameters, "keycloak-admin-user");
 var keycloakAdminPassword = GetParameter(parameters, "keycloak-admin-password");
+var keycloakRealmValue = GetParameter(parameters, "keycloak-realm", "sadaqa");
+var keycloakApiToken = GetParameter(parameters, "keycloak-api-token");
+var keycloakErpClientSecret = GetParameter(parameters, "keycloak-erp-client-secret");
+var keycloakMainWebsiteClientSecret = GetParameter(parameters, "keycloak-mainwebsite-client-secret");
+var entraIdTenantId = GetParameter(parameters, "entra-id-tenant-id");
+var entraIdClientId = GetParameter(parameters, "entra-id-client-id");
+var entraIdClientSecret = GetParameter(parameters, "entra-id-client-secret");
+var smtpUsername = GetParameter(parameters, "smtp-username");
+var smtpPassword = GetParameter(parameters, "smtp-password");
+var emailFromAddress = GetParameter(parameters, "email-from-address");
+var emailReplyToAddress = GetParameter(parameters, "email-reply-to-address");
 
 #region Local Email Container
 // Papercut SMTP container for email testing
@@ -87,10 +98,10 @@ var keycloakDb = postgres.AddDatabase("keycloakdb");
 var redis = builder.AddContainer("redis", "redis", "latest")
     .WithEndpoint("tcp", e =>
     {
-        e.TargetPort = 6379;
-        e.Port = 6379;
-        e.Protocol = ProtocolType.Tcp;
-        e.UriScheme = "redis";
+      e.TargetPort = 6379;
+      e.Port = 6379;
+      e.Protocol = ProtocolType.Tcp;
+      e.UriScheme = "redis";
     });
 var redisEndpoint = redis.GetEndpoint("tcp");
 #endregion
@@ -100,12 +111,14 @@ var redisEndpoint = redis.GetEndpoint("tcp");
 // Production mode: Use start with HTTPS, proper hostname, and optimized build
 const string keycloakDbHost = "postgres";
 const string keycloakDbPort = "5432";
-var keycloakRealm = builder.Configuration["Keycloak:Realm"] ?? "allspice";
+// Use parameter for Keycloak realm (allows override via command line or environment)
+var keycloakRealm = keycloakRealmValue;
+
+IResourceBuilder<IResourceWithEndpoints> keycloak;
 
 if (builder.Environment.IsDevelopment())
 {
-
-  var keycloak = builder.AddContainer("keycloak", "quay.io/keycloak/keycloak", "latest")
+  keycloak = builder.AddContainer("keycloak", "quay.io/keycloak/keycloak", "latest")
       .WithArgs("start-dev")
       .WithReference(keycloakDb)
       .WithReference(postgres)
@@ -139,8 +152,8 @@ else
   var keycloakTag = builder.Configuration["Keycloak:Tag"] ?? "latest";
   var keycloakHostname = builder.Configuration["Keycloak:Hostname"] ?? "";
   var proxyMode = builder.Configuration["Keycloak:Proxy"] ?? "edge";
-  
-  var keycloak = builder.AddContainer("keycloak", keycloakImage, keycloakTag)
+
+  var keycloakBuilder = builder.AddContainer("keycloak", keycloakImage, keycloakTag)
       .WithArgs("start", "--optimized")
       .WithReference(keycloakDb)
       .WithReference(postgres)
@@ -171,12 +184,19 @@ else
       .WithEnvironment("KC_PROXY", proxyMode)
       .WithEnvironment("KEYCLOAK_ADMIN", keycloakAdminUser ?? "admin")
       .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword ?? "admin");
-  
+
   if (!string.IsNullOrWhiteSpace(keycloakHostname))
   {
-    keycloak = keycloak.WithEnvironment("KC_HOSTNAME", keycloakHostname);
+    keycloakBuilder.WithEnvironment("KC_HOSTNAME", keycloakHostname);
   }
+
+  keycloak = keycloakBuilder;
 }
+
+// Get the Keycloak endpoint reference for OIDC configuration
+// The endpoint reference will resolve at runtime when the container is running
+var keycloakEndpoint = keycloak.GetEndpoint("http");
+
 #endregion
 
 #region API Gateway
@@ -186,15 +206,13 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
     .WithEnvironment("ConnectionStrings__redis", redisEndpoint)
     .WithEnvironment("Cors__WebOrigin", builder.Configuration["Cors:WebOrigin"] ?? "https://localhost:7001")
     .WithEnvironment("Cors__MobileOrigin", builder.Configuration["Cors:MobileOrigin"] ?? "https://localhost:7002")
-    .WithEnvironment("Keycloak__BaseUrl", builder.Configuration["Keycloak:BaseUrl"] ?? "http://localhost:8080")
-    .WithEnvironment("Keycloak__Realm", builder.Configuration["Keycloak:Realm"] ?? "allspice")
-    .WithEnvironment("Keycloak__Portals__Erp__Authority", builder.Configuration["Keycloak:Portals:Erp:Authority"] ?? "")
+    .WithEnvironment("Keycloak__BaseUrl", keycloakEndpoint)
+    .WithEnvironment("Keycloak__Realm", keycloakRealm)
     .WithEnvironment("Keycloak__Portals__Erp__ClientId", builder.Configuration["Keycloak:Portals:Erp:ClientId"] ?? "")
-    .WithEnvironment("Keycloak__Portals__MainWebsite__Authority", builder.Configuration["Keycloak:Portals:MainWebsite:Authority"] ?? "")
     .WithEnvironment("Keycloak__Portals__MainWebsite__ClientId", builder.Configuration["Keycloak:Portals:MainWebsite:ClientId"] ?? "")
-    .WithEnvironment("Identity__Keycloak__BaseUrl", builder.Configuration["Identity:Keycloak:BaseUrl"] ?? "")
-    .WithEnvironment("Identity__Keycloak__Realm", builder.Configuration["Identity:Keycloak:Realm"] ?? "")
-    .WithEnvironment("Identity__Keycloak__ApiToken", builder.Configuration["Identity:Keycloak:ApiToken"] ?? "")
+    .WithEnvironment("Identity__Keycloak__ServiceName", "keycloak")
+    .WithEnvironment("Identity__Keycloak__Realm", keycloakRealm)
+    .WithEnvironment("Identity__Keycloak__ApiToken", keycloakApiToken)
     .WithEnvironment("Identity__Keycloak__UserLookupTemplate", builder.Configuration["Identity:Keycloak:UserLookupTemplate"] ?? "/admin/realms/{realm}/users/{0}")
     .WithEnvironment("Identity__Keycloak__InvitationEndpoint", builder.Configuration["Identity:Keycloak:InvitationEndpoint"] ?? "")
     .WithEnvironment("Identity__Keycloak__AllowUntrustedCertificates", builder.Configuration["Identity:Keycloak:AllowUntrustedCertificates"] ?? "false")
@@ -206,20 +224,32 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
 #endregion
 
 #region Portal Applications
+// Pass the Keycloak endpoint reference and realm separately
+// The endpoint reference will resolve at runtime, and the apps will construct the authority URL
+// This is necessary because the OIDC handler creates its own HttpClient that doesn't use service discovery
 var erpPortal = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ErpPortal>("allspice-cleanmodularmonolith-erpportal")
-    .WithEnvironment("Keycloak__Portals__Erp__Authority", builder.Configuration["Keycloak:Portals:Erp:Authority"] ?? "")
+    .WithEnvironment("Keycloak__BaseUrl", keycloakEndpoint)
+    .WithEnvironment("Keycloak__Realm", keycloakRealm)
     .WithEnvironment("Keycloak__Portals__Erp__ClientId", builder.Configuration["Keycloak:Portals:Erp:ClientId"] ?? "")
-    .WithEnvironment("Keycloak__Portals__Erp__ClientSecret", builder.Configuration["Keycloak:Portals:Erp:ClientSecret"] ?? "")
+    .WithEnvironment("Keycloak__Portals__Erp__ClientSecret", keycloakErpClientSecret)
     .WithEnvironment("Keycloak__Portals__Erp__CallbackPath", builder.Configuration["Keycloak:Portals:Erp:CallbackPath"] ?? "/signin-oidc")
-    .WithEnvironment("Keycloak__Portals__Erp__SignedOutCallbackPath", builder.Configuration["Keycloak:Portals:Erp:SignedOutCallbackPath"] ?? "/signout-callback-oidc");
+    .WithEnvironment("Keycloak__Portals__Erp__SignedOutCallbackPath", builder.Configuration["Keycloak:Portals:Erp:SignedOutCallbackPath"] ?? "/signout-callback-oidc")
+    .WithEnvironment("EntraId__Portals__Erp__TenantId", entraIdTenantId)
+    .WithEnvironment("EntraId__Portals__Erp__ClientId", entraIdClientId)
+    .WithEnvironment("EntraId__Portals__Erp__ClientSecret", entraIdClientSecret);
 
-// MainWebsite project not yet created - uncomment when project is added to solution
-//var mainWebsite = builder.AddProject<Projects.AllSpice_CleanModularMonolith_MainWebsite>("allspice-cleanmodularmonolith-mainwebsite")
-//    .WithEnvironment("Keycloak__Portals__MainWebsite__Authority", builder.Configuration["Keycloak:Portals:MainWebsite:Authority"] ?? "")
-//    .WithEnvironment("Keycloak__Portals__MainWebsite__ClientId", builder.Configuration["Keycloak:Portals:MainWebsite:ClientId"] ?? "")
-//    .WithEnvironment("Keycloak__Portals__MainWebsite__ClientSecret", builder.Configuration["Keycloak:Portals:MainWebsite:ClientSecret"] ?? "")
-//    .WithEnvironment("Keycloak__Portals__MainWebsite__CallbackPath", builder.Configuration["Keycloak:Portals:MainWebsite:CallbackPath"] ?? "/signin-oidc")
-//    .WithEnvironment("Keycloak__Portals__MainWebsite__SignedOutCallbackPath", builder.Configuration["Keycloak:Portals:MainWebsite:SignedOutCallbackPath"] ?? "/signout-callback-oidc");
+var mainWebsite = builder.AddProject<Projects.AllSpice_CleanModularMonolith_MainWebsite>("allspice-cleanmodularmonolith-mainwebsite")
+  .WaitFor(apiGateway)
+  .WaitFor(keycloak)
+  .WaitFor(redis)
+  .WaitFor(storage)
+  .WaitFor(postgres)
+    .WithEnvironment("Keycloak__BaseUrl", keycloakEndpoint)
+    .WithEnvironment("Keycloak__Realm", keycloakRealm)
+    .WithEnvironment("Keycloak__Portals__MainWebsite__ClientId", builder.Configuration["Keycloak:Portals:MainWebsite:ClientId"] ?? "")
+    .WithEnvironment("Keycloak__Portals__MainWebsite__ClientSecret", keycloakMainWebsiteClientSecret)
+    .WithEnvironment("Keycloak__Portals__MainWebsite__CallbackPath", builder.Configuration["Keycloak:Portals:MainWebsite:CallbackPath"] ?? "/signin-oidc")
+    .WithEnvironment("Keycloak__Portals__MainWebsite__SignedOutCallbackPath", builder.Configuration["Keycloak:Portals:MainWebsite:SignedOutCallbackPath"] ?? "/signout-callback-oidc");
 #endregion
 
 

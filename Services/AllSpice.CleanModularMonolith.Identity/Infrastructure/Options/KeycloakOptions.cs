@@ -3,7 +3,14 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 public sealed class KeycloakOptions
 {
     /// <summary>
+    /// Service name for Aspire service discovery (e.g. "keycloak"). 
+    /// When provided, takes precedence over BaseUrl and uses service discovery.
+    /// </summary>
+    public string? ServiceName { get; set; }
+
+    /// <summary>
     /// Base URL of the Keycloak instance (e.g. http://localhost:8080).
+    /// Used as fallback when ServiceName is not provided.
     /// </summary>
     public string BaseUrl { get; set; } = string.Empty;
 
