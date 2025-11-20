@@ -19,7 +19,7 @@ builder.Services.AddRazorComponents()
 // Construct authority URL from BaseUrl (endpoint reference) and Realm
 // The endpoint reference resolves at runtime when the container is running
 var keycloakBaseUrl = builder.Configuration["Keycloak:BaseUrl"] ?? string.Empty;
-var keycloakRealm = builder.Configuration["Keycloak:Realm"] ?? "allspice";
+var keycloakRealm = builder.Configuration["Keycloak:Realm"] ?? "{{ProjectNameLower}}";
 var keycloakAuthority = string.IsNullOrWhiteSpace(keycloakBaseUrl) 
     ? string.Empty 
     : $"{keycloakBaseUrl.TrimEnd('/')}/realms/{keycloakRealm}";
@@ -75,10 +75,10 @@ if (!string.IsNullOrWhiteSpace(keycloakAuthority) && !string.IsNullOrWhiteSpace(
         // Steps to fix "Invalid parameter: redirect_uri" error:
         // 1. Check the Aspire dashboard for the MainWebsite URL (or check app logs)
         // 2. The redirect URI format is: {your-app-url}/signin-oidc
-        // 3. In Keycloak Admin Console: Clients > sadaqa-public > Settings
+        // 3. In Keycloak Admin Console: Clients > {{ProjectNameLower}}-public > Settings
         // 4. Add redirect URI(s) to "Valid redirect URIs", e.g.:
-        //    - http://allspice_cleanmodularmonolith_mainwebsite.dev.localhost:5222/signin-oidc
-        //    - https://allspice_cleanmodularmonolith_mainwebsite.dev.localhost:7285/signin-oidc
+        //    - http://{{ProjectNameLower}}_mainwebsite.dev.localhost:5222/signin-oidc
+        //    - https://{{ProjectNameLower}}_mainwebsite.dev.localhost:7285/signin-oidc
         //    - Or use wildcard for dev: http://*:*/signin-oidc (NOT recommended for production!)
         // For development with dynamic ports, you may need to use wildcards in Keycloak
         // or configure specific redirect URIs for each port
@@ -103,7 +103,7 @@ if (!string.IsNullOrWhiteSpace(keycloakAuthority) && !string.IsNullOrWhiteSpace(
                 logger.LogInformation("Full Redirect URI should be: {FullRedirectUri}", $"{currentUrl}{context.Options.CallbackPath}");
                 
                 // IMPORTANT: Add this redirect URI to Keycloak client's "Valid redirect URIs"
-                // Use wildcard for dynamic ports: https://allspice_cleanmodularmonolith_mainwebsite.dev.localhost:*/signin-oidc
+                // Use wildcard for dynamic ports: https://{{ProjectNameLower}}_mainwebsite.dev.localhost:*/signin-oidc
                 // OR disable PAR (Pushed Authorization Requests) in Keycloak client settings
                 
                 // Ensure the redirect happens as a full page navigation, not a fetch request

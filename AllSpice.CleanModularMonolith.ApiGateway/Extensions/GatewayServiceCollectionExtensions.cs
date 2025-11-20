@@ -66,7 +66,7 @@ public static class GatewayServiceCollectionExtensions
             builder.Services.AddStackExchangeRedisOutputCache(options =>
             {
                 options.Configuration = redisConfig;
-                options.InstanceName = "AllSpice.CleanModularMonolith_Gateway";
+                options.InstanceName = "{{ProjectName}}_Gateway";
             });
         }
 
@@ -215,7 +215,7 @@ public static class GatewayServiceCollectionExtensions
             ?? string.Empty;
         var keycloakRealm = builder.Configuration["Keycloak:Realm"]
             ?? Environment.GetEnvironmentVariable("KEYCLOAK__REALM")
-            ?? "allspice";
+            ?? "{{ProjectNameLower}}";
         
         var erpAuthority = builder.Configuration["Keycloak:Portals:Erp:Authority"]
             ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__ERP__AUTHORITY")

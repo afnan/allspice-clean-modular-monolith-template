@@ -23,7 +23,7 @@ var sinchServicePlanId = GetParameter(parameters, "sinch-service-plan-id");
 var sinchFromNumber = GetParameter(parameters, "sinch-from-number");
 var keycloakAdminUser = GetParameter(parameters, "keycloak-admin-user");
 var keycloakAdminPassword = GetParameter(parameters, "keycloak-admin-password");
-var keycloakRealmValue = GetParameter(parameters, "keycloak-realm", "sadaqa");
+var keycloakRealmValue = GetParameter(parameters, "keycloak-realm", "{{ProjectNameLower}}");
 var keycloakApiToken = GetParameter(parameters, "keycloak-api-token");
 var keycloakErpClientSecret = GetParameter(parameters, "keycloak-erp-client-secret");
 var keycloakMainWebsiteClientSecret = GetParameter(parameters, "keycloak-mainwebsite-client-secret");
@@ -82,7 +82,7 @@ var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
       Name = "Standard_B2s" // 2 vCPUs, 4 GB RAM, good balance for small apps
     };
 
-    flexibleServer.Tags.Add("Project", "AllSpice.CleanModularMonolith");
+    flexibleServer.Tags.Add("Project", "{{ProjectName}}");
     flexibleServer.Tags.Add("Environment", "Production");
   }).RunAsContainer(container => container.WithPgAdmin().WithPgWeb().WithDataVolume());
 
@@ -200,7 +200,7 @@ var keycloakEndpoint = keycloak.GetEndpoint("http");
 #endregion
 
 #region API Gateway
-var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGateway>("allspice-cleanmodular-apigateway")
+var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGateway>("{{ProjectNameLower}}-apigateway")
     .WithReference(notificationsDatabase)
     .WithReference(identityDatabase)
     .WithEnvironment("ConnectionStrings__redis", redisEndpoint)
@@ -227,7 +227,7 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
 // Pass the Keycloak endpoint reference and realm separately
 // The endpoint reference will resolve at runtime, and the apps will construct the authority URL
 // This is necessary because the OIDC handler creates its own HttpClient that doesn't use service discovery
-var erpPortal = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ErpPortal>("allspice-cleanmodularmonolith-erpportal")
+var erpPortal = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ErpPortal>("{{ProjectNameLower}}-erpportal")
     .WithEnvironment("Keycloak__BaseUrl", keycloakEndpoint)
     .WithEnvironment("Keycloak__Realm", keycloakRealm)
     .WithEnvironment("Keycloak__Portals__Erp__ClientId", builder.Configuration["Keycloak:Portals:Erp:ClientId"] ?? "")
@@ -238,7 +238,7 @@ var erpPortal = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ErpPor
     .WithEnvironment("EntraId__Portals__Erp__ClientId", entraIdClientId)
     .WithEnvironment("EntraId__Portals__Erp__ClientSecret", entraIdClientSecret);
 
-var mainWebsite = builder.AddProject<Projects.AllSpice_CleanModularMonolith_MainWebsite>("allspice-cleanmodularmonolith-mainwebsite")
+var mainWebsite = builder.AddProject<Projects.AllSpice_CleanModularMonolith_MainWebsite>("{{ProjectNameLower}}-mainwebsite")
   .WaitFor(apiGateway)
   .WaitFor(keycloak)
   .WaitFor(redis)

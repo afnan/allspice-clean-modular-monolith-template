@@ -16,7 +16,7 @@ builder.Services.AddRazorComponents()
 // Construct authority URL from BaseUrl (endpoint reference) and Realm
 // The endpoint reference resolves at runtime when the container is running
 var keycloakBaseUrl = builder.Configuration["Keycloak:BaseUrl"] ?? string.Empty;
-var keycloakRealm = builder.Configuration["Keycloak:Realm"] ?? "allspice";
+var keycloakRealm = builder.Configuration["Keycloak:Realm"] ?? "{{ProjectNameLower}}";
 var keycloakAuthority = string.IsNullOrWhiteSpace(keycloakBaseUrl) 
     ? string.Empty 
     : $"{keycloakBaseUrl.TrimEnd('/')}/realms/{keycloakRealm}";
