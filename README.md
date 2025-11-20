@@ -104,14 +104,14 @@ The repository also contains `samples/AllSpice.CleanModularMonolith.HR/` as an i
 
 ## Identity & Authentication
 
-- Authentik acts as the identity provider. Configure separate applications for ERP (enterprise SSO via upstream Azure AD) and Public (customer/social login) portals.
+- Keycloak acts as the identity provider. Configure separate clients for ERP (enterprise SSO via Entra ID through Keycloak OIDC) and MainWebsite (direct user registration in Keycloak) portals.
 - `Shared/AllSpice.CleanModularMonolith.Identity.Abstractions` provides portal-aware JWT registration helpers (`AddIdentityPortals`), claims utilities, and module-role authorization requirements.
-- `Services/AllSpice.CleanModularMonolith.Identity` owns module role assignments, Authentik directory lookups/invitations, and seeds baseline modules (HR, Finance, Events).
-- AppHost wiring injects Authentik authority/audience and API tokens via environment variables so the gateway and modules validate the correct issuer. For local development the Aspire AppHost spins up Authentik (Postgres + server container); provide `authentik-secret-key`, `authentik-db-password`, and `authentik-bootstrap-password` via Aspire parameters or secrets before running. The Authentik container image/tag now default to `ghcr.io/goauthentik/server:2025.10.1` and can be overridden through `Authentik:Image`/`Authentik:Tag` in `AllSpice.CleanModularMonolith.AppHost/appsettings.json`. In production plan a dedicated Authentik deployment and point the same settings at that instance.
+- `Services/AllSpice.CleanModularMonolith.Identity` owns module role assignments, Keycloak directory lookups/invitations via Admin API, and seeds baseline modules (HR, Finance, Events).
+- AppHost wiring injects Keycloak authority/client IDs and API tokens via environment variables so the gateway and modules validate the correct issuer. For local development the Aspire AppHost spins up Keycloak (Postgres + Keycloak container); provide `keycloak-admin-user` and `keycloak-admin-password` via Aspire parameters or secrets before running. The Keycloak container image defaults to `quay.io/keycloak/keycloak:latest` and can be configured through `Keycloak:BaseUrl` and `Keycloak:Realm` in `AllSpice.CleanModularMonolith.AppHost/appsettings.json`. In production plan a dedicated Keycloak deployment and point the same settings at that instance.
 
 ## Roadmap
 
-- Finish Authentik integration (tokens, user provisioning, UI samples).
+- Finish Keycloak integration (tokens, user provisioning, UI samples).
 - Add persistence for in-app inbox (read/unread state) and admin endpoints.
 - Publish reusable SignalR client helper (TypeScript/C#) for dashboards.
 - Replace SMS stub with production gateway adapters (Sinch/Twilio) and rate limiting.

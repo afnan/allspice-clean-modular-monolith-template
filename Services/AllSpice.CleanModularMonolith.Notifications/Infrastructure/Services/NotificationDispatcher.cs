@@ -10,6 +10,9 @@ using Microsoft.Extensions.Logging;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 
+/// <summary>
+/// Coordinates notification delivery across the registered delivery channels.
+/// </summary>
 public sealed class NotificationDispatcher : INotificationDispatcher
 {
     private readonly INotificationRepository _notificationRepository;
@@ -19,6 +22,15 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     private readonly IPublishEndpoint _publishEndpoint;
     private readonly ILogger<NotificationDispatcher> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="NotificationDispatcher"/> class.
+    /// </summary>
+    /// <param name="notificationRepository">Repository used to load and update notification records.</param>
+    /// <param name="channels">The set of delivery channel handlers available.</param>
+    /// <param name="preferenceRepository">Repository for recipient notification preferences.</param>
+    /// <param name="contentBuilder">Service that renders notification content.</param>
+    /// <param name="publishEndpoint">MassTransit endpoint used for event publication.</param>
+    /// <param name="logger">Logger used to record dispatcher activity.</param>
     public NotificationDispatcher(
         INotificationRepository notificationRepository,
         IEnumerable<INotificationChannel> channels,
@@ -35,6 +47,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         _logger = logger;
     }
 
+    /// <inheritdoc />
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTimeOffset.UtcNow;

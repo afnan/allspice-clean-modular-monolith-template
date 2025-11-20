@@ -17,6 +17,7 @@ try
 
   // Ensure module databases
   await app.EnsureNotificationsModuleDatabaseAsync();
+  await app.EnsureIdentityModuleDatabaseAsync();
 
   app.UseGatewayPipeline();
   app.MapHub<AppHub>("/hubs/app");
@@ -25,7 +26,8 @@ try
   // OpenAPI/Swagger for development
   if (app.Environment.IsDevelopment())
   {
-    app.MapOpenApi();
+    app.MapOpenApi()
+       .RequireAuthorization("allow-anonymous");
   }
 
   app.Run();

@@ -1,4 +1,4 @@
-namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
+﻿namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
 
 /// <summary>
 /// Provides extensions that encapsulate the API gateway's middleware pipeline configuration.
@@ -9,6 +9,7 @@ public static class GatewayApplicationExtensions
     /// Adds the standard middleware pipeline used by the gateway (security, diagnostics, caching, auth, etc.).
     /// </summary>
     /// <param name="app">The web application instance.</param>
+    /// <remarks>The swagger UI title is derived from <c>Application:Name</c> configuration when available.</remarks>
     public static void UseGatewayPipeline(this WebApplication app)
     {
         app.UseMiddleware<SecurityHeadersMiddleware>();
@@ -26,8 +27,29 @@ public static class GatewayApplicationExtensions
         app.UseRateLimiter();
         app.UseOutputCache();
         app.UseRequestBuffering();
-        app.UseAuthentication();
+
+        var authenticationState = app.Services.GetService<GatewayAuthenticationState>();
+        if (authenticationState?.Enabled == true)
+        {
+            app.UseAuthentication();
+        }
+
+        if (app.Environment.IsDevelopment())
+        {
+            var configuration = app.Services.GetRequiredService<IConfiguration>();
+            var applicationName = configuration["Application:Name"] ?? "API Gateway";
+
+            app.UseSwaggerGen();
+            app.UseSwaggerUi(options =>
+            {
+                options.ConfigureDefaults();
+                options.DocumentTitle = applicationName;
+                options.Path = "/swagger";
+            });
+        }
+
         app.UseAuthorization();
+        app.UseFastEndpoints();
     }
 
     /// <summary>

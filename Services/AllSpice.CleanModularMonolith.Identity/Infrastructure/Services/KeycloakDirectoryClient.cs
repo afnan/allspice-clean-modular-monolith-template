@@ -8,12 +8,20 @@ using Microsoft.Extensions.Options;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 
-public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
+/// <summary>
+/// Concrete <see cref="IExternalDirectoryClient"/> implementation backed by Keycloak's Admin REST API.
+/// </summary>
+public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
 {
     private readonly HttpClient _httpClient;
-    private readonly AuthentikOptions _options;
+    private readonly KeycloakOptions _options;
 
-    public AuthentikDirectoryClient(HttpClient httpClient, IOptions<AuthentikOptions> options)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="KeycloakDirectoryClient"/> class.
+    /// </summary>
+    /// <param name="httpClient">Configured HTTP client targeting Keycloak Admin API.</param>
+    /// <param name="options">Keycloak options governing lookups and invitations.</param>
+    public KeycloakDirectoryClient(HttpClient httpClient, IOptions<KeycloakOptions> options)
     {
         Guard.Against.Null(httpClient);
         Guard.Against.Null(options);
@@ -22,6 +30,7 @@ public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
         _options = options.Value;
     }
 
+    /// <inheritdoc />
     public async Task<bool> UserExistsAsync(string userId, CancellationToken cancellationToken = default)
     {
         Guard.Against.NullOrWhiteSpace(userId);
@@ -37,6 +46,7 @@ public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
         return true;
     }
 
+    /// <inheritdoc />
     public async Task<string?> GetUserDisplayNameAsync(string userId, CancellationToken cancellationToken = default)
     {
         Guard.Against.NullOrWhiteSpace(userId);
@@ -54,9 +64,15 @@ public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
         var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: cancellationToken);
         var root = document.RootElement;
 
-        if (root.TryGetProperty("name", out var nameElement))
+        // Keycloak user object has firstName and lastName, or username
+        if (root.TryGetProperty("firstName", out var firstNameElement) && root.TryGetProperty("lastName", out var lastNameElement))
         {
-            return nameElement.GetString();
+            var firstName = firstNameElement.GetString();
+            var lastName = lastNameElement.GetString();
+            if (!string.IsNullOrWhiteSpace(firstName) || !string.IsNullOrWhiteSpace(lastName))
+            {
+                return $"{firstName} {lastName}".Trim();
+            }
         }
 
         if (root.TryGetProperty("username", out var usernameElement))
@@ -67,6 +83,7 @@ public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
         return userId;
     }
 
+    /// <inheritdoc />
     public async Task InviteUserAsync(string email, string displayName, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(_options.InvitationEndpoint))
@@ -77,30 +94,40 @@ public sealed class AuthentikDirectoryClient : IExternalDirectoryClient
         Guard.Against.NullOrWhiteSpace(email);
         Guard.Against.NullOrWhiteSpace(displayName);
 
+        // Keycloak Admin API user creation format
+        var nameParts = displayName.Split(' ', 2);
         var payload = new
         {
-            email,
-            name = displayName,
-            send_email = true
+            username = email,
+            email = email,
+            firstName = nameParts.Length > 0 ? nameParts[0] : string.Empty,
+            lastName = nameParts.Length > 1 ? nameParts[1] : string.Empty,
+            enabled = true,
+            emailVerified = false
         };
 
         var response = await _httpClient.PostAsJsonAsync(_options.InvitationEndpoint, payload, cancellationToken);
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>
+    /// Builds the user lookup endpoint path based on current configuration.
+    /// </summary>
+    /// <param name="userId">User identifier.</param>
+    /// <returns>Resolved endpoint URL.</returns>
     private string BuildUserLookupUrl(string userId)
     {
-        if (!string.IsNullOrWhiteSpace(_options.UserLookupTemplate) && _options.UserLookupTemplate.Contains("{0}", StringComparison.Ordinal))
+        var template = _options.UserLookupTemplate;
+        if (!string.IsNullOrWhiteSpace(template))
         {
-            return string.Format(_options.UserLookupTemplate, Uri.EscapeDataString(userId));
+            // Replace {realm} and {0} placeholders
+            template = template.Replace("{realm}", _options.Realm, StringComparison.OrdinalIgnoreCase);
+            template = template.Replace("{0}", Uri.EscapeDataString(userId), StringComparison.OrdinalIgnoreCase);
+            return template;
         }
 
-        var basePath = string.IsNullOrWhiteSpace(_options.UserLookupTemplate)
-            ? "/api/v3/core/users"
-            : _options.UserLookupTemplate;
-
-        return $"{basePath.TrimEnd('/')}/{Uri.EscapeDataString(userId)}/";
+        // Default Keycloak Admin API path
+        return $"/admin/realms/{_options.Realm}/users/{Uri.EscapeDataString(userId)}";
     }
 }
-
 

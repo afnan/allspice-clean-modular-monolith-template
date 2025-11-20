@@ -7,8 +7,17 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace AllSpice.CleanModularMonolith.Identity.Abstractions.Authentication;
 
+/// <summary>
+/// Provides extension methods for configuring multi-portal authentication schemes.
+/// </summary>
 public static class IdentityPortalAuthenticationBuilderExtensions
 {
+    /// <summary>
+    /// Registers JWT bearer handlers for ERP/public portals using Keycloak and configures default schemes.
+    /// </summary>
+    /// <param name="builder">The ASP.NET authentication builder.</param>
+    /// <param name="configure">Callback used to configure portal options.</param>
+    /// <returns>The same authentication builder to support chaining.</returns>
     public static AuthenticationBuilder AddIdentityPortals(this AuthenticationBuilder builder, Action<IdentityPortalOptions> configure)
     {
         Guard.Against.Null(builder);
@@ -51,6 +60,10 @@ public static class IdentityPortalAuthenticationBuilderExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Creates the default token validation parameters applied to each portal scheme.
+    /// </summary>
+    /// <returns>A configured <see cref="TokenValidationParameters"/> instance.</returns>
     private static TokenValidationParameters CreateDefaultParameters() =>
         new()
         {

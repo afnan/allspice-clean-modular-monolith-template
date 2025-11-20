@@ -8,6 +8,9 @@ using Microsoft.Extensions.Logging;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 
+/// <summary>
+/// Builds rendered notification content from stored templates and metadata.
+/// </summary>
 public sealed class NotificationContentBuilder : INotificationContentBuilder
 {
     private static readonly Regex TokenRegex = new Regex(@"{{(?<key>[^}]+)}}", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -15,6 +18,11 @@ public sealed class NotificationContentBuilder : INotificationContentBuilder
     private readonly INotificationTemplateRepository _templateRepository;
     private readonly ILogger<NotificationContentBuilder> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="NotificationContentBuilder"/> class.
+    /// </summary>
+    /// <param name="templateRepository">Repository used to load notification templates.</param>
+    /// <param name="logger">Logger used to trace template usage.</param>
     public NotificationContentBuilder(
         INotificationTemplateRepository templateRepository,
         ILogger<NotificationContentBuilder> logger)
@@ -23,6 +31,7 @@ public sealed class NotificationContentBuilder : INotificationContentBuilder
         _logger = logger;
     }
 
+    /// <inheritdoc />
     public async Task<Result<NotificationContent>> BuildAsync(Notification notification, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(notification.TemplateKey))
@@ -46,6 +55,12 @@ public sealed class NotificationContentBuilder : INotificationContentBuilder
         return Result.Success(new NotificationContent(subject, body, template.IsHtml));
     }
 
+    /// <summary>
+    /// Replaces template tokens with metadata values.
+    /// </summary>
+    /// <param name="template">Template text containing <c>{{token}}</c> placeholders.</param>
+    /// <param name="metadata">Key/value metadata collected from the notification.</param>
+    /// <returns>The rendered template string.</returns>
     private static string ReplaceTokens(string template, IReadOnlyDictionary<string, string> metadata)
     {
         return TokenRegex.Replace(template, match =>

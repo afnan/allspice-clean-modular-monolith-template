@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Ardalis.GuardClauses;
 using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
@@ -7,15 +8,25 @@ using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Commands.QueueNotification;
 
+/// <summary>
+/// Handles requests to queue notifications for asynchronous processing.
+/// </summary>
 public sealed class QueueNotificationCommandHandler : IRequestHandler<QueueNotificationCommand, Result<Guid>>
 {
     private readonly INotificationRepository _notificationRepository;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="QueueNotificationCommandHandler"/> class.
+    /// </summary>
+    /// <param name="notificationRepository">Repository used to persist notifications.</param>
     public QueueNotificationCommandHandler(INotificationRepository notificationRepository)
     {
+        Guard.Against.Null(notificationRepository);
+
         _notificationRepository = notificationRepository;
     }
 
+    /// <inheritdoc />
     public async ValueTask<Result<Guid>> Handle(QueueNotificationCommand request, CancellationToken cancellationToken)
     {
         try

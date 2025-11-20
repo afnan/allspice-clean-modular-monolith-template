@@ -13,8 +13,19 @@ public static class GatewayServiceCollectionExtensions
     {
         builder.AddServiceDefaults();
 
+        var applicationName = builder.Configuration["Application:Name"] ?? "API Gateway";
+
         builder.Services.AddOpenApi();
-        builder.Services.AddFastEndpoints();
+        builder.Services
+            .AddFastEndpoints()
+            .SwaggerDocument(options =>
+            {
+                options.DocumentSettings = settings =>
+                {
+                    settings.Title = applicationName;
+                    settings.Version = "v1";
+                };
+            });
         builder.Services.AddSignalR();
         builder.Services.AddSingleton<IRealtimePublisher, RealtimePublisher>();
 
@@ -22,8 +33,11 @@ public static class GatewayServiceCollectionExtensions
         builder.ConfigureOutputCaching();
         builder.Services.ConfigureRateLimiting();
         builder.ConfigureCorsPolicies();
-        builder.ConfigureAuthentication();
-        builder.ConfigureAuthorization();
+
+        var authenticationEnabled = builder.ConfigureAuthentication();
+        builder.Services.AddSingleton(new GatewayAuthenticationState(authenticationEnabled));
+
+        builder.ConfigureAuthorization(authenticationEnabled);
 
         builder.Services
             .AddReverseProxy()
@@ -35,6 +49,10 @@ public static class GatewayServiceCollectionExtensions
     /// Configures output caching, wiring up Redis if Aspire provides a connection string.
     /// </summary>
     /// <param name="builder">The web application builder.</param>
+    /// <remarks>
+    /// When a Redis connection string is supplied via configuration or environment variables, the gateway uses
+    /// distributed output caching; otherwise, in-memory caching is applied.
+    /// </remarks>
     private static void ConfigureOutputCaching(this WebApplicationBuilder builder)
     {
         var redisConnectionString = builder.Configuration.GetConnectionString("redis");
@@ -64,6 +82,7 @@ public static class GatewayServiceCollectionExtensions
     /// Enables Brotli and Gzip compression with tuned defaults for JSON payloads.
     /// </summary>
     /// <param name="services">The service collection into which the compression components are registered.</param>
+    /// <returns>The service collection to allow fluent registration.</returns>
     private static IServiceCollection ConfigureResponseCompressionDefaults(this IServiceCollection services)
     {
         services.AddResponseCompression(options =>
@@ -92,6 +111,7 @@ public static class GatewayServiceCollectionExtensions
     /// Sets up global and named rate limiting policies along with rejection messaging.
     /// </summary>
     /// <param name="services">The service collection.</param>
+    /// <returns>The service collection to support fluent chaining.</returns>
     private static IServiceCollection ConfigureRateLimiting(this IServiceCollection services)
     {
         services.AddRateLimiter(options =>
@@ -148,6 +168,7 @@ public static class GatewayServiceCollectionExtensions
     /// Configures CORS policies for web and mobile clients, honoring Aspire-provided overrides.
     /// </summary>
     /// <param name="builder">The web application builder.</param>
+    /// <remarks>Origins can be overridden via configuration keys such as <c>Cors:WebOrigin</c>.</remarks>
     private static void ConfigureCorsPolicies(this WebApplicationBuilder builder)
     {
         var webOrigin = builder.Configuration["Cors:WebOrigin"]
@@ -180,56 +201,91 @@ public static class GatewayServiceCollectionExtensions
         });
     }
 
-    private static void ConfigureAuthentication(this WebApplicationBuilder builder)
+    /// <summary>
+    /// Attempts to configure authentication based on Keycloak portal settings.
+    /// </summary>
+    /// <param name="builder">The web application builder.</param>
+    /// <returns><see langword="true"/> when authentication is configured; otherwise <see langword="false"/>.</returns>
+    /// <remarks>The ERP authority and client ID are required; MainWebsite portal settings are optional.</remarks>
+    private static bool ConfigureAuthentication(this WebApplicationBuilder builder)
     {
-        var erpAuthority = builder.Configuration["Authentik:Portals:Erp:Authority"]
-            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__ERP__AUTHORITY")
+        // Try to get authority directly, or construct from BaseUrl and Realm
+        var keycloakBaseUrl = builder.Configuration["Keycloak:BaseUrl"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__BASEURL")
+            ?? string.Empty;
+        var keycloakRealm = builder.Configuration["Keycloak:Realm"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__REALM")
+            ?? "allspice";
+        
+        var erpAuthority = builder.Configuration["Keycloak:Portals:Erp:Authority"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__ERP__AUTHORITY")
+            ?? (string.IsNullOrWhiteSpace(keycloakBaseUrl) ? string.Empty : $"{keycloakBaseUrl.TrimEnd('/')}/realms/{keycloakRealm}");
+
+        var erpClientId = builder.Configuration["Keycloak:Portals:Erp:ClientId"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__ERP__CLIENTID")
             ?? string.Empty;
 
-        var erpAudience = builder.Configuration["Authentik:Portals:Erp:Audience"]
-            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__ERP__AUDIENCE")
+        var mainWebsiteAuthority = builder.Configuration["Keycloak:Portals:MainWebsite:Authority"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__MAINWEBSITE__AUTHORITY")
+            ?? (string.IsNullOrWhiteSpace(keycloakBaseUrl) ? string.Empty : $"{keycloakBaseUrl.TrimEnd('/')}/realms/{keycloakRealm}");
+
+        var mainWebsiteClientId = builder.Configuration["Keycloak:Portals:MainWebsite:ClientId"]
+            ?? Environment.GetEnvironmentVariable("KEYCLOAK__PORTALS__MAINWEBSITE__CLIENTID")
             ?? string.Empty;
 
-        var publicAuthority = builder.Configuration["Authentik:Portals:Public:Authority"]
-            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__PUBLIC__AUTHORITY")
-            ?? string.Empty;
-
-        var publicAudience = builder.Configuration["Authentik:Portals:Public:Audience"]
-            ?? Environment.GetEnvironmentVariable("AUTHENTIK__PORTALS__PUBLIC__AUDIENCE")
-            ?? string.Empty;
-
-        if (string.IsNullOrWhiteSpace(erpAuthority) || string.IsNullOrWhiteSpace(erpAudience))
+        if (string.IsNullOrWhiteSpace(erpAuthority) || string.IsNullOrWhiteSpace(erpClientId))
         {
-            return;
+            return false;
         }
 
         builder.Services.AddAuthentication()
             .AddIdentityPortals(options =>
             {
                 options.ErpAuthority = erpAuthority;
-                options.ErpAudience = erpAudience;
-                options.PublicAuthority = publicAuthority;
-                options.PublicAudience = publicAudience;
-                options.UsePublicAsDefaultChallenge = !string.IsNullOrWhiteSpace(publicAuthority) && !string.IsNullOrWhiteSpace(publicAudience);
+                options.ErpAudience = erpClientId;
+                options.PublicAuthority = mainWebsiteAuthority;
+                options.PublicAudience = mainWebsiteClientId;
+                options.UsePublicAsDefaultChallenge = !string.IsNullOrWhiteSpace(mainWebsiteAuthority) && !string.IsNullOrWhiteSpace(mainWebsiteClientId);
             });
+
+        return true;
     }
 
     /// <summary>
     /// Establishes authorization policies, including the authenticated fallback and an allow-anonymous policy.
     /// </summary>
     /// <param name="builder">The web application builder.</param>
-    private static void ConfigureAuthorization(this WebApplicationBuilder builder)
+    /// <param name="authenticationEnabled">Indicates whether authentication has been configured.</param>
+    /// <summary>
+    /// Establishes authorization policies, including the authenticated fallback and an allow-anonymous policy.
+    /// </summary>
+    /// <param name="builder">The web application builder.</param>
+    /// <param name="authenticationEnabled">Indicates whether authentication has been configured.</param>
+    /// <remarks>
+    /// When authentication is enabled, the fallback policy enforces authenticated access by default while retaining
+    /// an <c>allow-anonymous</c> policy for health checks and public endpoints.
+    /// </remarks>
+    private static void ConfigureAuthorization(this WebApplicationBuilder builder, bool authenticationEnabled)
     {
         builder.Services.AddAuthorization(options =>
         {
-            options.FallbackPolicy = new AuthorizationPolicyBuilder()
-                .RequireAuthenticatedUser()
-                .Build();
-
+            // Always add the 'authenticated' policy (required by YARP routes)
+            // It will only enforce authentication if authentication is enabled
             options.AddPolicy("authenticated", policy =>
             {
-                policy.RequireAuthenticatedUser();
+                if (authenticationEnabled)
+                {
+                    policy.RequireAuthenticatedUser();
+                }
+                // If authentication is not enabled, the policy allows all (no requirements)
             });
+
+            if (authenticationEnabled)
+            {
+                options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .Build();
+            }
 
             options.AddPolicy("allow-anonymous", policy =>
             {
@@ -237,6 +293,13 @@ public static class GatewayServiceCollectionExtensions
             });
         });
     }
+
 }
+
+/// <summary>
+/// Represents whether authentication middleware was configured for the gateway.
+/// </summary>
+/// <param name="Enabled">Indicates that authentication services were registered.</param>
+internal sealed record GatewayAuthenticationState(bool Enabled);
 
 

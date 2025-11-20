@@ -3,7 +3,7 @@ using AllSpice.CleanModularMonolith.Identity.Abstractions.Claims;
 namespace AllSpice.CleanModularMonolith.Identity.Abstractions.Authentication;
 
 /// <summary>
-/// Configuration for wiring multiple Authentik applications (e.g. ERP and public portals) into the authentication pipeline.
+/// Configuration for wiring multiple Keycloak applications (e.g. ERP and public portals) into the authentication pipeline.
 /// </summary>
 public sealed class IdentityPortalOptions
 {
@@ -18,7 +18,7 @@ public sealed class IdentityPortalOptions
     public string PublicScheme { get; set; } = IdentityPortalSchemes.Public;
 
     /// <summary>
-    /// Authority (issuer) for ERP tokens (e.g. https://auth.example.com/application/o/erp/).
+    /// Authority (issuer) for ERP tokens (e.g. http://localhost:8080/realms/allspice).
     /// </summary>
     public string ErpAuthority { get; set; } = string.Empty;
 
@@ -28,7 +28,7 @@ public sealed class IdentityPortalOptions
     public string ErpAudience { get; set; } = string.Empty;
 
     /// <summary>
-    /// Authority for public tokens (e.g. https://auth.example.com/application/o/public/).
+    /// Authority for public tokens (e.g. http://localhost:8080/realms/allspice).
     /// </summary>
     public string PublicAuthority { get; set; } = string.Empty;
 
@@ -38,7 +38,7 @@ public sealed class IdentityPortalOptions
     public string PublicAudience { get; set; } = string.Empty;
 
     /// <summary>
-    /// Claim type emitted by Authentik that identifies which portal issued the token.
+    /// Claim type emitted by Keycloak that identifies which portal issued the token.
     /// </summary>
     public string PortalClaimType { get; set; } = IdentityClaimTypes.Portal;
 

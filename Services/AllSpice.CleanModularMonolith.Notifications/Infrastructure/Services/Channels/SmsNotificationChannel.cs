@@ -12,12 +12,21 @@ using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Options;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Channels;
 
+/// <summary>
+/// Notification channel that delivers SMS messages through the Sinch API.
+/// </summary>
 public sealed class SinchSmsNotificationChannel : INotificationChannel
 {
     private readonly HttpClient _httpClient;
     private readonly SinchOptions _options;
     private readonly ILogger<SinchSmsNotificationChannel> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SinchSmsNotificationChannel"/> class.
+    /// </summary>
+    /// <param name="httpClient">Configured HTTP client for Sinch API calls.</param>
+    /// <param name="options">Sinch configuration settings.</param>
+    /// <param name="logger">Logger used to capture delivery diagnostics.</param>
     public SinchSmsNotificationChannel(
         HttpClient httpClient,
         IOptions<SinchOptions> options,
@@ -28,8 +37,10 @@ public sealed class SinchSmsNotificationChannel : INotificationChannel
         _logger = logger;
     }
 
+    /// <inheritdoc />
     public NotificationChannel Channel => NotificationChannel.Sms;
 
+    /// <inheritdoc />
     public async Task<Result> SendAsync(Notification notification, NotificationContent content, CancellationToken cancellationToken = default)
     {
         Guard.Against.Null(notification);
@@ -77,12 +88,20 @@ public sealed class SinchSmsNotificationChannel : INotificationChannel
         }
     }
 
+    /// <summary>
+    /// Validates whether the Sinch configuration is complete.
+    /// </summary>
     private bool IsConfigured() =>
         !string.IsNullOrWhiteSpace(_options.ProjectId) &&
         !string.IsNullOrWhiteSpace(_options.ApiKey) &&
         !string.IsNullOrWhiteSpace(_options.Sms.ServicePlanId) &&
         !string.IsNullOrWhiteSpace(_options.Sms.FromNumber);
 
+    /// <summary>
+    /// Builds the SMS message body, optionally prepending the subject line.
+    /// </summary>
+    /// <param name="content">Content of the notification.</param>
+    /// <returns>A string suitable for SMS transport.</returns>
     private static string BuildMessageBody(NotificationContent content)
     {
         if (!string.IsNullOrWhiteSpace(content.Subject))
@@ -93,6 +112,12 @@ public sealed class SinchSmsNotificationChannel : INotificationChannel
         return content.Body;
     }
 
+    /// <summary>
+    /// Creates the Sinch HTTP authorization header using basic authentication.
+    /// </summary>
+    /// <param name="projectId">Sinch project identifier.</param>
+    /// <param name="apiKey">Sinch API key.</param>
+    /// <returns>An authentication header value.</returns>
     private static System.Net.Http.Headers.AuthenticationHeaderValue CreateAuthorizationHeader(string projectId, string apiKey)
     {
         var credentialBytes = Encoding.ASCII.GetBytes($"{projectId}:{apiKey}");
