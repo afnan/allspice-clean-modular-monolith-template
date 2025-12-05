@@ -15,6 +15,7 @@ public sealed class ModuleRoleTemplate : AggregateRoot
     {
         TemplateKey = string.Empty;
         Name = string.Empty;
+        Description = string.Empty;
     }
 
     private ModuleRoleTemplate(string templateKey, string name, string? description)

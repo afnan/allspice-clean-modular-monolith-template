@@ -41,9 +41,9 @@ public sealed class ModuleRoleAssignmentConfiguration : IEntityTypeConfiguration
             value => ExternalUserId.From(value!));
 
         var userIdComparer = new ValueComparer<ExternalUserId>(
-            (left, right) => left.Value.Equals(right.Value, StringComparison.Ordinal),
-            userId => userId.Value.GetHashCode(StringComparison.Ordinal),
-            value => ExternalUserId.From(value.Value));
+            (left, right) => ReferenceEquals(left, right) || (left != null && right != null && left.Value.Equals(right.Value, StringComparison.Ordinal)),
+            userId => userId != null ? userId.Value.GetHashCode(StringComparison.Ordinal) : 0,
+            value => ExternalUserId.From(value!.Value));
 
         var userIdProperty = builder.Property(assignment => assignment.UserId)
             .HasConversion(userIdConverter)
