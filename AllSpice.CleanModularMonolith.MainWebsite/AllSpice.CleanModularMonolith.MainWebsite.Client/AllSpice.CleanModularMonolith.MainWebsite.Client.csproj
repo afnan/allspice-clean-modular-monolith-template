@@ -10,6 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AllSpice.Flowbite.Blazor" />
+    <PackageReference Include="AllSpice.Flowbite.Blazor.ExtendedIcons" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
   </ItemGroup>
 

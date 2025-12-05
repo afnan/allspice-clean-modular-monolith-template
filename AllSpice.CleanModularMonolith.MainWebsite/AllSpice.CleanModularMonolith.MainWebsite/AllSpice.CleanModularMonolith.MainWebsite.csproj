@@ -10,8 +10,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\AllSpice.CleanModularMonolith.ServiceDefaults\AllSpice.CleanModularMonolith.ServiceDefaults.csproj" />
     <ProjectReference Include="..\AllSpice.CleanModularMonolith.MainWebsite.Client\AllSpice.CleanModularMonolith.MainWebsite.Client.csproj" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server"/>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect"/>
+    <PackageReference Include="AllSpice.Flowbite.Blazor" />
+    <PackageReference Include="AllSpice.Flowbite.Blazor.ExtendedIcons" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
   </ItemGroup>
 
 </Project>
