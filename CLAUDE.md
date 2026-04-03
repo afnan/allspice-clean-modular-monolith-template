@@ -60,7 +60,7 @@ Services/{Module}/
 | CQRS / Mediator | **Mediator** (source-generated, scoped lifetime via `MediatorConfiguration.cs`) |
 | Validation | **FluentValidation** + SharedKernel `ValidationBehavior` pipeline |
 | API endpoints | **FastEndpoints** (not controllers) |
-| Messaging | **WolverineFx** (in-memory by default, handlers in `Infrastructure/Messaging/`, centralized in gateway with retry policies) |
+| Messaging | **WolverineFx** (in-memory by default, centralized in gateway with retry policies) |
 | Integration events | **IIntegrationEventPublisher** abstraction in SharedKernel, implemented by `WolverineIntegrationEventPublisher` in gateway |
 | Scheduling | **Quartz.NET** (registered globally in ServiceDefaults, jobs per module) |
 | Realtime | **SignalR** via `Shared/RealTime/AppHub` mapped at `/hubs/app` |
@@ -68,23 +68,48 @@ Services/{Module}/
 | Specifications | **Ardalis.Specification** for query objects |
 | Domain modeling | **Ardalis.GuardClauses**, **Ardalis.Result**, **Ardalis.SmartEnum** |
 | Reverse proxy | **YARP** configured in `appsettings.json` under `ReverseProxy` section |
-| Auth | **Keycloak** OIDC with portal-aware JWT (`Identity.Abstractions/Authentication/`) |
+| Auth | **Keycloak** OIDC with portal-aware JWT, client credentials flow via `KeycloakTokenProvider` |
+| Email | **Resend** (primary) -> **SendGrid** (fallback) -> **MailKit** (dev/last resort) via `EmailSenderDispatcher` |
+| PDF generation | **PuppeteerSharp** via `Shared/AllSpice.CleanModularMonolith.Pdf` — headless Chromium, A4 output |
 | Logging | **Serilog** + **OpenTelemetry** |
 | Cross-module identity | **IUserExternalIdResolver** in SharedKernel — resolves local user GUIDs to Keycloak external IDs |
 
 ### Shared Libraries
 
-- **SharedKernel** — Base entity types (`Entity`, `AggregateRoot`, `AuditableEntity`), domain events, `EfRepository<T>`, value objects, Mediator pipeline behaviors (Logging, Performance, Validation), exception types
+- **SharedKernel** — Base entity types (`Entity`, `AggregateRoot`, `AuditableEntity`), domain events, `EfRepository<T>`, value objects, Mediator pipeline behaviors (Logging, Performance, Validation), `IIntegrationEventPublisher`, `IUserExternalIdResolver`
 - **Notifications.Contracts** — Integration event DTOs consumed by other modules to request notifications via Wolverine
 - **RealTime** — `AppHub` SignalR hub and `IRealtimePublisher` abstraction for broadcasting to user groups
 - **Identity.Abstractions** — Portal-aware JWT registration (`AddIdentityPortals`), claims utilities, module-role authorization
 - **Web** — `Ardalis.Result` HTTP mapping extensions, `ClaimsPrincipalExtensions`
+- **Pdf** — `PdfGeneratorBase` (PuppeteerSharp), `PdfTheme` (A4 CSS), `PdfFooterBuilder` (header/footer/page-frame)
 
 ### CQRS Flow
 
 `FastEndpoint` -> `IMediator.Send(Command/Query)` -> `Handler` (with FluentValidation + pipeline behaviors) -> `Repository` (Ardalis.Specification) -> `DbContext`
 
 Domain events are dispatched via `MediatorDomainEventDispatcher` (registered in gateway). Cross-module communication uses Wolverine integration events via `IIntegrationEventPublisher` (not domain events).
+
+### Identity Module
+
+Full Keycloak integration with client credentials flow:
+- **Domain:** User, Invitation, ModuleDefinition, ModuleRoleAssignment, ModuleRoleTemplate aggregates
+- **Keycloak:** `KeycloakTokenProvider` (singleton, SemaphoreSlim-cached client credentials flow) + `KeycloakTokenHandler` (DelegatingHandler for auto Bearer injection)
+- **KeycloakDirectoryClient:** Full Admin REST API — create/sync users, manage realm roles, temp passwords
+- **Sync:** `KeycloakUserSyncJob` (Quartz) syncs Keycloak users to local User table
+- **API endpoints:** `GET /api/identity/users/{externalId}`, `GET /api/identity/users`, `POST /api/identity/invitations`
+
+### Notifications Module
+
+Email delivery with provider fallback chain:
+- **Development:** Always MailKit (Papercut SMTP container via Aspire)
+- **Production:** Resend -> SendGrid -> MailKit fallback via `EmailSenderDispatcher`
+- **HTML Templates:** Embedded resources in `Infrastructure/Templates/`, loaded by `EmailTemplateLoader`, merged with `_Layout.html`, seeded to DB on startup
+- **Channels:** Email, InApp (SignalR with external ID resolution via `IUserExternalIdResolver`)
+- **Templates:** `invitation-created`, `registration-welcome`, `role-assigned`, `role-revoked`, `password-reset`, `profile-updated`
+
+### FastEndpoints Assembly Discovery
+
+FastEndpoints uses explicit assembly discovery (auto-discovery disabled) in `GatewayServiceCollectionExtensions`. When adding a new module, add its assembly to the `Assemblies` array.
 
 ### Database Strategy
 
