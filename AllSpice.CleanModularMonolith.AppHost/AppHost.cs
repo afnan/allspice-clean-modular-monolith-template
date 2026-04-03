@@ -17,10 +17,6 @@ var postgresPassword = builder.AddParameter("postgres-password");
 var postgresUserValue = builder.Configuration["Parameters:postgres-user"] ?? "postgres";
 var postgresPasswordValue = builder.Configuration["Parameters:postgres-password"] ?? "pass!";
 
-var sinchProjectId = GetParameter(parameters, "sinch-project-id");
-var sinchApiKey = GetParameter(parameters, "sinch-api-key");
-var sinchServicePlanId = GetParameter(parameters, "sinch-service-plan-id");
-var sinchFromNumber = GetParameter(parameters, "sinch-from-number");
 var keycloakAdminUser = GetParameter(parameters, "keycloak-admin-user");
 var keycloakAdminPassword = GetParameter(parameters, "keycloak-admin-password");
 var keycloakRealmValue = GetParameter(parameters, "keycloak-realm", "allspice-cleanmodularmonolith");
@@ -211,10 +207,10 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
     .WithEnvironment("Identity__Keycloak__UserLookupTemplate", builder.Configuration["Identity:Keycloak:UserLookupTemplate"] ?? "/admin/realms/{realm}/users/{0}")
     .WithEnvironment("Identity__Keycloak__InvitationEndpoint", builder.Configuration["Identity:Keycloak:InvitationEndpoint"] ?? "")
     .WithEnvironment("Identity__Keycloak__AllowUntrustedCertificates", builder.Configuration["Identity:Keycloak:AllowUntrustedCertificates"] ?? "false")
-    .WithEnvironment("Notifications__Sinch__ProjectId", sinchProjectId)
-    .WithEnvironment("Notifications__Sinch__ApiKey", sinchApiKey)
-    .WithEnvironment("Notifications__Sinch__Sms__ServicePlanId", sinchServicePlanId)
-    .WithEnvironment("Notifications__Sinch__Sms__FromNumber", sinchFromNumber)
+    .WithEnvironment("Identity__Keycloak__ClientId", builder.Configuration["Identity:Keycloak:ClientId"] ?? "")
+    .WithEnvironment("Identity__Keycloak__ClientSecret", builder.Configuration["Identity:Keycloak:ClientSecret"] ?? "")
+    .WithEnvironment("Notifications__Smtp__Host", "localhost")
+    .WithEnvironment("Notifications__Smtp__Port", "25")
     .WaitFor(postgres);
 #endregion
 

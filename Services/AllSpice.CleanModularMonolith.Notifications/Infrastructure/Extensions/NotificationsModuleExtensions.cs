@@ -1,3 +1,6 @@
+using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Options;
+using Resend;
+
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
 
 /// <summary>
@@ -28,17 +31,25 @@ public static class NotificationsModuleExtensions
 
         builder.Services.AddValidatorsFromAssembly(typeof(AppAssemblyReference).Assembly);
 
-        builder.Services.Configure<SinchOptions>(builder.Configuration.GetSection("Notifications:Sinch"));
+        // Email provider options
+        builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Notifications:Resend"));
+        builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("Notifications:SendGrid"));
         builder.Services.Configure<MailKitSmtpOptions>(builder.Configuration.GetSection("Notifications:Smtp"));
 
-        builder.Services.AddHttpClient<SinchEmailSender>(client =>
-        {
-            client.DefaultRequestHeaders.Accept.Clear();
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        });
-        builder.Services.AddScoped<SinchEmailSender>();
+        // Resend client (IResend)
+        builder.Services.AddOptions<ResendClientOptions>()
+            .Configure<Microsoft.Extensions.Options.IOptions<ResendOptions>>((clientOpts, resendOpts) =>
+            {
+                clientOpts.ApiToken = resendOpts.Value.ApiKey;
+            });
+        builder.Services.AddTransient<IResend, ResendClient>();
+
+        // Email senders
+        builder.Services.AddScoped<ResendEmailSender>();
+        builder.Services.AddScoped<SendGridEmailSender>();
         builder.Services.AddScoped<MailKitEmailSender>();
         builder.Services.AddScoped<IEmailSender, EmailSenderDispatcher>();
+
         builder.Services.AddScoped<INotificationContentBuilder, NotificationContentBuilder>();
         builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
         builder.Services.Configure<NotificationDispatcherOptions>(builder.Configuration.GetSection("Notifications:Dispatcher"));
@@ -47,15 +58,9 @@ public static class NotificationsModuleExtensions
             Guard.Against.NegativeOrZero(options.PollIntervalSeconds, nameof(options.PollIntervalSeconds));
         });
 
+        // Notification channels
         builder.Services.AddScoped<INotificationChannel, EmailNotificationChannel>();
         builder.Services.AddScoped<INotificationChannel, InAppNotificationChannel>();
-
-        builder.Services.AddHttpClient<SinchSmsNotificationChannel>(client =>
-        {
-            client.DefaultRequestHeaders.Accept.Clear();
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        });
-        builder.Services.AddScoped<INotificationChannel, SinchSmsNotificationChannel>();
 
         builder.Services.AddQuartz(configurator =>
         {
@@ -85,20 +90,34 @@ public static class NotificationsModuleExtensions
         var context = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
         await context.Database.EnsureCreatedAsync(app.Lifetime.ApplicationStopping);
 
-        if (!await context.NotificationTemplates.AnyAsync(template => template.Key == "hr.welcome"))
+        // Seed/update email templates from embedded HTML resources
+        var seedTemplates = new (string Key, string Subject)[]
         {
-            var template = NotificationTemplate.Create(
-                "hr.welcome",
-                "Welcome to AllSpice.CleanModularMonolith, {{FirstName}}!",
-                "Hi {{FirstName}},<br/>Welcome aboard! We're excited to have you join the team.",
-                true);
+            ("invitation-created", "You've been invited to {{ProjectName}}!"),
+            ("registration-welcome", "Welcome to {{ProjectName}}, {{FirstName}}!"),
+            ("role-assigned", "New role assigned: {{RoleName}}"),
+            ("role-revoked", "Role revoked: {{RoleName}}"),
+            ("password-reset", "Password reset for {{ProjectName}}"),
+            ("profile-updated", "Profile updated")
+        };
 
-            context.NotificationTemplates.Add(template);
-            await context.SaveChangesAsync();
+        foreach (var (key, subject) in seedTemplates)
+        {
+            var body = EmailTemplateLoader.LoadTemplate(key);
+            var existing = await context.NotificationTemplates.FirstOrDefaultAsync(t => t.Key == key);
+
+            if (existing is null)
+            {
+                context.NotificationTemplates.Add(NotificationTemplate.Create(key, subject, body, true));
+            }
+            else
+            {
+                existing.UpdateContent(subject, body, true);
+            }
         }
+
+        await context.SaveChangesAsync();
 
         return app;
     }
 }
-
-
