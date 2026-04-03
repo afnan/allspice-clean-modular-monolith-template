@@ -4,19 +4,19 @@
 
 ## Description
 
-This template captures the opinionated modular-monolith architecture we use at **AllSpice Technologies**. It combines Clean Architecture, CQRS, MassTransit messaging, Quartz scheduling, and SignalR real-time delivery in a single deployable unit that can later be split into independent microservices.
+This template captures the opinionated modular-monolith architecture we use at **AllSpice Technologies**. It combines Clean Architecture, CQRS, Wolverine messaging, Quartz scheduling, and SignalR real-time delivery in a single deployable unit that can later be split into independent microservices.
 
 The solution centers around the `Notifications` module, which exposes a multi-channel communication hub (email, SMS stub, in-app) and background orchestration. The repository also includes reusable infrastructure (API Gateway, Aspire AppHost, shared defaults) so teams can clone and immediately focus on business modules.
 
 ## Features
 
 - **API Gateway with YARP** for routing, caching, rate limiting, and JWT validation.
-- **Notifications module** with templates, preferences, MassTransit integration, SignalR in-app delivery, and a Quartz daily digest job.
+- **Notifications module** with templates, preferences, Wolverine integration, SignalR in-app delivery, and a Quartz daily digest job.
 - **Realtime hub (`{{ProjectName}}.RealTime`)** sharing SignalR infrastructure across modules.
 - **Quartz.NET scheduling** registered in `{{ProjectName}}.ServiceDefaults` for consistent background job hosting.
 - **Central package management** with .NET 10 (RC) support and Clean Architecture patterns powered by Ardalis libraries.
 - **Aspire AppHost orchestration** to spin up PostgreSQL, Redis, and development containers like Papercut SMTP in one command.
-- **MassTransit (in-memory by default)** for event-driven communication between modules.
+- **Wolverine (in-memory by default)** for event-driven communication between modules.
 - **Serilog + OpenTelemetry** logging and tracing defaults.
 
 > **Warning:** The HR module that originally triggered onboarding notifications is intentionally excluded from the template output. A reference implementation still lives under `samples/{{ProjectName}}.HR/` for documentation purposes only.
@@ -140,7 +140,7 @@ The repository also contains `samples/{{ProjectName}}.HR/` as an illustrative ex
 
 | Module | Highlights |
 | --- | --- |
-| **Notifications** | Clean Architecture layers, FastEndpoints APIs, Quartz daily digest job, MassTransit consumer (`NotificationRequestedIntegrationEvent`), SignalR in-app channel, template rendering, user preferences. |
+| **Notifications** | Clean Architecture layers, FastEndpoints APIs, Quartz daily digest job, Wolverine consumer (`NotificationRequestedIntegrationEvent`), SignalR in-app channel, template rendering, user preferences. |
 | **RealTime** | `AppHub` SignalR hub with automatic `user:{id}` groups, `IRealtimePublisher` abstraction for broadcasting payloads or notifications to users/groups. |
 | **ServiceDefaults** | Shared OpenTelemetry logging/metrics, HTTP resilience, service discovery, Quartz hosting defaults. |
 | **ApiGateway** | YARP reverse proxy, FastEndpoints registration, SignalR hub mapping, rate limiting, Redis output caching, Serilog, OpenTelemetry. |
