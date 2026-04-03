@@ -1,31 +1,20 @@
 using AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Commands.QueueNotification;
 using AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging;
-using MassTransit;
 using Mediator;
 using DomainChannel = AllSpice.CleanModularMonolith.Notifications.Domain.Enums.NotificationChannel;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consumers;
 
 /// <summary>
-/// MassTransit consumer that converts notification integration events into internal queue commands.
+/// Wolverine handler that converts notification integration events into internal queue commands.
 /// </summary>
-public sealed class NotificationRequestedIntegrationEventConsumer : IConsumer<NotificationRequestedIntegrationEvent>
+public static class NotificationRequestedIntegrationEventConsumer
 {
-    private readonly IMediator _mediator;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="NotificationRequestedIntegrationEventConsumer"/> class.
-    /// </summary>
-    /// <param name="mediator">Mediator used to dispatch commands into the application layer.</param>
-    public NotificationRequestedIntegrationEventConsumer(IMediator mediator)
+    public static async Task HandleAsync(
+        NotificationRequestedIntegrationEvent message,
+        IMediator mediator,
+        CancellationToken cancellationToken)
     {
-        _mediator = mediator;
-    }
-
-    /// <inheritdoc />
-    public async Task Consume(ConsumeContext<NotificationRequestedIntegrationEvent> context)
-    {
-        var message = context.Message;
         var channel = MapChannel(message.Channel);
 
         var command = new QueueNotificationCommand(
@@ -40,7 +29,7 @@ public sealed class NotificationRequestedIntegrationEventConsumer : IConsumer<No
             message.ScheduledSendUtc,
             message.CorrelationId);
 
-        await _mediator.Send(command, context.CancellationToken);
+        await mediator.Send(command, cancellationToken);
     }
 
     /// <summary>
@@ -57,5 +46,3 @@ public sealed class NotificationRequestedIntegrationEventConsumer : IConsumer<No
             _ => DomainChannel.Email
         };
 }
-
-

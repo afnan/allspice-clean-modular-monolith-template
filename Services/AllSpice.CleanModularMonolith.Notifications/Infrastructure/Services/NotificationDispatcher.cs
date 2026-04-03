@@ -5,8 +5,8 @@ using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services.Channels;
 using AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Specifications;
-using MassTransit;
 using Microsoft.Extensions.Logging;
+using Wolverine;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 
@@ -19,7 +19,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     private readonly IEnumerable<INotificationChannel> _channels;
     private readonly INotificationPreferenceRepository _preferenceRepository;
     private readonly INotificationContentBuilder _contentBuilder;
-    private readonly IPublishEndpoint _publishEndpoint;
+    private readonly IMessageBus _messageBus;
     private readonly ILogger<NotificationDispatcher> _logger;
 
     /// <summary>
@@ -29,21 +29,21 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     /// <param name="channels">The set of delivery channel handlers available.</param>
     /// <param name="preferenceRepository">Repository for recipient notification preferences.</param>
     /// <param name="contentBuilder">Service that renders notification content.</param>
-    /// <param name="publishEndpoint">MassTransit endpoint used for event publication.</param>
+    /// <param name="messageBus">Wolverine message bus used for event publication.</param>
     /// <param name="logger">Logger used to record dispatcher activity.</param>
     public NotificationDispatcher(
         INotificationRepository notificationRepository,
         IEnumerable<INotificationChannel> channels,
         INotificationPreferenceRepository preferenceRepository,
         INotificationContentBuilder contentBuilder,
-        IPublishEndpoint publishEndpoint,
+        IMessageBus messageBus,
         ILogger<NotificationDispatcher> logger)
     {
         _notificationRepository = notificationRepository;
         _channels = channels;
         _preferenceRepository = preferenceRepository;
         _contentBuilder = contentBuilder;
-        _publishEndpoint = publishEndpoint;
+        _messageBus = messageBus;
         _logger = logger;
     }
 
@@ -113,7 +113,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
                         notification.AttemptCount,
                         DateTimeOffset.UtcNow);
 
-                    await _publishEndpoint.Publish(deliveryEvent, cancellationToken);
+                    await _messageBus.PublishAsync(deliveryEvent);
 
                     _logger.LogInformation("Notification {NotificationId} delivered via {Channel}", notification.Id, notification.Channel.Name);
                 }
@@ -136,5 +136,3 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         return processed;
     }
 }
-
-
