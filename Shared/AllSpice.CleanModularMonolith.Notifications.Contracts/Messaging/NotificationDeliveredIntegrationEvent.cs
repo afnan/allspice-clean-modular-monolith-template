@@ -7,6 +7,9 @@ public sealed record NotificationDeliveredIntegrationEvent(
     string RecipientUserId,
     string? CorrelationId,
     int AttemptCount,
-    DateTimeOffset DeliveredAtUtc);
-
-
+    DateTimeOffset DeliveredAtUtc)
+{
+    // Parameterless constructor for Wolverine deserialization
+    public NotificationDeliveredIntegrationEvent()
+        : this(Guid.Empty, Guid.Empty, string.Empty, string.Empty, null, 0, default) { }
+}

@@ -57,16 +57,6 @@ public static class NotificationsModuleExtensions
         });
         builder.Services.AddScoped<INotificationChannel, SinchSmsNotificationChannel>();
 
-        builder.Services.AddMassTransit(configurator =>
-        {
-            configurator.AddConsumer<NotificationRequestedIntegrationEventConsumer>();
-
-            configurator.UsingInMemory((context, cfg) =>
-            {
-                cfg.ConfigureEndpoints(context);
-            });
-        });
-
         builder.Services.AddQuartz(configurator =>
         {
             var jobKey = new JobKey("NotificationDailyDigestJob");

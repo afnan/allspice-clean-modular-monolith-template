@@ -1,3 +1,10 @@
+using AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.Messaging;
+using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consumers;
+using AllSpice.CleanModularMonolith.SharedKernel.Events;
+using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
+using Wolverine;
+using Wolverine.ErrorHandling;
+
 namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
 
 /// <summary>
@@ -14,9 +21,21 @@ public static class GatewayModuleRegistrationExtensions
         using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
         var logger = loggerFactory.CreateLogger("Program");
 
+        builder.Services.AddScoped<IDomainEventDispatcher, MediatorDomainEventDispatcher>();
+
         builder.AddNotificationsModuleServices(logger);
         builder.AddIdentityModuleServices(logger);
+
+        builder.Host.UseWolverine(opts =>
+        {
+            opts.Discovery.IncludeAssembly(typeof(NotificationRequestedIntegrationEventConsumer).Assembly);
+
+            opts.OnException<Exception>().RetryWithCooldown(
+                TimeSpan.FromMilliseconds(500),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(30));
+        });
+
+        builder.Services.AddScoped<IIntegrationEventPublisher, WolverineIntegrationEventPublisher>();
     }
 }
-
-
