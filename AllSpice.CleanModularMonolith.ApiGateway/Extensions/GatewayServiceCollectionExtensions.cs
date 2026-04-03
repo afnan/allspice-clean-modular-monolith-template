@@ -17,7 +17,16 @@ public static class GatewayServiceCollectionExtensions
 
         builder.Services.AddOpenApi();
         builder.Services
-            .AddFastEndpoints()
+            .AddFastEndpoints(o =>
+            {
+                o.DisableAutoDiscovery = true;
+                o.Assemblies =
+                [
+                    typeof(Program).Assembly,
+                    typeof(AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions.NotificationsModuleExtensions).Assembly,
+                    typeof(AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions.IdentityModuleExtensions).Assembly,
+                ];
+            })
             .SwaggerDocument(options =>
             {
                 options.DocumentSettings = settings =>

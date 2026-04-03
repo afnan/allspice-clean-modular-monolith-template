@@ -10,6 +10,7 @@
   </Folder>
   <Folder Name="/Shared/">
     <Project Path="Shared/AllSpice.CleanModularMonolith.Notifications.Contracts/AllSpice.CleanModularMonolith.Notifications.Contracts.csproj" />
+    <Project Path="Shared/AllSpice.CleanModularMonolith.Pdf/AllSpice.CleanModularMonolith.Pdf.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.RealTime/AllSpice.CleanModularMonolith.RealTime.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.SharedKernel/AllSpice.CleanModularMonolith.SharedKernel.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.Identity.Abstractions/AllSpice.CleanModularMonolith.Identity.Abstractions.csproj" />
