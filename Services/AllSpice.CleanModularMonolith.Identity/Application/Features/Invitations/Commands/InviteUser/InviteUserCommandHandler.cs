@@ -60,7 +60,6 @@ public sealed class InviteUserCommandHandler : IRequestHandler<InviteUserCommand
             request.LastName);
 
         await _userRepository.AddAsync(user, cancellationToken);
-        await _userRepository.SaveChangesAsync(cancellationToken);
 
         // Create invitation (fires InvitationCreatedDomainEvent)
         var invitation = Invitation.Create(
@@ -74,6 +73,9 @@ public sealed class InviteUserCommandHandler : IRequestHandler<InviteUserCommand
             tempPassword);
 
         await _invitationRepository.AddAsync(invitation, cancellationToken);
+
+        // Single commit — both User and Invitation share the same DbContext scope
+        await _invitationRepository.SaveChangesAsync(cancellationToken);
 
         return Result<Guid>.Created(invitation.Id);
     }

@@ -47,6 +47,6 @@ public static class NotificationRequestedIntegrationEventConsumer
             NotificationChannel.Email => DomainChannel.Email,
             NotificationChannel.Sms => DomainChannel.Sms,
             NotificationChannel.InApp => DomainChannel.InApp,
-            _ => DomainChannel.Email
+            _ => throw new ArgumentOutOfRangeException(nameof(channel), channel, $"Unknown notification channel: {channel}")
         };
 }

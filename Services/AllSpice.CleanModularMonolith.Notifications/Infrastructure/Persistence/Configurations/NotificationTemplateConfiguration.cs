@@ -24,6 +24,8 @@ public sealed class NotificationTemplateConfiguration : IEntityTypeConfiguration
 
         builder.Property(template => template.BodyTemplate)
             .IsRequired();
+
+        builder.Ignore(template => template.DomainEvents);
     }
 }
 

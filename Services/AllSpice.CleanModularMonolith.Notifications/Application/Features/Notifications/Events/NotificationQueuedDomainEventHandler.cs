@@ -17,12 +17,10 @@ public sealed class NotificationQueuedDomainEventHandler : INotificationHandler<
     {
         _logger.LogDebug(
             "Notification {NotificationId} queued for user {UserId} via channel {Channel}.",
-            notification.Notification.Id,
-            notification.Notification.Recipient.UserId,
-            notification.Notification.Channel.Name);
+            notification.NotificationId,
+            notification.RecipientUserId,
+            notification.ChannelName);
 
         return ValueTask.CompletedTask;
     }
 }
-
-

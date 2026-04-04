@@ -4,6 +4,10 @@
 Thumbs.db
 .cursor/*
 
+# AI/Development tool configs
+.mcp.json
+.serena/
+
 # User-Specific Files
 *.suo
 *.user

@@ -38,7 +38,7 @@ public sealed class Notification : AggregateRoot
         CorrelationId = correlationId;
         CreatedUtc = DateTimeOffset.UtcNow;
 
-        RegisterDomainEvent(new NotificationQueuedDomainEvent(this));
+        RegisterDomainEvent(new NotificationQueuedDomainEvent(Id, recipient.UserId, channel.Name));
     }
 
     public NotificationChannel Channel { get; private set; } = null!;

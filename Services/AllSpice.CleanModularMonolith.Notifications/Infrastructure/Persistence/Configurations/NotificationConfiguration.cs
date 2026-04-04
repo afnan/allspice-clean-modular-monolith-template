@@ -67,6 +67,8 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
             ownedNavigationBuilder.ToTable("NotificationRecipients");
         });
 
+        builder.Ignore(notification => notification.DomainEvents);
+
         builder.HasIndex(notification => new { notification.Channel, notification.Status });
         builder.HasIndex(notification => notification.CreatedUtc);
         builder.HasIndex(notification => notification.CorrelationId);

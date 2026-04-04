@@ -23,8 +23,8 @@ public class NotificationTests
             null);
 
         var domainEvent = Assert.Single(notification.DomainEvents);
-        Assert.IsType<NotificationQueuedDomainEvent>(domainEvent);
-        Assert.Equal(notification, ((NotificationQueuedDomainEvent)domainEvent).Notification);
+        var queuedEvent = Assert.IsType<NotificationQueuedDomainEvent>(domainEvent);
+        Assert.Equal(notification.Id, queuedEvent.NotificationId);
     }
 
     [Fact]

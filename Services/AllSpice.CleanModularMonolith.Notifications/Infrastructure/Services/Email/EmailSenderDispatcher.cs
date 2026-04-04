@@ -7,9 +7,9 @@ using Microsoft.Extensions.Options;
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Email;
 
 /// <summary>
-/// Dispatches emails through a provider fallback chain.
+/// Dispatches emails through a provider fallback chain with error recovery.
 /// Development: always MailKit (Papercut SMTP).
-/// Production: Resend -> SendGrid -> MailKit.
+/// Production: Resend -> SendGrid -> MailKit (each catches errors and falls through).
 /// </summary>
 public sealed class EmailSenderDispatcher : IEmailSender
 {
@@ -52,19 +52,33 @@ public sealed class EmailSenderDispatcher : IEmailSender
         // Production fallback chain: Resend -> SendGrid -> MailKit
         if (IsResendConfigured())
         {
-            _logger.LogDebug("Sending email via Resend to {Recipient}", message.To);
-            await _resendSender.SendEmailAsync(message, cancellationToken);
-            return;
+            try
+            {
+                _logger.LogDebug("Sending email via Resend to {Recipient}", message.To);
+                await _resendSender.SendEmailAsync(message, cancellationToken);
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Resend failed for {Recipient}, falling back to next provider", message.To);
+            }
         }
 
         if (IsSendGridConfigured())
         {
-            _logger.LogDebug("Sending email via SendGrid to {Recipient}", message.To);
-            await _sendGridSender.SendEmailAsync(message, cancellationToken);
-            return;
+            try
+            {
+                _logger.LogDebug("Sending email via SendGrid to {Recipient}", message.To);
+                await _sendGridSender.SendEmailAsync(message, cancellationToken);
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SendGrid failed for {Recipient}, falling back to MailKit", message.To);
+            }
         }
 
-        _logger.LogDebug("No cloud email provider configured; falling back to MailKit for {Recipient}", message.To);
+        _logger.LogDebug("Sending email via MailKit to {Recipient}", message.To);
         await _mailKitSender.SendEmailAsync(message, cancellationToken);
     }
 

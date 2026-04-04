@@ -35,12 +35,14 @@ public sealed class InvitationRepository : IInvitationRepository
     public async Task AddAsync(Invitation invitation, CancellationToken cancellationToken = default)
     {
         await _dbContext.Invitations.AddAsync(invitation, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task UpdateAsync(Invitation invitation, CancellationToken cancellationToken = default)
+    public Task UpdateAsync(Invitation invitation, CancellationToken cancellationToken = default)
     {
         _dbContext.Invitations.Update(invitation);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Task.CompletedTask;
     }
+
+    public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.SaveChangesAsync(cancellationToken);
 }

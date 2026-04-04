@@ -10,4 +10,5 @@ public interface IInvitationRepository
     Task<List<Invitation>> ListAllAsync(CancellationToken cancellationToken = default);
     Task AddAsync(Invitation invitation, CancellationToken cancellationToken = default);
     Task UpdateAsync(Invitation invitation, CancellationToken cancellationToken = default);
+    Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

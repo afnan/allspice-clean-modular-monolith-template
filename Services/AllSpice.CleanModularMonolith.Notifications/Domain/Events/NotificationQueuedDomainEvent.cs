@@ -1,16 +1,17 @@
-using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 using AllSpice.CleanModularMonolith.SharedKernel.Events;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Domain.Events;
 
 public sealed class NotificationQueuedDomainEvent : DomainEventBase
 {
-    public NotificationQueuedDomainEvent(Notification notification)
+    public NotificationQueuedDomainEvent(Guid notificationId, string recipientUserId, string channelName)
     {
-        Notification = notification;
+        NotificationId = notificationId;
+        RecipientUserId = recipientUserId;
+        ChannelName = channelName;
     }
 
-    public Notification Notification { get; }
+    public Guid NotificationId { get; }
+    public string RecipientUserId { get; }
+    public string ChannelName { get; }
 }
-
-
