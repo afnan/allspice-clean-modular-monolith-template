@@ -1,5 +1,6 @@
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
+using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
@@ -9,6 +10,12 @@ public sealed class NotificationsDbContext : DbContext, INotificationsDbContext
     public NotificationsDbContext(DbContextOptions<NotificationsDbContext> options)
         : base(options)
     {
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+        configurationBuilder.ApplyUtcDateTimeOffsetConversions();
     }
 
     public DbSet<Notification> Notifications => Set<Notification>();

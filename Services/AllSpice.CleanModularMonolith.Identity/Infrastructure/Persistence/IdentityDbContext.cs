@@ -4,6 +4,7 @@ using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleAssignm
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleTemplate;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Entities;
+using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
@@ -13,6 +14,12 @@ public sealed class IdentityDbContext : DbContext
     public IdentityDbContext(DbContextOptions<IdentityDbContext> options)
         : base(options)
     {
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+        configurationBuilder.ApplyUtcDateTimeOffsetConversions();
     }
 
     public DbSet<ModuleDefinition> ModuleDefinitions => Set<ModuleDefinition>();

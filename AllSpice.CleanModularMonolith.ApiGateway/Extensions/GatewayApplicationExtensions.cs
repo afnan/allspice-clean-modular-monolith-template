@@ -14,9 +14,9 @@ public static class GatewayApplicationExtensions
     {
         app.UseMiddleware<SecurityHeadersMiddleware>();
         app.UseMiddleware<CorrelationIdMiddleware>();
+        app.UseMiddleware<ErrorHandlingMiddleware>();
         app.UseMiddleware<RequestValidationMiddleware>();
         app.UseResponseCompression();
-        app.UseMiddleware<ErrorHandlingMiddleware>();
         app.UseCors();
 
         if (!app.Environment.IsDevelopment())

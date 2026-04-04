@@ -74,6 +74,11 @@ public sealed class NotificationDispatcher : INotificationDispatcher
 
             notification.RecordAttempt();
 
+            // Mark as Dispatched and persist BEFORE sending to prevent duplicate dispatch
+            // by the background service polling concurrently.
+            notification.MarkDispatched();
+            await _notificationRepository.UpdateAsync(notification, cancellationToken);
+
             var contentResult = await _contentBuilder.BuildAsync(notification, cancellationToken);
             if (!contentResult.IsSuccess)
             {

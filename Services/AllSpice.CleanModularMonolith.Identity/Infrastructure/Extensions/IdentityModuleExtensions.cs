@@ -140,22 +140,39 @@ public static class IdentityModuleExtensions
     /// <returns>The application instance to continue fluent configuration.</returns>
     public static async Task<WebApplication> EnsureIdentityModuleDatabaseAsync(this WebApplication app)
     {
-        await using var scope = app.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        await context.Database.EnsureCreatedAsync(app.Lifetime.ApplicationStopping);
+        using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+        var logger = loggerFactory.CreateLogger("IdentityDatabase");
 
-        if (!await context.ModuleDefinitions.AnyAsync())
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var identityModule = DomainModuleDefinition.Create("Identity", "Identity", "Identity and access management");
-            identityModule.AddRole("Admin", "Identity Administrator", "Full access to identity management");
-            identityModule.AddRole("Viewer", "Identity Viewer", "Read-only identity access");
+            try
+            {
+                await using var scope = app.Services.CreateAsyncScope();
+                var context = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+                await context.Database.EnsureCreatedAsync(app.Lifetime.ApplicationStopping);
 
-            var notificationsModule = DomainModuleDefinition.Create("Notifications", "Notifications", "Notification delivery and management");
-            notificationsModule.AddRole("Admin", "Notifications Administrator", "Full notifications access");
-            notificationsModule.AddRole("Viewer", "Notifications Viewer", "View-only notifications access");
+                if (!await context.ModuleDefinitions.AnyAsync())
+                {
+                    var identityModule = DomainModuleDefinition.Create("Identity", "Identity", "Identity and access management");
+                    identityModule.AddRole("Admin", "Identity Administrator", "Full access to identity management");
+                    identityModule.AddRole("Viewer", "Identity Viewer", "Read-only identity access");
 
-            await context.ModuleDefinitions.AddRangeAsync(identityModule, notificationsModule);
-            await context.SaveChangesAsync();
+                    var notificationsModule = DomainModuleDefinition.Create("Notifications", "Notifications", "Notification delivery and management");
+                    notificationsModule.AddRole("Admin", "Notifications Administrator", "Full notifications access");
+                    notificationsModule.AddRole("Viewer", "Notifications Viewer", "View-only notifications access");
+
+                    await context.ModuleDefinitions.AddRangeAsync(identityModule, notificationsModule);
+                    await context.SaveChangesAsync();
+                }
+
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                logger.LogWarning(ex, "Identity database setup attempt {Attempt}/{Max} failed. Retrying...", attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(attempt * 2), app.Lifetime.ApplicationStopping);
+            }
         }
 
         return app;

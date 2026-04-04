@@ -1,7 +1,10 @@
+using AllSpice.CleanModularMonolith.SharedKernel.Exceptions;
+
 namespace AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 
 /// <summary>
 /// Middleware that captures unhandled exceptions and converts them to RFC 7807 JSON responses.
+/// Maps domain exception types to appropriate HTTP status codes.
 /// </summary>
 public class ErrorHandlingMiddleware
 {
@@ -9,12 +12,6 @@ public class ErrorHandlingMiddleware
     private readonly ILogger<ErrorHandlingMiddleware> _logger;
     private readonly IWebHostEnvironment _environment;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ErrorHandlingMiddleware"/> class.
-    /// </summary>
-    /// <param name="next">The next middleware in the pipeline.</param>
-    /// <param name="logger">Logger used to record exception details.</param>
-    /// <param name="environment">The current hosting environment.</param>
     public ErrorHandlingMiddleware(
         RequestDelegate next,
         ILogger<ErrorHandlingMiddleware> logger,
@@ -25,16 +22,17 @@ public class ErrorHandlingMiddleware
         _environment = environment;
     }
 
-    /// <summary>
-    /// Wraps downstream middleware execution in a try/catch block and normalizes exceptions.
-    /// </summary>
-    /// <param name="context">The current HTTP context.</param>
-    /// <returns>A task representing middleware execution.</returns>
     public async Task InvokeAsync(HttpContext context)
     {
         try
         {
             await _next(context);
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            _logger.LogDebug("Request cancelled by client: {Method} {Path}",
+                context.Request.Method, context.Request.Path);
+            context.Response.StatusCode = 499; // nginx-style "Client Closed Request"
         }
         catch (Exception ex)
         {
@@ -51,17 +49,17 @@ public class ErrorHandlingMiddleware
         }
     }
 
-    /// <summary>
-    /// Generates a problem details response for the provided exception.
-    /// </summary>
-    /// <param name="context">The current HTTP context.</param>
-    /// <param name="exception">The exception that was thrown.</param>
-    /// <param name="correlationId">The correlation identifier associated with the request.</param>
-    /// <returns>A task that writes the problem response to the pipeline.</returns>
     private Task HandleExceptionAsync(HttpContext context, Exception exception, string correlationId)
     {
         var statusCode = exception switch
         {
+            NotFoundException => HttpStatusCode.NotFound,
+            DomainValidationException => HttpStatusCode.BadRequest,
+            UnauthorizedException => HttpStatusCode.Unauthorized,
+            ForbiddenException => HttpStatusCode.Forbidden,
+            ConflictException => HttpStatusCode.Conflict,
+            BusinessRuleViolationException => HttpStatusCode.UnprocessableEntity,
+            IdentityServerUnreachableException => HttpStatusCode.ServiceUnavailable,
             UnauthorizedAccessException => HttpStatusCode.Unauthorized,
             ArgumentException => HttpStatusCode.BadRequest,
             KeyNotFoundException => HttpStatusCode.NotFound,
@@ -69,14 +67,18 @@ public class ErrorHandlingMiddleware
             _ => HttpStatusCode.InternalServerError
         };
 
+        var isIdentityError = exception is IdentityServerUnreachableException;
+
         var problemDetails = new GatewayProblemDetails
         {
             Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
-            Title = "An error occurred while processing your request.",
+            Title = isIdentityError
+                ? exception.Message
+                : "An error occurred while processing your request.",
             Status = (int)statusCode,
             Detail = _environment.IsDevelopment()
                 ? exception.ToString()
-                : "An error occurred while processing your request.",
+                : (isIdentityError ? exception.Message : "An error occurred while processing your request."),
             Instance = context.Request.Path
         };
 
@@ -98,9 +100,6 @@ public class ErrorHandlingMiddleware
         return context.Response.WriteAsync(result);
     }
 
-    /// <summary>
-    /// Lightweight DTO used to serialize problem detail responses.
-    /// </summary>
     private sealed class GatewayProblemDetails
     {
         public string Type { get; init; } = string.Empty;

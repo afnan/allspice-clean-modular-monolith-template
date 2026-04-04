@@ -1,6 +1,7 @@
 using AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Commands.QueueNotification;
 using AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging;
 using Mediator;
+using Microsoft.Extensions.Logging;
 using DomainChannel = AllSpice.CleanModularMonolith.Notifications.Domain.Enums.NotificationChannel;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consumers;
@@ -13,6 +14,7 @@ public static class NotificationRequestedIntegrationEventConsumer
     public static async Task HandleAsync(
         NotificationRequestedIntegrationEvent message,
         IMediator mediator,
+        ILogger<NotificationRequestedIntegrationEvent> logger,
         CancellationToken cancellationToken)
     {
         var channel = MapChannel(message.Channel);
@@ -29,14 +31,16 @@ public static class NotificationRequestedIntegrationEventConsumer
             message.ScheduledSendUtc,
             message.CorrelationId);
 
-        await mediator.Send(command, cancellationToken);
+        var result = await mediator.Send(command, cancellationToken);
+        if (!result.IsSuccess)
+        {
+            logger.LogWarning(
+                "Failed to queue notification for {Email}: {Errors}",
+                message.RecipientEmail,
+                string.Join("; ", result.Errors));
+        }
     }
 
-    /// <summary>
-    /// Maps contract channels to domain channel instances.
-    /// </summary>
-    /// <param name="channel">The channel specified in the integration event.</param>
-    /// <returns>A domain channel enumeration value.</returns>
     private static DomainChannel MapChannel(NotificationChannel channel)
         => channel switch
         {
