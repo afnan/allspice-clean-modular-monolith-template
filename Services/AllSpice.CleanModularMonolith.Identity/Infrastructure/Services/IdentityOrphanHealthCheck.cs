@@ -27,7 +27,7 @@ public sealed class IdentityOrphanHealthCheck : IHealthCheck
         }
 
         return HealthCheckResult.Degraded(
-            $"There are {orphanCount} Authentik users without module role assignments.",
+            $"There are {orphanCount} Keycloak users without module role assignments.",
             data: new Dictionary<string, object>
             {
                 ["orphanCount"] = orphanCount

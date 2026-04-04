@@ -15,6 +15,6 @@ public static class IdentityClaimTypes
     public const string Roles = "roles";
     /// <summary>Custom claim storing module-role assignments.</summary>
     public const string ModuleRoles = "module_roles";
-    /// <summary>Authentik portal identifier claim.</summary>
+    /// <summary>Keycloak portal identifier claim.</summary>
     public const string Portal = "ak_portal";
 }

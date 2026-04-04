@@ -1,7 +1,7 @@
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Entities;
 
 /// <summary>
-/// Represents a user present in Authentik without any active module role assignments.
+/// Represents a user present in Keycloak without any active module role assignments.
 /// </summary>
 public sealed class IdentityOrphanUser
 {

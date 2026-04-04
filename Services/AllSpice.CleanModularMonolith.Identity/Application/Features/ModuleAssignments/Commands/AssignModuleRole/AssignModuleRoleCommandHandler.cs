@@ -9,7 +9,7 @@ using Mediator;
 namespace AllSpice.CleanModularMonolith.Identity.Application.Features.ModuleAssignments.Commands.AssignModuleRole;
 
 /// <summary>
-/// Handles assignment of module roles to Authentik users, ensuring directory validation and auditing.
+/// Handles assignment of module roles to Keycloak users, ensuring directory validation and auditing.
 /// </summary>
 public sealed class AssignModuleRoleCommandHandler : IRequestHandler<AssignModuleRoleCommand, Result<ModuleRoleAssignmentDto>>
 {

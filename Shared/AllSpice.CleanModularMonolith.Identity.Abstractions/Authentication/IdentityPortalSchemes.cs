@@ -6,8 +6,8 @@ namespace AllSpice.CleanModularMonolith.Identity.Abstractions.Authentication;
 public static class IdentityPortalSchemes
 {
     /// <summary>Authentication scheme name for ERP (internal) portal tokens.</summary>
-    public const string Erp = "AuthentikErp";
+    public const string Erp = "KeycloakErp";
 
     /// <summary>Authentication scheme name for public portal tokens.</summary>
-    public const string Public = "AuthentikPublic";
+    public const string Public = "KeycloakPublic";
 }

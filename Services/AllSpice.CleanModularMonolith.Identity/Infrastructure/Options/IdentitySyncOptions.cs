@@ -1,7 +1,7 @@
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 
 /// <summary>
-/// Options governing the Authentik synchronization job.
+/// Options governing the Keycloak synchronization job.
 /// </summary>
 public sealed class IdentitySyncOptions
 {
@@ -13,7 +13,7 @@ public sealed class IdentitySyncOptions
     public string CronExpression { get; set; } = "0 0/15 * * * ?";
 
     /// <summary>
-    /// The maximum number of users fetched per Authentik request.
+    /// The maximum number of users fetched per Keycloak request.
     /// </summary>
     public int PageSize { get; set; } = 100;
 
