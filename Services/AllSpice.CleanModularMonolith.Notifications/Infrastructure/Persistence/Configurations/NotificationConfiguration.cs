@@ -50,6 +50,8 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
         builder.Property(notification => notification.LastError)
             .HasMaxLength(512);
 
+        builder.Property(notification => notification.ReadAt);
+
         builder.OwnsOne(notification => notification.Recipient, ownedNavigationBuilder =>
         {
             ownedNavigationBuilder.Property(recipient => recipient.UserId)

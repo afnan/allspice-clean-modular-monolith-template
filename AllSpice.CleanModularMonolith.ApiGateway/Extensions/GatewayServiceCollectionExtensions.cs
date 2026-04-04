@@ -35,6 +35,8 @@ public static class GatewayServiceCollectionExtensions
                     settings.Version = "v1";
                 };
             });
+        AddMediatorServices(builder.Services);
+
         builder.Services.AddSignalR();
         builder.Services.AddSingleton<IRealtimePublisher, RealtimePublisher>();
 
@@ -52,6 +54,24 @@ public static class GatewayServiceCollectionExtensions
             .AddReverseProxy()
             .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
             .AddServiceDiscoveryDestinationResolver();
+    }
+
+    /// <summary>
+    /// Registers mediator pipeline behaviors in execution order.
+    /// Centralised here so all modules share the same pipeline.
+    /// </summary>
+    /// <summary>
+    /// Registers mediator pipeline behaviors in execution order.
+    /// Centralised here so all modules share the same pipeline.
+    /// Note: AddMediator() is called per-module in their extension methods since
+    /// source-generated Mediator creates module-specific registrations.
+    /// </summary>
+    private static void AddMediatorServices(IServiceCollection services)
+    {
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.LoggingBehavior<,>));
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.PerformanceBehavior<,>));
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.DomainExceptionBehavior<,>));
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.ValidationBehavior<,>));
     }
 
     /// <summary>
@@ -77,11 +97,17 @@ public static class GatewayServiceCollectionExtensions
                 options.Configuration = redisConfig;
                 options.InstanceName = "{{ProjectName}}_Gateway";
             });
+
+            builder.Services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConfig;
+                options.InstanceName = "{{ProjectName}}_";
+            });
         }
 
         builder.Services.AddOutputCache(options =>
         {
-            options.AddBasePolicy(policy => policy.Expire(TimeSpan.FromMinutes(5)));
+            options.AddBasePolicy(policy => policy.NoCache());
             options.AddPolicy("Cache5Min", policy => policy.Expire(TimeSpan.FromMinutes(5)));
             options.AddPolicy("Cache1Hour", policy => policy.Expire(TimeSpan.FromHours(1)));
         });

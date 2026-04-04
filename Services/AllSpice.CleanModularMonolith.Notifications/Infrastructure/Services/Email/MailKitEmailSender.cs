@@ -73,9 +73,16 @@ public sealed class MailKitEmailSender : IEmailSender
         }
         finally
         {
-            if (client.IsConnected)
+            try
             {
-                await client.DisconnectAsync(true, cancellationToken);
+                if (client.IsConnected)
+                {
+                    await client.DisconnectAsync(true, CancellationToken.None);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SMTP disconnect failed (email was already sent).");
             }
         }
     }
