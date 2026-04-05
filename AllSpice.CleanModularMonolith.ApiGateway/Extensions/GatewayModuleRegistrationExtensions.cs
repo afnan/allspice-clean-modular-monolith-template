@@ -3,7 +3,9 @@ using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consu
 using AllSpice.CleanModularMonolith.SharedKernel.Events;
 using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
 using Wolverine;
+using Wolverine.EntityFrameworkCore;
 using Wolverine.ErrorHandling;
+using Wolverine.Postgresql;
 
 namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
 
@@ -26,9 +28,21 @@ public static class GatewayModuleRegistrationExtensions
         builder.AddNotificationsModuleServices(logger);
         builder.AddIdentityModuleServices(logger);
 
+        var messagingConnectionString = builder.Configuration.GetConnectionString("messagingdb");
+
         builder.Host.UseWolverine(opts =>
         {
             opts.Discovery.IncludeAssembly(typeof(NotificationRequestedIntegrationEventConsumer).Assembly);
+
+            // EF Core transaction middleware: Wolverine wraps handlers in EF Core transactions
+            opts.UseEntityFrameworkCoreTransactions();
+
+            // Durable outbox: store message envelopes in PostgreSQL
+            if (!string.IsNullOrEmpty(messagingConnectionString))
+            {
+                opts.PersistMessagesWithPostgresql(messagingConnectionString, "wolverine");
+                opts.Policies.UseDurableLocalQueues();
+            }
 
             opts.OnException<Exception>().RetryWithCooldown(
                 TimeSpan.FromMilliseconds(500),

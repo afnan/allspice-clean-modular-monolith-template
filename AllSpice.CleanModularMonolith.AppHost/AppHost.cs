@@ -83,6 +83,7 @@ var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
 var notificationsDatabase = postgres.AddDatabase("notificationsdb");
 var identityDatabase = postgres.AddDatabase("identitydb");
 var keycloakDb = postgres.AddDatabase("keycloakdb");
+var messagingDatabase = postgres.AddDatabase("messagingdb");
 #endregion
 
 #region Redis Cache
@@ -194,6 +195,7 @@ var keycloakEndpoint = keycloak.GetEndpoint("http");
 var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGateway>("allspice-cleanmodularmonolith-apigateway")
     .WithReference(notificationsDatabase)
     .WithReference(identityDatabase)
+    .WithReference(messagingDatabase)
     .WithEnvironment("ConnectionStrings__redis", redisEndpoint)
     .WithEnvironment("Cors__WebOrigin", builder.Configuration["Cors:WebOrigin"] ?? "https://localhost:7001")
     .WithEnvironment("Cors__MobileOrigin", builder.Configuration["Cors:MobileOrigin"] ?? "https://localhost:7002")
