@@ -1,4 +1,5 @@
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Options;
+using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Resend;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
@@ -21,6 +22,7 @@ public static class NotificationsModuleExtensions
         ILogger logger)
     {
         builder.AddNpgsqlDbContext<NotificationsDbContext>(DatabaseResourceName);
+        builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<NotificationsDbContext>());
 
         builder.Services.AddScoped<INotificationsDbContext, NotificationsDbContext>();
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();

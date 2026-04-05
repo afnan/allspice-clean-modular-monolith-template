@@ -3,6 +3,7 @@ using System.Linq;
 using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Identity.Application.DTOs;
 using AllSpice.CleanModularMonolith.Identity.Application.Features.ModuleAssignments.Commands.AssignModuleRole;
+using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 using AllSpice.CleanModularMonolith.Identity.Application.Specifications.ModuleTemplates;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleTemplate;
 using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
@@ -13,7 +14,7 @@ namespace AllSpice.CleanModularMonolith.Identity.Application.Features.ModuleTemp
 public sealed record ApplyModuleRoleTemplateCommand(
     string TemplateKey,
     string UserId,
-    string AssignedBy) : IRequest<Result<IReadOnlyCollection<ModuleRoleAssignmentDto>>>;
+    string AssignedBy) : IRequest<Result<IReadOnlyCollection<ModuleRoleAssignmentDto>>>, ITransactional;
 
 public sealed class ApplyModuleRoleTemplateCommandHandler : IRequestHandler<ApplyModuleRoleTemplateCommand, Result<IReadOnlyCollection<ModuleRoleAssignmentDto>>>
 {

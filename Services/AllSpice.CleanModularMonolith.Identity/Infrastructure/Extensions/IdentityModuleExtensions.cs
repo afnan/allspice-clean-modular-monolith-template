@@ -5,6 +5,7 @@ using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleTemplat
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
+using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 using Microsoft.Extensions.Options;
 using Quartz;
@@ -30,6 +31,7 @@ public static class IdentityModuleExtensions
         ILogger logger)
     {
         builder.AddNpgsqlDbContext<IdentityDbContext>(DatabaseResourceName);
+        builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
         // Existing repositories
         builder.Services.AddScoped<IModuleDefinitionRepository, ModuleDefinitionRepository>();

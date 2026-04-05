@@ -68,10 +68,17 @@ public static class GatewayServiceCollectionExtensions
     /// </summary>
     private static void AddMediatorServices(IServiceCollection services)
     {
+        // Pipeline execution order (outermost to innermost):
+        // 1. Logging — logs request/response and elapsed time
+        // 2. Performance — traces slow requests
+        // 3. Validation — rejects invalid requests before starting a transaction
+        // 4. Transaction — wraps handler + domain events in a DB transaction (commands only)
+        // 5. DomainException — maps domain/validation exceptions to Result types
         services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.LoggingBehavior<,>));
         services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.PerformanceBehavior<,>));
-        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.DomainExceptionBehavior<,>));
         services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.ValidationBehavior<,>));
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.TransactionBehavior<,>));
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.DomainExceptionBehavior<,>));
     }
 
     /// <summary>

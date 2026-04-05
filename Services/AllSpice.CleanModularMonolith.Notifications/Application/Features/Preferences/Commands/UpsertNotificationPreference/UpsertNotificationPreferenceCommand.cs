@@ -1,5 +1,6 @@
 using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Enums;
+using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Preferences.Commands.UpsertNotificationPreference;
@@ -7,6 +8,6 @@ namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Prefe
 public sealed record UpsertNotificationPreferenceCommand(
     string UserId,
     NotificationChannel Channel,
-    bool IsEnabled) : IRequest<Result>;
+    bool IsEnabled) : IRequest<Result>, ITransactional;
 
 

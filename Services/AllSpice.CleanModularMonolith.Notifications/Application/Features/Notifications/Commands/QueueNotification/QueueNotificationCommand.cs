@@ -1,5 +1,6 @@
 using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Enums;
+using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Commands.QueueNotification;
@@ -17,6 +18,6 @@ public sealed record QueueNotificationCommand(
     string? TemplateKey,
     IReadOnlyDictionary<string, string>? Metadata,
     DateTimeOffset? ScheduledSendUtc,
-    string? CorrelationId) : IRequest<Result<Guid>>;
+    string? CorrelationId) : IRequest<Result<Guid>>, ITransactional;
 
 

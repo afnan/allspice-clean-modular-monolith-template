@@ -1,12 +1,13 @@
 using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Identity.Application.Specifications.ModuleTemplates;
+using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleTemplate;
 using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Identity.Application.Features.ModuleTemplates.Commands.DeleteModuleRoleTemplate;
 
-public sealed record DeleteModuleRoleTemplateCommand(string TemplateKey) : IRequest<Result>;
+public sealed record DeleteModuleRoleTemplateCommand(string TemplateKey) : IRequest<Result>, ITransactional;
 
 public sealed class DeleteModuleRoleTemplateCommandHandler : IRequestHandler<DeleteModuleRoleTemplateCommand, Result>
 {

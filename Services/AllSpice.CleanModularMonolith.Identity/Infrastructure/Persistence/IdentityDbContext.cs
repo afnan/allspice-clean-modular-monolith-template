@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
 
-public sealed class IdentityDbContext : DbContext
+public sealed class IdentityDbContext : DbContext, IModuleDbContext
 {
     public IdentityDbContext(DbContextOptions<IdentityDbContext> options)
         : base(options)
@@ -21,6 +21,8 @@ public sealed class IdentityDbContext : DbContext
         base.ConfigureConventions(configurationBuilder);
         configurationBuilder.ApplyUtcDateTimeOffsetConversions();
     }
+
+    DbContext IModuleDbContext.Instance => this;
 
     public DbSet<ModuleDefinition> ModuleDefinitions => Set<ModuleDefinition>();
 

@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
 
-public sealed class NotificationsDbContext : DbContext, INotificationsDbContext
+public sealed class NotificationsDbContext : DbContext, INotificationsDbContext, IModuleDbContext
 {
     public NotificationsDbContext(DbContextOptions<NotificationsDbContext> options)
         : base(options)
@@ -17,6 +17,8 @@ public sealed class NotificationsDbContext : DbContext, INotificationsDbContext
         base.ConfigureConventions(configurationBuilder);
         configurationBuilder.ApplyUtcDateTimeOffsetConversions();
     }
+
+    DbContext IModuleDbContext.Instance => this;
 
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();

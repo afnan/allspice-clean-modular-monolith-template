@@ -1,6 +1,7 @@
 using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Identity.Application.DTOs;
 using AllSpice.CleanModularMonolith.Identity.Application.Specifications.ModuleTemplates;
+using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleTemplate;
 using AllSpice.CleanModularMonolith.Identity.Domain.ValueObjects;
 using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
@@ -12,7 +13,7 @@ public sealed record CreateModuleRoleTemplateCommand(
     string TemplateKey,
     string Name,
     string? Description,
-    IReadOnlyCollection<ModuleRoleTemplateRoleDto> Roles) : IRequest<Result<ModuleRoleTemplateDto>>;
+    IReadOnlyCollection<ModuleRoleTemplateRoleDto> Roles) : IRequest<Result<ModuleRoleTemplateDto>>, ITransactional;
 
 public sealed class CreateModuleRoleTemplateCommandHandler : IRequestHandler<CreateModuleRoleTemplateCommand, Result<ModuleRoleTemplateDto>>
 {
