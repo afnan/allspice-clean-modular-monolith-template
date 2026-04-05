@@ -3,9 +3,12 @@ using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Services;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleDefinition;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleTemplate;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
+using Microsoft.Extensions.Options;
 using Quartz;
+
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 
 /// <summary>
@@ -53,8 +56,18 @@ public static class IdentityModuleExtensions
         builder.Services.AddValidatorsFromAssembly(AppAssemblyReference.Assembly);
         builder.Services.AddModuleRoleAuthorization();
 
-        builder.Services.Configure<KeycloakOptions>(builder.Configuration.GetSection("Identity:Keycloak"));
-        builder.Services.Configure<IdentitySyncOptions>(builder.Configuration.GetSection(IdentitySyncOptions.ConfigurationSectionName));
+        builder.Services
+            .AddOptions<KeycloakOptions>()
+            .Bind(builder.Configuration.GetSection("Identity:Keycloak"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<KeycloakOptions>, KeycloakOptionsValidator>();
+
+        builder.Services
+            .AddOptions<IdentitySyncOptions>()
+            .Bind(builder.Configuration.GetSection(IdentitySyncOptions.ConfigurationSectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         // Token provider (singleton — caches tokens across requests)
         builder.Services.AddSingleton<KeycloakTokenProvider>();

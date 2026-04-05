@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 
 /// <summary>
@@ -10,11 +12,13 @@ public sealed class IdentitySyncOptions
     /// <summary>
     /// Cron expression that determines how frequently the sync job runs.
     /// </summary>
+    [Required]
     public string CronExpression { get; set; } = "0 0/15 * * * ?";
 
     /// <summary>
     /// The maximum number of users fetched per Keycloak request.
     /// </summary>
+    [Range(1, 1000)]
     public int PageSize { get; set; } = 100;
 
     /// <summary>

@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 
 public sealed class KeycloakOptions
@@ -17,6 +19,7 @@ public sealed class KeycloakOptions
     /// <summary>
     /// Keycloak realm name (e.g. allspice).
     /// </summary>
+    [Required]
     public string Realm { get; set; } = string.Empty;
 
     /// <summary>

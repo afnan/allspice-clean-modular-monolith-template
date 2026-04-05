@@ -52,11 +52,11 @@ public static class NotificationsModuleExtensions
 
         builder.Services.AddScoped<INotificationContentBuilder, NotificationContentBuilder>();
         builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
-        builder.Services.Configure<NotificationDispatcherOptions>(builder.Configuration.GetSection("Notifications:Dispatcher"));
-        builder.Services.PostConfigure<NotificationDispatcherOptions>(options =>
-        {
-            Guard.Against.NegativeOrZero(options.PollIntervalSeconds, nameof(options.PollIntervalSeconds));
-        });
+        builder.Services
+            .AddOptions<NotificationDispatcherOptions>()
+            .Bind(builder.Configuration.GetSection("Notifications:Dispatcher"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         // Notification channels
         builder.Services.AddScoped<INotificationChannel, EmailNotificationChannel>();
