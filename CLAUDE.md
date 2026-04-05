@@ -47,7 +47,7 @@ Services/{Module}/
 
 1. Each module exposes an `Infrastructure/Extensions/{Module}ModuleExtensions.cs` with:
    - `Add{Module}ModuleServices(builder, logger)` — registers DI (DbContext, repos, Mediator, Quartz jobs, validators)
-   - `Ensure{Module}ModuleDatabaseAsync(app)` — runs EnsureCreatedAsync + seeds
+   - `Ensure{Module}ModuleDatabaseAsync(app)` — runs `MigrateAsync` + seeds
 2. `ApiGateway/Extensions/GatewayModuleRegistrationExtensions.cs` calls each module's registration in `RegisterGatewayModules()`
 3. `Program.cs` calls `builder.RegisterGatewayModules()` then `app.Ensure{Module}ModuleDatabaseAsync()` for each module
 
@@ -60,8 +60,11 @@ Services/{Module}/
 | CQRS / Mediator | **Mediator** (source-generated, scoped lifetime via `MediatorConfiguration.cs`) |
 | Validation | **FluentValidation** + SharedKernel `ValidationBehavior` pipeline |
 | API endpoints | **FastEndpoints** (not controllers) |
-| Messaging | **WolverineFx** (in-memory by default, centralized in gateway with retry policies) |
-| Integration events | **IIntegrationEventPublisher** abstraction in SharedKernel, implemented by `WolverineIntegrationEventPublisher` in gateway |
+| Messaging | **WolverineFx** with PostgreSQL durable outbox (`WolverineFx.EntityFrameworkCore` + `WolverineFx.Postgresql`), centralized in gateway with retry policies |
+| Integration events | **IIntegrationEventPublisher** abstraction in SharedKernel, implemented by `WolverineIntegrationEventPublisher` in gateway. Outbox ensures delivery survives crashes |
+| Transactional commands | `TransactionBehavior` in SharedKernel pipeline — commands implement `ITransactional` marker for automatic DB transaction wrapping with domain event dispatch |
+| Options validation | `ValidateDataAnnotations().ValidateOnStart()` on critical options (`KeycloakOptions`, `IdentitySyncOptions`, `NotificationDispatcherOptions`); email provider options intentionally skip for graceful fallback |
+| Soft delete | `SoftDeleteQueryFilterConvention.ApplySoftDeleteFilters()` in `DbContext.OnModelCreating` — auto-filters `ISoftDelete` entities |
 | Scheduling | **Quartz.NET** (registered globally in ServiceDefaults, jobs per module) |
 | Realtime | **SignalR** via `Shared/RealTime/AppHub` mapped at `/hubs/app` |
 | ORM | **EF Core** with PostgreSQL (Npgsql), each module owns its own DbContext |
@@ -76,7 +79,7 @@ Services/{Module}/
 
 ### Shared Libraries
 
-- **SharedKernel** — Base entity types (`Entity`, `AggregateRoot`, `AuditableEntity`), domain events, `EfRepository<T>`, value objects, Mediator pipeline behaviors (Logging, Performance, Validation), `IIntegrationEventPublisher`, `IUserExternalIdResolver`
+- **SharedKernel** — Base entity types (`Entity`, `AggregateRoot`, `AuditableEntity`, `SoftDeletableEntity`), domain events, `EfRepository<T>`, value objects, Mediator pipeline behaviors (Logging, Performance, Validation, Transaction, DomainException), `IIntegrationEventPublisher`, `IUserExternalIdResolver`, `IModuleDbContext`, `SoftDeleteQueryFilterConvention`
 - **Notifications.Contracts** — Integration event DTOs consumed by other modules to request notifications via Wolverine
 - **RealTime** — `AppHub` SignalR hub and `IRealtimePublisher` abstraction for broadcasting to user groups
 - **Identity.Abstractions** — Portal-aware JWT registration (`AddIdentityPortals`), claims utilities, module-role authorization
@@ -85,9 +88,13 @@ Services/{Module}/
 
 ### CQRS Flow
 
-`FastEndpoint` -> `IMediator.Send(Command/Query)` -> `Handler` (with FluentValidation + pipeline behaviors) -> `Repository` (Ardalis.Specification) -> `DbContext`
+`FastEndpoint` -> `IMediator.Send(Command/Query)` -> `Handler` (with pipeline behaviors) -> `Repository` (Ardalis.Specification) -> `DbContext`
 
-Domain events are dispatched via `MediatorDomainEventDispatcher` (registered in gateway). Cross-module communication uses Wolverine integration events via `IIntegrationEventPublisher` (not domain events).
+**Pipeline order (outermost to innermost):** Logging → Performance → Validation → Transaction → DomainException
+
+Commands implement `ITransactional` for automatic transaction wrapping. The `TransactionBehavior` begins a DB transaction, calls the handler, dispatches domain events (drain loop for multi-generation events), then commits. On failure, the transaction rolls back.
+
+Domain events are dispatched via `MediatorDomainEventDispatcher` (registered in gateway). Cross-module communication uses Wolverine integration events via `IIntegrationEventPublisher` (not domain events). The Wolverine durable outbox ensures integration events survive process crashes.
 
 ### Identity Module
 
@@ -113,7 +120,16 @@ FastEndpoints uses explicit assembly discovery (auto-discovery disabled) in `Gat
 
 ### Database Strategy
 
-Each module has its own DbContext and Aspire database resource (e.g., `notificationsdb`, `identitydb`). Databases are auto-created via `EnsureCreatedAsync` at startup (no EF migrations currently).
+Each module has its own DbContext and Aspire database resource (e.g., `notificationsdb`, `identitydb`). Schema changes use **EF Core migrations** — `MigrateAsync` runs at startup with retry logic. Design-time factories (`IDesignTimeDbContextFactory`) exist in each module for CLI migration generation without running infrastructure. Wolverine uses a dedicated `messagingdb` for durable outbox envelope storage.
+
+To generate a new migration:
+```bash
+dotnet ef migrations add <MigrationName> \
+  --project Services/AllSpice.CleanModularMonolith.<Module>/AllSpice.CleanModularMonolith.<Module>.csproj \
+  --startup-project AllSpice.CleanModularMonolith.ApiGateway/AllSpice.CleanModularMonolith.ApiGateway.csproj \
+  --context <Module>DbContext \
+  --output-dir Infrastructure/Migrations
+```
 
 ## Conventions
 
