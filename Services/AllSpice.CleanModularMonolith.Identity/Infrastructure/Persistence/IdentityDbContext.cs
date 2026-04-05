@@ -42,6 +42,7 @@ public sealed class IdentityDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityDbContext).Assembly);
+        modelBuilder.ApplySoftDeleteFilters();
     }
 }
 
