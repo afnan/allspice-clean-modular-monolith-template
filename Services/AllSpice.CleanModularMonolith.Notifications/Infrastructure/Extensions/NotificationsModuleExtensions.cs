@@ -1,5 +1,6 @@
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Resend;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
@@ -98,7 +99,7 @@ public static class NotificationsModuleExtensions
             {
                 using var scope = app.Services.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
-                await context.Database.EnsureCreatedAsync(app.Lifetime.ApplicationStopping);
+                await context.Database.MigrateAsync(app.Lifetime.ApplicationStopping);
 
                 // Seed/update email templates from embedded HTML resources
                 var seedTemplates = new (string Key, string Subject)[]

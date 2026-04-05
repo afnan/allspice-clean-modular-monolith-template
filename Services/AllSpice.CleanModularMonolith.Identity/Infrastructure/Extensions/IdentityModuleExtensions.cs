@@ -7,6 +7,7 @@ using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Quartz;
 
@@ -165,7 +166,7 @@ public static class IdentityModuleExtensions
             {
                 await using var scope = app.Services.CreateAsyncScope();
                 var context = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-                await context.Database.EnsureCreatedAsync(app.Lifetime.ApplicationStopping);
+                await context.Database.MigrateAsync(app.Lifetime.ApplicationStopping);
 
                 if (!await context.ModuleDefinitions.AnyAsync())
                 {
