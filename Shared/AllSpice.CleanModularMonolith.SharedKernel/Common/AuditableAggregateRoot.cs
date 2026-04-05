@@ -19,8 +19,6 @@ public abstract class AuditableAggregateRoot : AggregateRoot, IAuditable
     {
         CreatedOnUtc = DateTimeOffset.UtcNow;
         CreatedBy = userId;
-        LastModifiedOnUtc = CreatedOnUtc;
-        LastModifiedBy = userId;
     }
 
     public void SetModified(string? userId)
