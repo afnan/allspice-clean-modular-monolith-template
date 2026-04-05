@@ -53,24 +53,24 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
         {
             var response = await next(request, cancellationToken).ConfigureAwait(false);
 
-            // Dispatch domain events from all tracked entities
+            // Drain-loop: dispatch domain events, including second-generation events
+            // raised by event handlers, until no more remain.
             foreach (var ctx in _dbContexts)
             {
-                var entities = ctx.Instance.ChangeTracker
-                    .Entries<IHasDomainEvents>()
-                    .Where(e => e.Entity.DomainEvents.Any())
-                    .Select(e => e.Entity)
-                    .ToList();
-
-                if (entities.Count == 0)
-                    continue;
-
-                var events = entities
-                    .SelectMany(e => e.TakeDomainEvents())
-                    .ToList();
-
-                if (events.Count > 0)
+                bool hasMore = true;
+                while (hasMore)
                 {
+                    var events = ctx.Instance.ChangeTracker
+                        .Entries<IHasDomainEvents>()
+                        .SelectMany(e => e.Entity.TakeDomainEvents())
+                        .ToList();
+
+                    if (events.Count == 0)
+                    {
+                        hasMore = false;
+                        continue;
+                    }
+
                     _logger.LogDebug("Dispatching {Count} domain events", events.Count);
                     await _dispatcher.DispatchAsync(events, cancellationToken).ConfigureAwait(false);
                     await ctx.Instance.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

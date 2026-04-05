@@ -59,10 +59,6 @@ public static class GatewayServiceCollectionExtensions
     /// <summary>
     /// Registers mediator pipeline behaviors in execution order.
     /// Centralised here so all modules share the same pipeline.
-    /// </summary>
-    /// <summary>
-    /// Registers mediator pipeline behaviors in execution order.
-    /// Centralised here so all modules share the same pipeline.
     /// Note: AddMediator() is called per-module in their extension methods since
     /// source-generated Mediator creates module-specific registrations.
     /// </summary>
