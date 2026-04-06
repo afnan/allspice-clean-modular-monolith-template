@@ -83,6 +83,7 @@ packages/
 
 # Configuration Files
 *.config
+!.template.config/
 *.local.json
 *.env
 *.local.settings.json
