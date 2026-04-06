@@ -4,12 +4,12 @@ A production-ready .NET 10 modular monolith template (`dotnet new allspice-modul
 
 ## Features
 
-- **API Gateway with YARP** for routing, caching, rate limiting, and JWT validation
+- **API Gateway with YARP** for routing, Redis output caching, and JWT validation
 - **Identity module** with full Keycloak Admin API integration — user provisioning, role management, invitation flow, client credentials token caching
 - **Notifications module** with Resend/SendGrid/MailKit fallback chain, HTML email templates (embedded resources), SignalR in-app delivery, Quartz daily digest
 - **PuppeteerSharp PDF library** — headless Chromium, A4 output, reusable theme CSS, header/footer page-frame
 - **Realtime hub** sharing SignalR infrastructure across modules with automatic user groups
-- **Wolverine messaging** (in-memory by default) for event-driven cross-module communication
+- **Wolverine messaging** with PostgreSQL durable outbox for reliable event-driven cross-module communication
 - **Quartz.NET scheduling** with per-module jobs (Keycloak user sync, notification digest)
 - **Aspire AppHost** to spin up PostgreSQL, Redis, Keycloak, and Papercut SMTP in one command
 - **Central package management** with .NET 10, Clean Architecture patterns powered by Ardalis libraries
@@ -65,7 +65,7 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 | --- | --- |
 | **Identity** | User + Invitation aggregates, `KeycloakTokenProvider` (client credentials flow), `KeycloakDirectoryClient` (full Admin REST API), `KeycloakUserSyncJob`, module role assignments/templates, health checks |
 | **Notifications** | Email (Resend/SendGrid/MailKit), InApp (SignalR), HTML templates (embedded resources + DB seeding), `NotificationContentBuilder` with `{{token}}` replacement, Quartz daily digest, Wolverine consumer |
-| **ApiGateway** | FastEndpoints (explicit assembly discovery), YARP reverse proxy, SignalR hub mapping, rate limiting, Redis output caching, centralized Wolverine registration |
+| **ApiGateway** | FastEndpoints (explicit assembly discovery), YARP reverse proxy, SignalR hub mapping, Redis output caching, centralized Wolverine durable outbox registration |
 | **AppHost** | Aspire orchestrator: PostgreSQL, Redis, Keycloak (dev + prod modes), Papercut SMTP |
 
 ## Identity & Authentication
@@ -75,7 +75,7 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 - `KeycloakTokenHandler` (DelegatingHandler) auto-injects Bearer tokens into HTTP clients
 - `KeycloakDirectoryClient` provides full Admin REST API: create users, manage roles, reset passwords, paginated user listing
 - `KeycloakUserSyncJob` (Quartz) periodically syncs Keycloak users to local User table
-- Invitation flow: creates Keycloak user with temp password, local User + Invitation records, fires domain event that publishes notification integration event
+- Invitation flow: creates Keycloak user with temp password (with compensating delete on local failure), local User + Invitation records, fires domain event that publishes notification integration event via durable outbox
 
 ## Email Delivery
 

@@ -180,7 +180,7 @@ ApiGateway (sole host)
 ├── FastEndpoints (API)
 ├── SignalR (/hubs/app)
 ├── YARP (reverse proxy)
-├── Wolverine (in-memory messaging)
+├── Wolverine (durable outbox with PostgreSQL)
 └── Modules register services via extension methods
 
 Identity Module
@@ -213,6 +213,6 @@ Notifications Module
 - View Aspire dashboard for dispatcher logs
 
 **Database errors on startup:**
-- Databases auto-create via `EnsureCreatedAsync` with retry (5 attempts)
+- Databases apply EF Core migrations via `MigrateAsync` with retry (5 attempts, exponential backoff)
 - Check PostgreSQL container is healthy in Aspire dashboard
 - Verify connection string resolution in logs

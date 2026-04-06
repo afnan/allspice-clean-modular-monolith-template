@@ -30,7 +30,7 @@ dotnet test tests/AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests -
 
 ### Hosting Model
 
-Everything runs as a single deployable unit. The **ApiGateway** is the sole runnable host — modules register their services into it, not as separate processes. **AppHost** is the Aspire orchestrator that provisions infrastructure (Postgres, Redis, Keycloak containers) and launches the gateway + portal apps.
+Everything runs as a single deployable unit. The **ApiGateway** is the sole runnable host — modules register their services into it, not as separate processes. **AppHost** is the Aspire orchestrator that provisions infrastructure (Postgres, Redis, Keycloak containers) and launches the gateway.
 
 ### Module Structure (Clean Architecture per module)
 
@@ -60,7 +60,7 @@ Services/{Module}/
 | CQRS / Mediator | **Mediator** (source-generated, scoped lifetime via `MediatorConfiguration.cs`) |
 | Validation | **FluentValidation** + SharedKernel `ValidationBehavior` pipeline |
 | API endpoints | **FastEndpoints** (not controllers) |
-| Messaging | **WolverineFx** with PostgreSQL durable outbox (`WolverineFx.EntityFrameworkCore` + `WolverineFx.Postgresql`), centralized in gateway with retry policies |
+| Messaging | **WolverineFx** with PostgreSQL durable outbox (`WolverineFx.EntityFrameworkCore` + `WolverineFx.Postgresql`), centralized in gateway with scoped retry policies (transient exceptions only) |
 | Integration events | **IIntegrationEventPublisher** abstraction in SharedKernel, implemented by `WolverineIntegrationEventPublisher` in gateway. Outbox ensures delivery survives crashes |
 | Transactional commands | `TransactionBehavior` in SharedKernel pipeline — commands implement `ITransactional` marker for automatic DB transaction wrapping with domain event dispatch |
 | Options validation | `ValidateDataAnnotations().ValidateOnStart()` on critical options (`KeycloakOptions`, `IdentitySyncOptions`, `NotificationDispatcherOptions`); email provider options intentionally skip for graceful fallback |
@@ -92,7 +92,9 @@ Services/{Module}/
 
 **Pipeline order (outermost to innermost):** Logging → Performance → Validation → Transaction → DomainException
 
-Commands implement `ITransactional` for automatic transaction wrapping. The `TransactionBehavior` begins a DB transaction, calls the handler, dispatches domain events (drain loop for multi-generation events), then commits. On failure, the transaction rolls back.
+Commands implement `ITransactional` for automatic transaction wrapping. The `TransactionBehavior` begins a DB transaction on the first module's DbContext, calls the handler, dispatches domain events (drain loop for multi-generation events), then commits. On failure, the transaction rolls back.
+
+**Important constraint:** Each command should only touch ONE module's DbContext. Cross-module communication must use Wolverine integration events via `IIntegrationEventPublisher`, not direct writes to another module's DbContext. The `TransactionBehavior` logs a warning if multiple DbContexts have pending changes within a single command.
 
 Domain events are dispatched via `MediatorDomainEventDispatcher` (registered in gateway). Cross-module communication uses Wolverine integration events via `IIntegrationEventPublisher` (not domain events). The Wolverine durable outbox ensures integration events survive process crashes.
 
@@ -103,6 +105,7 @@ Full Keycloak integration with client credentials flow:
 - **Keycloak:** `KeycloakTokenProvider` (singleton, SemaphoreSlim-cached client credentials flow) + `KeycloakTokenHandler` (DelegatingHandler for auto Bearer injection)
 - **KeycloakDirectoryClient:** Full Admin REST API — create/sync users, manage realm roles, temp passwords
 - **Sync:** `KeycloakUserSyncJob` (Quartz) syncs Keycloak users to local User table
+- **Invitation compensation:** `InviteUserCommandHandler` creates the Keycloak user first, then local records. If local persistence fails, the handler compensates by deleting the Keycloak user to prevent orphans.
 - **API endpoints:** `GET /api/identity/users/{externalId}`, `GET /api/identity/users`, `POST /api/identity/invitations`
 
 ### Notifications Module
