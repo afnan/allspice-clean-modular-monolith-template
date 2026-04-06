@@ -44,7 +44,16 @@ public static class GatewayModuleRegistrationExtensions
                 opts.Policies.UseDurableLocalQueues();
             }
 
-            opts.OnException<Exception>().RetryWithCooldown(
+            // Retry only transient failures; non-transient errors go straight to error queue
+            opts.OnException<TimeoutException>().RetryWithCooldown(
+                TimeSpan.FromMilliseconds(500),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(30));
+            opts.OnException<HttpRequestException>().RetryWithCooldown(
+                TimeSpan.FromMilliseconds(500),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(30));
+            opts.OnException<InvalidOperationException>().RetryWithCooldown(
                 TimeSpan.FromMilliseconds(500),
                 TimeSpan.FromSeconds(5),
                 TimeSpan.FromSeconds(30));

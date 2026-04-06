@@ -34,10 +34,10 @@ public static class NotificationRequestedIntegrationEventConsumer
         var result = await mediator.Send(command, cancellationToken);
         if (!result.IsSuccess)
         {
-            logger.LogWarning(
-                "Failed to queue notification for {Email}: {Errors}",
-                message.RecipientEmail,
-                string.Join("; ", result.Errors));
+            // Throw so Wolverine's retry policies kick in for transient failures.
+            // The durable outbox will preserve the message for retry.
+            throw new InvalidOperationException(
+                $"Failed to queue notification for {message.RecipientEmail}: {string.Join("; ", result.Errors)}");
         }
     }
 

@@ -11,5 +11,6 @@ public interface IUserRepository : IRepository<User>, IReadRepository<User>
     Task<IReadOnlyList<User>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<User>> GetByExternalIdsAsync(IEnumerable<string> externalIds, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<User>> ListActiveAsync(CancellationToken cancellationToken = default);
+    Task<(IReadOnlyList<User> Items, int TotalCount)> ListActivePagedAsync(int page, int pageSize, CancellationToken cancellationToken = default);
     Task<Dictionary<string, User>> GetAllIndexedByExternalIdAsync(CancellationToken cancellationToken = default);
 }

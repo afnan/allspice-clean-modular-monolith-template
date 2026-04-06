@@ -35,13 +35,19 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
         MessageHandlerDelegate<TRequest, TResponse> next,
         CancellationToken cancellationToken)
     {
+        // Design constraint: each command should only touch ONE module's DbContext.
+        // Cross-module communication must use integration events (Wolverine outbox), not
+        // direct writes to another module's DbContext. This behavior begins a transaction
+        // on the first DbContext without one and commits/rolls back atomically.
         IDbContextTransaction? transaction = null;
+        IModuleDbContext? transactionalContext = null;
 
         foreach (var ctx in _dbContexts)
         {
             var db = ctx.Instance;
             if (db.Database.CurrentTransaction is null)
             {
+                transactionalContext = ctx;
                 transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
                 _logger.LogDebug("Began transaction {TransactionId} for {RequestType}",
                     transaction.TransactionId, typeof(TRequest).Name);
@@ -52,6 +58,18 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
         try
         {
             var response = await next(request, cancellationToken).ConfigureAwait(false);
+
+            // Safety check: warn if multiple module DbContexts have pending changes.
+            // This indicates a cross-module write that won't be covered by the transaction.
+            var dirtyContexts = _dbContexts.Where(c => c.Instance.ChangeTracker.HasChanges()).ToList();
+            if (dirtyContexts.Count > 1)
+            {
+                _logger.LogWarning(
+                    "Multiple module DbContexts have pending changes for {RequestType}. " +
+                    "Only the first DbContext is covered by the transaction. " +
+                    "Use integration events for cross-module communication instead of direct writes.",
+                    typeof(TRequest).Name);
+            }
 
             // Drain-loop: dispatch domain events, including second-generation events
             // raised by event handlers, until no more remain.

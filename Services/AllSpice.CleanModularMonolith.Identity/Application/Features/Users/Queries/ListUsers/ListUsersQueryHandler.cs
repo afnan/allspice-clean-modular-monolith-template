@@ -16,11 +16,9 @@ public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, Resu
 
     public async ValueTask<Result<IReadOnlyCollection<UserDto>>> Handle(ListUsersQuery request, CancellationToken cancellationToken)
     {
-        var users = await _userRepository.ListActiveAsync(cancellationToken);
+        var (users, _) = await _userRepository.ListActivePagedAsync(request.Page, request.PageSize, cancellationToken);
 
         var dtos = users
-            .Skip((request.Page - 1) * request.PageSize)
-            .Take(request.PageSize)
             .Select(UserDto.From)
             .ToList();
 

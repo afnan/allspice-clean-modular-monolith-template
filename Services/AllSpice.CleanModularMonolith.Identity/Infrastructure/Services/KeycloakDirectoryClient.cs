@@ -345,5 +345,18 @@ public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
 
         return $"/admin/realms/{_options.Realm}/users/{Uri.EscapeDataString(userId)}";
     }
+
+    public async Task DeleteUserAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        var url = $"/admin/realms/{_options.Realm}/users/{Uri.EscapeDataString(userId)}";
+        var response = await _httpClient.DeleteAsync(url, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            _logger.LogWarning("Keycloak user {UserId} not found during delete (may have been already removed)", userId);
+            return;
+        }
+        response.EnsureSuccessStatusCode();
+        _logger.LogInformation("Deleted Keycloak user {UserId}", userId);
+    }
 }
 

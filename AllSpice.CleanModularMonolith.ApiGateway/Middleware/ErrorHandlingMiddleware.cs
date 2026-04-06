@@ -73,12 +73,12 @@ public class ErrorHandlingMiddleware
         {
             Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
             Title = isIdentityError
-                ? exception.Message
+                ? "Identity service is temporarily unavailable."
                 : "An error occurred while processing your request.",
             Status = (int)statusCode,
             Detail = _environment.IsDevelopment()
                 ? exception.ToString()
-                : (isIdentityError ? exception.Message : "An error occurred while processing your request."),
+                : (isIdentityError ? "The identity provider is unreachable. Please try again later." : "An error occurred while processing your request."),
             Instance = context.Request.Path
         };
 

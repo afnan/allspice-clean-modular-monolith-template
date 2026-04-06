@@ -16,6 +16,7 @@ public interface IExternalDirectoryClient
     Task UpdateUserNameAsync(string userId, string firstName, string lastName, CancellationToken cancellationToken = default);
     Task<List<ExternalUser>> GetUsersPagedAsync(int first, int max, CancellationToken cancellationToken = default);
     Task<List<string>> GetUserRealmRolesAsync(string userId, CancellationToken cancellationToken = default);
+    Task DeleteUserAsync(string userId, CancellationToken cancellationToken = default);
 }
 
 public sealed record ExternalUser(string Id, string Username, string? Email, string? FirstName, string? LastName, bool Enabled);

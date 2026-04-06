@@ -2,6 +2,9 @@ using AllSpice.CleanModularMonolith.SharedKernel.Events;
 
 namespace AllSpice.CleanModularMonolith.Identity.Domain.Events;
 
+// NOTE: TempPassword transits through the Wolverine durable outbox (messagingdb) in plaintext.
+// For production, consider using Keycloak's built-in "required actions" flow to send password-reset
+// emails directly from Keycloak, eliminating the need to pass credentials through the event system.
 public sealed class InvitationCreatedDomainEvent : DomainEventBase
 {
     public Guid InvitationId { get; }

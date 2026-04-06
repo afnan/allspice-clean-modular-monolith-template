@@ -2,6 +2,7 @@ using Ardalis.GuardClauses;
 using AllSpice.CleanModularMonolith.Identity.Domain.Enums;
 using AllSpice.CleanModularMonolith.Identity.Domain.Events;
 using AllSpice.CleanModularMonolith.SharedKernel.Common;
+using AllSpice.CleanModularMonolith.SharedKernel.Exceptions;
 
 namespace AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Invitation;
 
@@ -73,6 +74,13 @@ public sealed class Invitation : AuditableAggregateRoot
 
     public void MarkAccepted()
     {
+        Guard.Against.InvalidInput(Status, nameof(Status),
+            s => s == InvitationStatus.Pending,
+            "Only pending invitations can be accepted.");
+
+        if (IsExpired())
+            throw new DomainValidationException("This invitation has expired.");
+
         Status = InvitationStatus.Accepted;
     }
 
