@@ -1,3 +1,8 @@
+using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Options;
+using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Resend;
+
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
 
 /// <summary>
@@ -18,6 +23,7 @@ public static class NotificationsModuleExtensions
         ILogger logger)
     {
         builder.AddNpgsqlDbContext<NotificationsDbContext>(DatabaseResourceName);
+        builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<NotificationsDbContext>());
 
         builder.Services.AddScoped<INotificationsDbContext, NotificationsDbContext>();
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -28,44 +34,36 @@ public static class NotificationsModuleExtensions
 
         builder.Services.AddValidatorsFromAssembly(typeof(AppAssemblyReference).Assembly);
 
-        builder.Services.Configure<SinchOptions>(builder.Configuration.GetSection("Notifications:Sinch"));
+        // Email provider options
+        builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Notifications:Resend"));
+        builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("Notifications:SendGrid"));
         builder.Services.Configure<MailKitSmtpOptions>(builder.Configuration.GetSection("Notifications:Smtp"));
 
-        builder.Services.AddHttpClient<SinchEmailSender>(client =>
-        {
-            client.DefaultRequestHeaders.Accept.Clear();
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        });
-        builder.Services.AddScoped<SinchEmailSender>();
+        // Resend client (IResend)
+        builder.Services.AddOptions<ResendClientOptions>()
+            .Configure<Microsoft.Extensions.Options.IOptions<ResendOptions>>((clientOpts, resendOpts) =>
+            {
+                clientOpts.ApiToken = resendOpts.Value.ApiKey;
+            });
+        builder.Services.AddTransient<IResend, ResendClient>();
+
+        // Email senders
+        builder.Services.AddScoped<ResendEmailSender>();
+        builder.Services.AddScoped<SendGridEmailSender>();
         builder.Services.AddScoped<MailKitEmailSender>();
         builder.Services.AddScoped<IEmailSender, EmailSenderDispatcher>();
+
         builder.Services.AddScoped<INotificationContentBuilder, NotificationContentBuilder>();
         builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
-        builder.Services.Configure<NotificationDispatcherOptions>(builder.Configuration.GetSection("Notifications:Dispatcher"));
-        builder.Services.PostConfigure<NotificationDispatcherOptions>(options =>
-        {
-            Guard.Against.NegativeOrZero(options.PollIntervalSeconds, nameof(options.PollIntervalSeconds));
-        });
+        builder.Services
+            .AddOptions<NotificationDispatcherOptions>()
+            .Bind(builder.Configuration.GetSection("Notifications:Dispatcher"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
+        // Notification channels
         builder.Services.AddScoped<INotificationChannel, EmailNotificationChannel>();
         builder.Services.AddScoped<INotificationChannel, InAppNotificationChannel>();
-
-        builder.Services.AddHttpClient<SinchSmsNotificationChannel>(client =>
-        {
-            client.DefaultRequestHeaders.Accept.Clear();
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        });
-        builder.Services.AddScoped<INotificationChannel, SinchSmsNotificationChannel>();
-
-        builder.Services.AddMassTransit(configurator =>
-        {
-            configurator.AddConsumer<NotificationRequestedIntegrationEventConsumer>();
-
-            configurator.UsingInMemory((context, cfg) =>
-            {
-                cfg.ConfigureEndpoints(context);
-            });
-        });
 
         builder.Services.AddQuartz(configurator =>
         {
@@ -91,24 +89,54 @@ public static class NotificationsModuleExtensions
     /// <returns>The application instance to support fluent configuration.</returns>
     public static async Task<WebApplication> EnsureNotificationsModuleDatabaseAsync(this WebApplication app)
     {
-        using var scope = app.Services.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
-        await context.Database.EnsureCreatedAsync(app.Lifetime.ApplicationStopping);
+        using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+        var logger = loggerFactory.CreateLogger("NotificationsDatabase");
 
-        if (!await context.NotificationTemplates.AnyAsync(template => template.Key == "hr.welcome"))
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var template = NotificationTemplate.Create(
-                "hr.welcome",
-                "Welcome to AllSpice.CleanModularMonolith, {{FirstName}}!",
-                "Hi {{FirstName}},<br/>Welcome aboard! We're excited to have you join the team.",
-                true);
+            try
+            {
+                using var scope = app.Services.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
+                await context.Database.MigrateAsync(app.Lifetime.ApplicationStopping);
 
-            context.NotificationTemplates.Add(template);
-            await context.SaveChangesAsync();
+                // Seed/update email templates from embedded HTML resources
+                var seedTemplates = new (string Key, string Subject)[]
+                {
+                    ("invitation-created", "You've been invited to {{ProjectName}}!"),
+                    ("registration-welcome", "Welcome to {{ProjectName}}, {{FirstName}}!"),
+                    ("role-assigned", "New role assigned: {{RoleName}}"),
+                    ("role-revoked", "Role revoked: {{RoleName}}"),
+                    ("password-reset", "Password reset for {{ProjectName}}"),
+                    ("profile-updated", "Profile updated")
+                };
+
+                foreach (var (key, subject) in seedTemplates)
+                {
+                    var body = EmailTemplateLoader.LoadTemplate(key);
+                    var existing = await context.NotificationTemplates.FirstOrDefaultAsync(t => t.Key == key);
+
+                    if (existing is null)
+                    {
+                        context.NotificationTemplates.Add(NotificationTemplate.Create(key, subject, body, true));
+                    }
+                    else
+                    {
+                        existing.UpdateContent(subject, body, true);
+                    }
+                }
+
+                await context.SaveChangesAsync();
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                logger.LogWarning(ex, "Notifications database setup attempt {Attempt}/{Max} failed. Retrying...", attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(attempt * 2), app.Lifetime.ApplicationStopping);
+            }
         }
 
         return app;
     }
 }
-
-

@@ -1,78 +1,36 @@
-﻿# AllSpice Clean Modular Monolith (Work in Progress)
+# AllSpice Clean Modular Monolith
 
-> **Status:** Authentication with Authentik is scaffolded but not fully wired yet. The template ships with a complete notifications module, real-time infrastructure, and shared service defaults. The original HR sample is kept only for reference and is excluded when you scaffold a new solution.
-
-## Description
-
-This template captures the opinionated modular-monolith architecture we use at **AllSpice Technologies**. It combines Clean Architecture, CQRS, MassTransit messaging, Quartz scheduling, and SignalR real-time delivery in a single deployable unit that can later be split into independent microservices.
-
-The solution centers around the `Notifications` module, which exposes a multi-channel communication hub (email, SMS stub, in-app) and background orchestration. The repository also includes reusable infrastructure (API Gateway, Aspire AppHost, shared defaults) so teams can clone and immediately focus on business modules.
+A production-ready .NET 10 modular monolith template (`dotnet new allspice-modular`) using Clean Architecture, CQRS, and event-driven patterns. Ships with full Keycloak integration, multi-provider email delivery, PuppeteerSharp PDF generation, and a complete Identity + Notifications module stack.
 
 ## Features
 
-- **API Gateway with YARP** for routing, caching, rate limiting, and JWT validation.
-- **Notifications module** with templates, preferences, MassTransit integration, SignalR in-app delivery, and a Quartz daily digest job.
-- **Realtime hub (`{{ProjectName}}.RealTime`)** sharing SignalR infrastructure across modules.
-- **Quartz.NET scheduling** registered in `{{ProjectName}}.ServiceDefaults` for consistent background job hosting.
-- **Central package management** with .NET 10 (RC) support and Clean Architecture patterns powered by Ardalis libraries.
-- **Aspire AppHost orchestration** to spin up PostgreSQL, Redis, and development containers like Papercut SMTP in one command.
-- **MassTransit (in-memory by default)** for event-driven communication between modules.
-- **Serilog + OpenTelemetry** logging and tracing defaults.
-
-> **Warning:** The HR module that originally triggered onboarding notifications is intentionally excluded from the template output. A reference implementation still lives under `samples/{{ProjectName}}.HR/` for documentation purposes only.
-
-## Design Guide
-
-A detailed design guide that explains layering, module extension patterns, messaging vs. scheduling, and real-time delivery resides in [`docs/DesignGuide.md`](docs/DesignGuide.md). Highlights:
-
-- Clean Architecture split across Domain, Application, Infrastructure, Api folders per module.
-- Module registration via `Infrastructure/Extensions/*ModuleExtensions.cs` and the gateway's `RegisterGatewayModules` helper.
-- Quartz jobs registered per module and hosted through the shared service defaults.
-- SignalR hub groups authenticated connections automatically, letting any module publish realtime payloads.
+- **API Gateway with YARP** for routing, Redis output caching, and JWT validation
+- **Identity module** with full Keycloak Admin API integration — user provisioning, role management, invitation flow, client credentials token caching
+- **Notifications module** with Resend/SendGrid/MailKit fallback chain, HTML email templates (embedded resources), SignalR in-app delivery, Quartz daily digest
+- **PuppeteerSharp PDF library** — headless Chromium, A4 output, reusable theme CSS, header/footer page-frame
+- **Realtime hub** sharing SignalR infrastructure across modules with automatic user groups
+- **Wolverine messaging** with PostgreSQL durable outbox for reliable event-driven cross-module communication
+- **Quartz.NET scheduling** with per-module jobs (Keycloak user sync, notification digest)
+- **Aspire AppHost** to spin up PostgreSQL, Redis, Keycloak, and Papercut SMTP in one command
+- **Central package management** with .NET 10, Clean Architecture patterns powered by Ardalis libraries
+- **FastEndpoints** with explicit assembly discovery (not controllers)
+- **Serilog + OpenTelemetry** logging and tracing
 
 ## Getting Started
 
 ### Install the Template
 
-From the root directory of this template:
-
 ```bash
 dotnet new install .
 ```
-
-This registers the template with `dotnet new` using the short name `allspice-modular`.
-
-> **Note:** This install command will be replaced with a NuGet package once the template is published.
 
 ### Create a New Project
 
 ```bash
 dotnet new allspice-modular -n Contoso.Erp
 cd Contoso.Erp
-```
-
-The `-n Contoso.Erp` parameter triggers two types of replacements:
-
-1. **Automatic `sourceName` replacement**: `AllSpice.CleanModularMonolith` → `Contoso.Erp`
-   - File and folder names
-   - Namespaces, class names, project references
-   - Solution file references
-
-2. **Custom symbol replacements**:
-   - `{{ProjectName}}` → `Contoso.Erp` (used in config files, comments, Azure tags)
-   - `{{ProjectNameLower}}` → `contoso.erp` (used in URLs, hostnames, realm names, service names)
-
-This creates a new solution with:
-- `Contoso.Erp.slnx`
-- `Services/Contoso.Erp.Notifications`
-- `Shared/Contoso.Erp.RealTime`
-- `Contoso.Erp.ApiGateway`, `Contoso.Erp.AppHost`, and `Contoso.Erp.ServiceDefaults`
-
-### Restore & Build
-
-```bash
 dotnet restore Contoso.Erp.slnx
-dotnet build Contoso.Erp.slnx -c Debug
+dotnet build Contoso.Erp.slnx
 ```
 
 ### Run with Aspire
@@ -81,91 +39,69 @@ dotnet build Contoso.Erp.slnx -c Debug
 dotnet run --project Contoso.Erp.AppHost/Contoso.Erp.AppHost.csproj
 ```
 
-- Spins up PostgreSQL (notifications database), Redis, and Papercut SMTP (development only).
-- Launches the API Gateway with SignalR and module registration.
-
-### Example Transformations
-
-When you run `dotnet new allspice-modular -n Contoso.Erp`:
-
-| Location | Original | Replaced With |
-|----------|----------|---------------|
-| **File Names** | `AllSpice.CleanModularMonolith.ApiGateway.csproj` | `Contoso.Erp.ApiGateway.csproj` |
-| **Namespaces** | `namespace AllSpice.CleanModularMonolith.ApiGateway` | `namespace Contoso.Erp.ApiGateway` |
-| **appsettings.json** | `"Application": "{{ProjectName}}.ApiGateway"` | `"Application": "Contoso.Erp.ApiGateway"` |
-| **appsettings.json** | `"Realm": "{{ProjectNameLower}}"` | `"Realm": "contoso.erp"` |
-| **AppHost.cs** | `"{{ProjectNameLower}}-apigateway"` | `"contoso.erp-apigateway"` |
-| **launchSettings.json** | `"{{ProjectNameLower}}_mainwebsite.dev.localhost"` | `"contoso.erp_mainwebsite.dev.localhost"` |
-
-### Troubleshooting
-
-**Template Not Found:**
-```bash
-# List installed templates
-dotnet new list
-
-# Reinstall if needed
-dotnet new uninstall .
-dotnet new install .
-```
-
-**Replacements Not Working:**
-1. Check that `.template.config/template.json` exists
-2. Verify `sourceName` matches exactly: `AllSpice.CleanModularMonolith`
-3. Ensure symbols are defined correctly
-4. Check file encoding (should be UTF-8)
-
-**Build Errors After Generation:**
-1. Run `dotnet restore` first
-2. Check that all project references were replaced correctly
-3. Verify namespaces match project names
+Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 
 ## Project Layout
 
 ```
 {{ProjectName}}/
-|- {{ProjectName}}.ApiGateway/
-|- {{ProjectName}}.AppHost/
-|- {{ProjectName}}.ServiceDefaults/
-|- Services/{{ProjectName}}.Notifications/
-|- Shared/{{ProjectName}}.RealTime/
-|- Shared/{{ProjectName}}.Notifications.Contracts/
-|- Shared/{{ProjectName}}.SharedKernel/
-\- Directory.Packages.props
+|- {{ProjectName}}.ApiGateway/           -- Sole runnable host, YARP, FastEndpoints, SignalR
+|- {{ProjectName}}.AppHost/              -- Aspire orchestrator (Postgres, Redis, Keycloak, Papercut)
+|- {{ProjectName}}.ServiceDefaults/      -- OpenTelemetry, resilience, service discovery, Quartz hosting
+|- Services/{{ProjectName}}.Identity/    -- User/Invitation aggregates, Keycloak sync, RBAC
+|- Services/{{ProjectName}}.Notifications/ -- Multi-channel delivery, templates, preferences
+|- Shared/{{ProjectName}}.SharedKernel/  -- Base entities, domain events, EfRepository, pipeline behaviors
+|- Shared/{{ProjectName}}.Pdf/           -- PuppeteerSharp PDF generation, theme CSS, footer builder
+|- Shared/{{ProjectName}}.RealTime/      -- SignalR hub, IRealtimePublisher
+|- Shared/{{ProjectName}}.Notifications.Contracts/ -- Integration event DTOs
+|- Shared/{{ProjectName}}.Identity.Abstractions/   -- Portal-aware JWT, claims, module-role auth
+|- Shared/{{ProjectName}}.Web/           -- Ardalis.Result HTTP extensions
+\- Directory.Packages.props              -- Central NuGet version management
 ```
 
-The repository also contains `samples/{{ProjectName}}.HR/` as an illustrative example. It is excluded from template output but kept in source control for documentation comparisons.
-
-## Modules Included
+## Modules
 
 | Module | Highlights |
 | --- | --- |
-| **Notifications** | Clean Architecture layers, FastEndpoints APIs, Quartz daily digest job, MassTransit consumer (`NotificationRequestedIntegrationEvent`), SignalR in-app channel, template rendering, user preferences. |
-| **RealTime** | `AppHub` SignalR hub with automatic `user:{id}` groups, `IRealtimePublisher` abstraction for broadcasting payloads or notifications to users/groups. |
-| **ServiceDefaults** | Shared OpenTelemetry logging/metrics, HTTP resilience, service discovery, Quartz hosting defaults. |
-| **ApiGateway** | YARP reverse proxy, FastEndpoints registration, SignalR hub mapping, rate limiting, Redis output caching, Serilog, OpenTelemetry. |
-| **AppHost** | Aspire orchestrator wiring PostgreSQL, Redis, Papercut SMTP, and environment parameters (Sinch credentials, CORS origins, Authentik placeholders). |
-
-## Scheduler & Background Jobs
-
-- Quartz is registered globally via `{{ProjectName}}.ServiceDefaults`.
-- The template ships with `NotificationDailyDigestJob` as a sample (currently logs pending notifications older than 24 hours).
-- Add new jobs in each module by calling `.AddQuartz(...)` inside that module's extension method.
+| **Identity** | User + Invitation aggregates, `KeycloakTokenProvider` (client credentials flow), `KeycloakDirectoryClient` (full Admin REST API), `KeycloakUserSyncJob`, module role assignments/templates, health checks |
+| **Notifications** | Email (Resend/SendGrid/MailKit), InApp (SignalR), HTML templates (embedded resources + DB seeding), `NotificationContentBuilder` with `{{token}}` replacement, Quartz daily digest, Wolverine consumer |
+| **ApiGateway** | FastEndpoints (explicit assembly discovery), YARP reverse proxy, SignalR hub mapping, Redis output caching, centralized Wolverine durable outbox registration |
+| **AppHost** | Aspire orchestrator: PostgreSQL, Redis, Keycloak (dev + prod modes), Papercut SMTP |
 
 ## Identity & Authentication
 
-- Keycloak acts as the identity provider. Configure separate clients for ERP (enterprise SSO via Entra ID through Keycloak OIDC) and MainWebsite (direct user registration in Keycloak) portals.
-- `Shared/{{ProjectName}}.Identity.Abstractions` provides portal-aware JWT registration helpers (`AddIdentityPortals`), claims utilities, and module-role authorization requirements.
-- `Services/{{ProjectName}}.Identity` owns module role assignments, Keycloak directory lookups/invitations via Admin API, and seeds baseline modules (HR, Finance, Events).
-- AppHost wiring injects Keycloak authority/client IDs and API tokens via environment variables so the gateway and modules validate the correct issuer. For local development the Aspire AppHost spins up Keycloak (Postgres + Keycloak container); provide `keycloak-admin-user` and `keycloak-admin-password` via Aspire parameters or secrets before running. The Keycloak container image defaults to `quay.io/keycloak/keycloak:latest` and can be configured through `Keycloak:BaseUrl` and `Keycloak:Realm` in `{{ProjectName}}.AppHost/appsettings.json`. In production plan a dedicated Keycloak deployment and point the same settings at that instance.
+- **Keycloak** acts as the identity provider with client credentials flow for server-to-server API calls
+- `KeycloakTokenProvider` caches tokens with SemaphoreSlim thread safety, refreshes 5 minutes before expiry
+- `KeycloakTokenHandler` (DelegatingHandler) auto-injects Bearer tokens into HTTP clients
+- `KeycloakDirectoryClient` provides full Admin REST API: create users, manage roles, reset passwords, paginated user listing
+- `KeycloakUserSyncJob` (Quartz) periodically syncs Keycloak users to local User table
+- Invitation flow: creates Keycloak user with temp password (with compensating delete on local failure), local User + Invitation records, fires domain event that publishes notification integration event via durable outbox
 
-## Roadmap
+## Email Delivery
 
-- Finish Keycloak integration (tokens, user provisioning, UI samples).
-- Add persistence for in-app inbox (read/unread state) and admin endpoints.
-- Publish reusable SignalR client helper (TypeScript/C#) for dashboards.
-- Replace SMS stub with production gateway adapters (Sinch/Twilio) and rate limiting.
-- Provide template packages via NuGet and the `dotnet new` short-name gallery.
+Provider fallback chain via `EmailSenderDispatcher`:
+- **Development:** Always MailKit (Papercut SMTP container via Aspire)
+- **Production:** Resend -> SendGrid -> MailKit
+
+HTML email templates stored as embedded resources, loaded by `EmailTemplateLoader`, merged with `_Layout.html` layout, and seeded/synced to database on startup. Templates: `invitation-created`, `registration-welcome`, `role-assigned`, `role-revoked`, `password-reset`, `profile-updated`.
+
+## Configuration
+
+Key environment variables (set via Aspire AppHost or appsettings):
+
+| Setting | Description |
+| --- | --- |
+| `Identity:Keycloak:ServiceName` | Aspire service discovery name for Keycloak |
+| `Identity:Keycloak:Realm` | Keycloak realm name |
+| `Identity:Keycloak:ClientId` | OAuth client ID for client credentials flow |
+| `Identity:Keycloak:ClientSecret` | OAuth client secret |
+| `Identity:Keycloak:ApiToken` | Static admin token (fallback when ClientId not set) |
+| `Notifications:Resend:ApiKey` | Resend API key |
+| `Notifications:Resend:FromAddress` | Resend from address |
+| `Notifications:SendGrid:ApiKey` | SendGrid API key |
+| `Notifications:SendGrid:FromAddress` | SendGrid from address |
+| `Notifications:Smtp:Host` | SMTP host (MailKit) |
+| `Notifications:Smtp:Port` | SMTP port |
 
 ## License
 
@@ -173,4 +109,4 @@ MIT
 
 ---
 
-Built with love using .NET 10 RC, Clean Architecture, and modular monolith principles.
+Built with .NET 10, Clean Architecture, and modular monolith principles.

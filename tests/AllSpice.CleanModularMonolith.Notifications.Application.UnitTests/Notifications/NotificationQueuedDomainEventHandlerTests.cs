@@ -15,16 +15,8 @@ public class NotificationQueuedDomainEventHandlerTests
         var loggerMock = new Mock<ILogger<NotificationQueuedDomainEventHandler>>();
         var handler = new NotificationQueuedDomainEventHandler(loggerMock.Object);
 
-        var notification = Notification.Queue(
-            NotificationChannel.Email,
-            NotificationRecipient.Create("user-123", "user@example.com", null),
-            "Subject",
-            "Body",
-            null,
-            null);
-        notification.ClearDomainEvents();
-
-        var domainEvent = new NotificationQueuedDomainEvent(notification);
+        var notificationId = Guid.NewGuid();
+        var domainEvent = new NotificationQueuedDomainEvent(notificationId, "user-123", "Email");
 
         await handler.Handle(domainEvent, CancellationToken.None);
 
@@ -32,7 +24,7 @@ public class NotificationQueuedDomainEventHandlerTests
             logger => logger.Log(
                 LogLevel.Debug,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains(notification.Id.ToString(), StringComparison.Ordinal)),
+                It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains(notificationId.ToString(), StringComparison.Ordinal)),
                 null,
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

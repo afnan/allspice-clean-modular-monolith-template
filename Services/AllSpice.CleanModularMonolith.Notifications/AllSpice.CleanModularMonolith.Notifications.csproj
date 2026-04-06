@@ -20,7 +20,9 @@
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <PackageReference Include="MailKit" />
-    <PackageReference Include="MassTransit" />
+    <PackageReference Include="Resend" />
+    <PackageReference Include="SendGrid" />
+    <PackageReference Include="WolverineFx" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="Mediator.Abstractions" />
     <PackageReference Include="Mediator.SourceGenerator">
@@ -36,6 +38,10 @@
     <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Quartz" />
     <PackageReference Include="Quartz.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Infrastructure\Templates\*.html" />
   </ItemGroup>
 
   <ItemGroup>

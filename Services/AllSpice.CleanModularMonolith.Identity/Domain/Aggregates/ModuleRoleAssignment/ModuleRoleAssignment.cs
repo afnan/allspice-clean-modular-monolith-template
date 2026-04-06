@@ -5,7 +5,7 @@ using AllSpice.CleanModularMonolith.SharedKernel.Common;
 namespace AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleAssignment;
 
 /// <summary>
-/// Represents the assignment of a module-specific role to an Authentik user, including audit metadata.
+/// Represents the assignment of a module-specific role to an Keycloak user, including audit metadata.
 /// </summary>
 public sealed class ModuleRoleAssignment : AuditableAggregateRoot
 {
@@ -29,7 +29,7 @@ public sealed class ModuleRoleAssignment : AuditableAggregateRoot
     }
 
     /// <summary>
-    /// Gets the Authentik user receiving the module role assignment.
+    /// Gets the Keycloak user receiving the module role assignment.
     /// </summary>
     public ExternalUserId UserId { get; private set; } = ExternalUserId.From(Guid.Empty.ToString());
 

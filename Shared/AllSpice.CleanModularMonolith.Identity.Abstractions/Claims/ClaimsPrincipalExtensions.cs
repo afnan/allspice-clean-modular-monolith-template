@@ -4,7 +4,7 @@ using Ardalis.GuardClauses;
 namespace AllSpice.CleanModularMonolith.Identity.Abstractions.Claims;
 
 /// <summary>
-/// Provides helper methods for working with identity claims produced by Authentik.
+/// Provides helper methods for working with identity claims produced by Keycloak.
 /// </summary>
 public static class ClaimsPrincipalExtensions
 {
@@ -56,7 +56,7 @@ public static class ClaimsPrincipalExtensions
     }
 
     /// <summary>
-    /// Returns the token issuer (typically the Authentik application URL).
+    /// Returns the token issuer (typically the Keycloak application URL).
     /// </summary>
     public static string? GetIssuer(this ClaimsPrincipal principal)
     {
@@ -74,10 +74,10 @@ public static class ClaimsPrincipalExtensions
     }
 
     /// <summary>
-    /// Returns the Authentik portal identifier (e.g. <c>erp</c>, <c>public</c>) assigned to the principal.
+    /// Returns the Keycloak portal identifier (e.g. <c>erp</c>, <c>public</c>) assigned to the principal.
     /// </summary>
     /// <param name="principal">The authenticated user.</param>
-    /// <param name="claimTypeOverride">Optional claim type override when Authentik configuration uses a different name.</param>
+    /// <param name="claimTypeOverride">Optional claim type override when Keycloak configuration uses a different name.</param>
     public static string? GetPortal(this ClaimsPrincipal principal, string? claimTypeOverride = null)
     {
         Guard.Against.Null(principal);

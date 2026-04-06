@@ -5,28 +5,28 @@ using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Enums;
 using AllSpice.CleanModularMonolith.RealTime;
+using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 using Microsoft.Extensions.Logging;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Channels;
 
 /// <summary>
 /// Notification channel that pushes messages to connected clients via SignalR.
+/// Resolves local user IDs to Keycloak external IDs for SignalR group matching.
 /// </summary>
 public sealed class InAppNotificationChannel : INotificationChannel
 {
     private readonly IRealtimePublisher _realtimePublisher;
+    private readonly IUserExternalIdResolver _userExternalIdResolver;
     private readonly ILogger<InAppNotificationChannel> _logger;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="InAppNotificationChannel"/> class.
-    /// </summary>
-    /// <param name="realtimePublisher">Realtime publisher used to broadcast events.</param>
-    /// <param name="logger">Logger used for delivery diagnostics.</param>
     public InAppNotificationChannel(
         IRealtimePublisher realtimePublisher,
+        IUserExternalIdResolver userExternalIdResolver,
         ILogger<InAppNotificationChannel> logger)
     {
         _realtimePublisher = realtimePublisher;
+        _userExternalIdResolver = userExternalIdResolver;
         _logger = logger;
     }
 
@@ -39,6 +39,22 @@ public sealed class InAppNotificationChannel : INotificationChannel
         Guard.Against.Null(notification);
         Guard.Against.Null(notification.Recipient, nameof(notification.Recipient));
 
+        // Resolve local user ID to Keycloak external ID for SignalR group matching
+        var targetUserId = notification.Recipient.UserId;
+
+        if (Guid.TryParse(targetUserId, out var localUserId))
+        {
+            var externalId = await _userExternalIdResolver.GetExternalIdByLocalIdAsync(localUserId, cancellationToken);
+
+            if (string.IsNullOrEmpty(externalId))
+            {
+                _logger.LogWarning("Could not resolve external ID for user {UserId}", targetUserId);
+                return Result.Error("Could not resolve external user ID for in-app notification.");
+            }
+
+            targetUserId = externalId;
+        }
+
         var metadata = notification.GetMetadata();
         var dto = new NotificationRealtimeDto(
             notification.Id,
@@ -49,15 +65,13 @@ public sealed class InAppNotificationChannel : INotificationChannel
             notification.CorrelationId,
             metadata);
 
-        await _realtimePublisher.PublishNotificationAsync(notification.Recipient.UserId, dto, cancellationToken);
+        await _realtimePublisher.PublishNotificationAsync(targetUserId, dto, cancellationToken);
 
         _logger.LogInformation(
             "In-app notification {NotificationId} delivered to user {UserId}.",
             notification.Id,
-            notification.Recipient.UserId);
+            targetUserId);
 
         return Result.Success();
     }
 }
-
-

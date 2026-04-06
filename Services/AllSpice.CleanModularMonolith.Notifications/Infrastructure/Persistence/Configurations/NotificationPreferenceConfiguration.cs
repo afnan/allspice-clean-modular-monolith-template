@@ -22,6 +22,8 @@ public sealed class NotificationPreferenceConfiguration : IEntityTypeConfigurati
             .HasMaxLength(25)
             .IsRequired();
 
+        builder.Ignore(preference => preference.DomainEvents);
+
         builder.HasIndex(preference => new { preference.UserId, preference.Channel })
             .IsUnique();
     }

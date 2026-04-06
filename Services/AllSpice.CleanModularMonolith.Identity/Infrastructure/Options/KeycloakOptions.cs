@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 
 public sealed class KeycloakOptions
@@ -17,12 +19,24 @@ public sealed class KeycloakOptions
     /// <summary>
     /// Keycloak realm name (e.g. allspice).
     /// </summary>
+    [Required]
     public string Realm { get; set; } = string.Empty;
 
     /// <summary>
     /// Admin client secret or service account token with rights to query users and send invitations.
+    /// Falls back to client credentials flow when ClientId and ClientSecret are provided.
     /// </summary>
     public string ApiToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// OAuth 2.0 client ID for client credentials flow. Used by KeycloakTokenProvider.
+    /// </summary>
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// OAuth 2.0 client secret for client credentials flow. Used by KeycloakTokenProvider.
+    /// </summary>
+    public string ClientSecret { get; set; } = string.Empty;
 
     /// <summary>
     /// Template used to look up users. Defaults to /admin/realms/{realm}/users/{0}.

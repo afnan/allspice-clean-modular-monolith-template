@@ -1,15 +1,24 @@
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
+using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
 
-public sealed class NotificationsDbContext : DbContext, INotificationsDbContext
+public sealed class NotificationsDbContext : DbContext, INotificationsDbContext, IModuleDbContext
 {
     public NotificationsDbContext(DbContextOptions<NotificationsDbContext> options)
         : base(options)
     {
     }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        base.ConfigureConventions(configurationBuilder);
+        configurationBuilder.ApplyUtcDateTimeOffsetConversions();
+    }
+
+    DbContext IModuleDbContext.Instance => this;
 
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
@@ -20,6 +29,7 @@ public sealed class NotificationsDbContext : DbContext, INotificationsDbContext
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(NotificationsDbContext).Assembly);
+        modelBuilder.ApplySoftDeleteFilters();
     }
 }
 

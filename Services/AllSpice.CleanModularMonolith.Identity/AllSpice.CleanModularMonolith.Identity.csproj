@@ -19,7 +19,7 @@
     <PackageReference Include="FastEndpoints" />
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
-    <PackageReference Include="MassTransit" />
+    <PackageReference Include="WolverineFx" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="Mediator.Abstractions" />
     <PackageReference Include="Mediator.SourceGenerator">
@@ -38,6 +38,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.Identity.Abstractions\AllSpice.CleanModularMonolith.Identity.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.Notifications.Contracts\AllSpice.CleanModularMonolith.Notifications.Contracts.csproj" />
     <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.SharedKernel\AllSpice.CleanModularMonolith.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.Web\AllSpice.CleanModularMonolith.Web.csproj" />
   </ItemGroup>

@@ -17,7 +17,16 @@ public static class GatewayServiceCollectionExtensions
 
         builder.Services.AddOpenApi();
         builder.Services
-            .AddFastEndpoints()
+            .AddFastEndpoints(o =>
+            {
+                o.DisableAutoDiscovery = true;
+                o.Assemblies =
+                [
+                    typeof(Program).Assembly,
+                    typeof(AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions.NotificationsModuleExtensions).Assembly,
+                    typeof(AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions.IdentityModuleExtensions).Assembly,
+                ];
+            })
             .SwaggerDocument(options =>
             {
                 options.DocumentSettings = settings =>
@@ -26,6 +35,8 @@ public static class GatewayServiceCollectionExtensions
                     settings.Version = "v1";
                 };
             });
+        AddMediatorServices(builder.Services);
+
         builder.Services.AddSignalR();
         builder.Services.AddSingleton<IRealtimePublisher, RealtimePublisher>();
 
@@ -43,6 +54,27 @@ public static class GatewayServiceCollectionExtensions
             .AddReverseProxy()
             .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
             .AddServiceDiscoveryDestinationResolver();
+    }
+
+    /// <summary>
+    /// Registers mediator pipeline behaviors in execution order.
+    /// Centralised here so all modules share the same pipeline.
+    /// Note: AddMediator() is called per-module in their extension methods since
+    /// source-generated Mediator creates module-specific registrations.
+    /// </summary>
+    private static void AddMediatorServices(IServiceCollection services)
+    {
+        // Pipeline execution order (outermost to innermost):
+        // 1. Logging — logs request/response and elapsed time
+        // 2. Performance — traces slow requests
+        // 3. Validation — rejects invalid requests before starting a transaction
+        // 4. Transaction — wraps handler + domain events in a DB transaction (commands only)
+        // 5. DomainException — maps domain/validation exceptions to Result types
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.LoggingBehavior<,>));
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.PerformanceBehavior<,>));
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.ValidationBehavior<,>));
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.TransactionBehavior<,>));
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.DomainExceptionBehavior<,>));
     }
 
     /// <summary>
@@ -68,11 +100,17 @@ public static class GatewayServiceCollectionExtensions
                 options.Configuration = redisConfig;
                 options.InstanceName = "{{ProjectName}}_Gateway";
             });
+
+            builder.Services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConfig;
+                options.InstanceName = "{{ProjectName}}_";
+            });
         }
 
         builder.Services.AddOutputCache(options =>
         {
-            options.AddBasePolicy(policy => policy.Expire(TimeSpan.FromMinutes(5)));
+            options.AddBasePolicy(policy => policy.NoCache());
             options.AddPolicy("Cache5Min", policy => policy.Expire(TimeSpan.FromMinutes(5)));
             options.AddPolicy("Cache1Hour", policy => policy.Expire(TimeSpan.FromHours(1)));
         });

@@ -13,7 +13,7 @@ global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services
 global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Channels;
 global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Email;
 global using FluentValidation;
-global using MassTransit;
+global using Wolverine;
 global using Mediator;
 global using Microsoft.AspNetCore.Builder;
 global using Microsoft.Extensions.Configuration;

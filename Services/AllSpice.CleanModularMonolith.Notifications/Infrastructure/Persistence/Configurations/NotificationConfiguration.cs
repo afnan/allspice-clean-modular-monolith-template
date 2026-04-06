@@ -50,6 +50,8 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
         builder.Property(notification => notification.LastError)
             .HasMaxLength(512);
 
+        builder.Property(notification => notification.ReadAt);
+
         builder.OwnsOne(notification => notification.Recipient, ownedNavigationBuilder =>
         {
             ownedNavigationBuilder.Property(recipient => recipient.UserId)
@@ -64,6 +66,8 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
 
             ownedNavigationBuilder.ToTable("NotificationRecipients");
         });
+
+        builder.Ignore(notification => notification.DomainEvents);
 
         builder.HasIndex(notification => new { notification.Channel, notification.Status });
         builder.HasIndex(notification => notification.CreatedUtc);

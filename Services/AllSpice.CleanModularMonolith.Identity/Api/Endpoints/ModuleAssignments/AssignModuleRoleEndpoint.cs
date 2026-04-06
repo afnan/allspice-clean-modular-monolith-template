@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Http;
 namespace AllSpice.CleanModularMonolith.Identity.Api.Endpoints.ModuleAssignments;
 
 /// <summary>
-/// API endpoint that assigns a module role to an Authentik user.
+/// API endpoint that assigns a module role to an Keycloak user.
 /// </summary>
 public sealed class AssignModuleRoleEndpoint : Endpoint<AssignModuleRoleRequest, ModuleRoleAssignmentResponse>
 {
@@ -31,7 +31,7 @@ public sealed class AssignModuleRoleEndpoint : Endpoint<AssignModuleRoleRequest,
         Summary(summary =>
         {
             summary.Summary = "Assigns a module role to a user.";
-            summary.Description = "Creates or updates a module role assignment for a given Authentik user.";
+            summary.Description = "Creates or updates a module role assignment for a given Keycloak user.";
         });
     }
 

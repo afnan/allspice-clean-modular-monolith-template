@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 
 /// <summary>
@@ -8,6 +10,7 @@ public sealed class NotificationDispatcherOptions
     /// <summary>
     /// Gets or sets the polling interval (in seconds) between dispatch cycles.
     /// </summary>
+    [Range(1, int.MaxValue)]
     public int PollIntervalSeconds { get; set; } = 10;
 }
 

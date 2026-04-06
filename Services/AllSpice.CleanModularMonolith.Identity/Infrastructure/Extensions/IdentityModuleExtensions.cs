@@ -1,9 +1,16 @@
-﻿using System.Net.Http;
+using System.Net.Http;
+using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Services;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleDefinition;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleTemplate;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
+using AllSpice.CleanModularMonolith.SharedKernel.Identity;
+using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Quartz;
+
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 
 /// <summary>
@@ -25,10 +32,11 @@ public static class IdentityModuleExtensions
         ILogger logger)
     {
         builder.AddNpgsqlDbContext<IdentityDbContext>(DatabaseResourceName);
+        builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
+        // Existing repositories
         builder.Services.AddScoped<IModuleDefinitionRepository, ModuleDefinitionRepository>();
         builder.Services.AddScoped<IModuleRoleAssignmentRepository, ModuleRoleAssignmentRepository>();
-        builder.Services.AddScoped<IExternalDirectoryClient, KeycloakDirectoryClient>();
         builder.Services.AddScoped<IRepository<ModuleRoleTemplate>>(sp =>
         {
             var context = sp.GetRequiredService<IdentityDbContext>();
@@ -37,19 +45,48 @@ public static class IdentityModuleExtensions
         builder.Services.AddScoped<IReadRepository<ModuleRoleTemplate>>(sp =>
             (IReadRepository<ModuleRoleTemplate>)sp.GetRequiredService<IRepository<ModuleRoleTemplate>>());
 
+        // New repositories
+        builder.Services.AddScoped<IUserRepository, UserRepository>();
+        builder.Services.AddScoped<IInvitationRepository, InvitationRepository>();
+
+        // New services
+        builder.Services.AddScoped<IUserLookupService, UserLookupService>();
+        builder.Services.AddScoped<IUserAccessService, UserAccessService>();
+        builder.Services.AddScoped<IUserExternalIdResolver, UserLookupService>();
+
         builder.Services.AddMediator();
 
         builder.Services.AddValidatorsFromAssembly(AppAssemblyReference.Assembly);
         builder.Services.AddModuleRoleAuthorization();
 
-        builder.Services.Configure<KeycloakOptions>(builder.Configuration.GetSection("Identity:Keycloak"));
-        builder.Services.Configure<IdentitySyncOptions>(builder.Configuration.GetSection(IdentitySyncOptions.ConfigurationSectionName));
+        builder.Services
+            .AddOptions<KeycloakOptions>()
+            .Bind(builder.Configuration.GetSection("Identity:Keycloak"))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<KeycloakOptions>, KeycloakOptionsValidator>();
 
+        builder.Services
+            .AddOptions<IdentitySyncOptions>()
+            .Bind(builder.Configuration.GetSection(IdentitySyncOptions.ConfigurationSectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // Token provider (singleton — caches tokens across requests)
+        builder.Services.AddSingleton<KeycloakTokenProvider>();
+        builder.Services.AddTransient<KeycloakTokenHandler>();
+
+        // HTTP clients with token handler for auto Bearer injection
         builder.Services.AddHttpClient(KeycloakHttpClientName, ConfigureKeycloakClient)
+            .AddHttpMessageHandler<KeycloakTokenHandler>()
             .ConfigurePrimaryHttpMessageHandler(CreateKeycloakHandler);
 
         builder.Services.AddHttpClient<KeycloakDirectoryClient>(ConfigureKeycloakClient)
+            .AddHttpMessageHandler<KeycloakTokenHandler>()
             .ConfigurePrimaryHttpMessageHandler(CreateKeycloakHandler);
+
+        builder.Services.AddScoped<IExternalDirectoryClient>(sp =>
+            sp.GetRequiredService<KeycloakDirectoryClient>());
 
         builder.Services.AddHealthChecks()
             .AddCheck<KeycloakHealthCheck>("keycloak")
@@ -86,18 +123,15 @@ public static class IdentityModuleExtensions
     {
         var options = serviceProvider.GetRequiredService<IOptions<KeycloakOptions>>().Value;
         Guard.Against.NullOrWhiteSpace(options.Realm, nameof(options.Realm));
-        Guard.Against.NullOrWhiteSpace(options.ApiToken, nameof(options.ApiToken));
 
         // Use service discovery if ServiceName is provided, otherwise use BaseUrl
-        // Service discovery will automatically resolve the service name to the actual endpoint
         var baseUrl = !string.IsNullOrWhiteSpace(options.ServiceName)
             ? $"http://{options.ServiceName}/admin/realms/{options.Realm}"
             : (string.IsNullOrWhiteSpace(options.BaseUrl)
                 ? throw new InvalidOperationException("Either ServiceName or BaseUrl must be provided for Keycloak configuration")
                 : $"{options.BaseUrl.TrimEnd('/')}/admin/realms/{options.Realm}");
-        
+
         client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiToken);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 
@@ -122,30 +156,41 @@ public static class IdentityModuleExtensions
     /// <returns>The application instance to continue fluent configuration.</returns>
     public static async Task<WebApplication> EnsureIdentityModuleDatabaseAsync(this WebApplication app)
     {
-        await using var scope = app.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-        await context.Database.EnsureCreatedAsync(app.Lifetime.ApplicationStopping);
+        using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+        var logger = loggerFactory.CreateLogger("IdentityDatabase");
 
-        if (!await context.ModuleDefinitions.AnyAsync())
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var hrModule = DomainModuleDefinition.Create("HR", "Human Resources", "HR service module");
-            hrModule.AddRole("Admin", "HR Administrator", "Full access to HR module");
-            hrModule.AddRole("Employee", "Employee", "Standard employee access");
+            try
+            {
+                await using var scope = app.Services.CreateAsyncScope();
+                var context = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+                await context.Database.MigrateAsync(app.Lifetime.ApplicationStopping);
 
-            var financeModule = DomainModuleDefinition.Create("Finance", "Finance", "Finance module");
-            financeModule.AddRole("Admin", "Finance Administrator", "Full finance access");
-            financeModule.AddRole("Analyst", "Finance Analyst", "Read-only finance access");
+                if (!await context.ModuleDefinitions.AnyAsync())
+                {
+                    var identityModule = DomainModuleDefinition.Create("Identity", "Identity", "Identity and access management");
+                    identityModule.AddRole("Admin", "Identity Administrator", "Full access to identity management");
+                    identityModule.AddRole("Viewer", "Identity Viewer", "Read-only identity access");
 
-            var eventsModule = DomainModuleDefinition.Create("Events", "Events", "Events and communications");
-            eventsModule.AddRole("Admin", "Events Administrator", "Full events access");
-            eventsModule.AddRole("Viewer", "Events Viewer", "View-only access");
+                    var notificationsModule = DomainModuleDefinition.Create("Notifications", "Notifications", "Notification delivery and management");
+                    notificationsModule.AddRole("Admin", "Notifications Administrator", "Full notifications access");
+                    notificationsModule.AddRole("Viewer", "Notifications Viewer", "View-only notifications access");
 
-            await context.ModuleDefinitions.AddRangeAsync(hrModule, financeModule, eventsModule);
-            await context.SaveChangesAsync();
+                    await context.ModuleDefinitions.AddRangeAsync(identityModule, notificationsModule);
+                    await context.SaveChangesAsync();
+                }
+
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                logger.LogWarning(ex, "Identity database setup attempt {Attempt}/{Max} failed. Retrying...", attempt, maxAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(attempt * 2), app.Lifetime.ApplicationStopping);
+            }
         }
 
         return app;
     }
 }
-
-

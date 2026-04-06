@@ -17,19 +17,10 @@ var postgresPassword = builder.AddParameter("postgres-password");
 var postgresUserValue = builder.Configuration["Parameters:postgres-user"] ?? "postgres";
 var postgresPasswordValue = builder.Configuration["Parameters:postgres-password"] ?? "pass!";
 
-var sinchProjectId = GetParameter(parameters, "sinch-project-id");
-var sinchApiKey = GetParameter(parameters, "sinch-api-key");
-var sinchServicePlanId = GetParameter(parameters, "sinch-service-plan-id");
-var sinchFromNumber = GetParameter(parameters, "sinch-from-number");
 var keycloakAdminUser = GetParameter(parameters, "keycloak-admin-user");
 var keycloakAdminPassword = GetParameter(parameters, "keycloak-admin-password");
 var keycloakRealmValue = GetParameter(parameters, "keycloak-realm", "allspice-cleanmodularmonolith");
 var keycloakApiToken = GetParameter(parameters, "keycloak-api-token");
-var keycloakErpClientSecret = GetParameter(parameters, "keycloak-erp-client-secret");
-var keycloakMainWebsiteClientSecret = GetParameter(parameters, "keycloak-mainwebsite-client-secret");
-var entraIdTenantId = GetParameter(parameters, "entra-id-tenant-id");
-var entraIdClientId = GetParameter(parameters, "entra-id-client-id");
-var entraIdClientSecret = GetParameter(parameters, "entra-id-client-secret");
 var smtpUsername = GetParameter(parameters, "smtp-username");
 var smtpPassword = GetParameter(parameters, "smtp-password");
 var emailFromAddress = GetParameter(parameters, "email-from-address");
@@ -92,6 +83,7 @@ var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
 var notificationsDatabase = postgres.AddDatabase("notificationsdb");
 var identityDatabase = postgres.AddDatabase("identitydb");
 var keycloakDb = postgres.AddDatabase("keycloakdb");
+var messagingDatabase = postgres.AddDatabase("messagingdb");
 #endregion
 
 #region Redis Cache
@@ -203,6 +195,7 @@ var keycloakEndpoint = keycloak.GetEndpoint("http");
 var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGateway>("allspice-cleanmodularmonolith-apigateway")
     .WithReference(notificationsDatabase)
     .WithReference(identityDatabase)
+    .WithReference(messagingDatabase)
     .WithEnvironment("ConnectionStrings__redis", redisEndpoint)
     .WithEnvironment("Cors__WebOrigin", builder.Configuration["Cors:WebOrigin"] ?? "https://localhost:7001")
     .WithEnvironment("Cors__MobileOrigin", builder.Configuration["Cors:MobileOrigin"] ?? "https://localhost:7002")
@@ -216,42 +209,12 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
     .WithEnvironment("Identity__Keycloak__UserLookupTemplate", builder.Configuration["Identity:Keycloak:UserLookupTemplate"] ?? "/admin/realms/{realm}/users/{0}")
     .WithEnvironment("Identity__Keycloak__InvitationEndpoint", builder.Configuration["Identity:Keycloak:InvitationEndpoint"] ?? "")
     .WithEnvironment("Identity__Keycloak__AllowUntrustedCertificates", builder.Configuration["Identity:Keycloak:AllowUntrustedCertificates"] ?? "false")
-    .WithEnvironment("Notifications__Sinch__ProjectId", sinchProjectId)
-    .WithEnvironment("Notifications__Sinch__ApiKey", sinchApiKey)
-    .WithEnvironment("Notifications__Sinch__Sms__ServicePlanId", sinchServicePlanId)
-    .WithEnvironment("Notifications__Sinch__Sms__FromNumber", sinchFromNumber)
+    .WithEnvironment("Identity__Keycloak__ClientId", builder.Configuration["Identity:Keycloak:ClientId"] ?? "")
+    .WithEnvironment("Identity__Keycloak__ClientSecret", builder.Configuration["Identity:Keycloak:ClientSecret"] ?? "")
+    .WithEnvironment("Notifications__Smtp__Host", "localhost")
+    .WithEnvironment("Notifications__Smtp__Port", "25")
     .WaitFor(postgres);
 #endregion
-
-#region Portal Applications
-// Pass the Keycloak endpoint reference and realm separately
-// The endpoint reference will resolve at runtime, and the apps will construct the authority URL
-// This is necessary because the OIDC handler creates its own HttpClient that doesn't use service discovery
-var erpPortal = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ErpPortal>("allspice-cleanmodularmonolith-erpportal")
-    .WithEnvironment("Keycloak__BaseUrl", keycloakEndpoint)
-    .WithEnvironment("Keycloak__Realm", keycloakRealm)
-    .WithEnvironment("Keycloak__Portals__Erp__ClientId", builder.Configuration["Keycloak:Portals:Erp:ClientId"] ?? "")
-    .WithEnvironment("Keycloak__Portals__Erp__ClientSecret", keycloakErpClientSecret)
-    .WithEnvironment("Keycloak__Portals__Erp__CallbackPath", builder.Configuration["Keycloak:Portals:Erp:CallbackPath"] ?? "/signin-oidc")
-    .WithEnvironment("Keycloak__Portals__Erp__SignedOutCallbackPath", builder.Configuration["Keycloak:Portals:Erp:SignedOutCallbackPath"] ?? "/signout-callback-oidc")
-    .WithEnvironment("EntraId__Portals__Erp__TenantId", entraIdTenantId)
-    .WithEnvironment("EntraId__Portals__Erp__ClientId", entraIdClientId)
-    .WithEnvironment("EntraId__Portals__Erp__ClientSecret", entraIdClientSecret);
-
-var mainWebsite = builder.AddProject<Projects.AllSpice_CleanModularMonolith_MainWebsite>("allspice-cleanmodularmonolith-mainwebsite")
-  .WaitFor(apiGateway)
-  .WaitFor(keycloak)
-  .WaitFor(redis)
-  .WaitFor(storage)
-  .WaitFor(postgres)
-    .WithEnvironment("Keycloak__BaseUrl", keycloakEndpoint)
-    .WithEnvironment("Keycloak__Realm", keycloakRealm)
-    .WithEnvironment("Keycloak__Portals__MainWebsite__ClientId", builder.Configuration["Keycloak:Portals:MainWebsite:ClientId"] ?? "")
-    .WithEnvironment("Keycloak__Portals__MainWebsite__ClientSecret", keycloakMainWebsiteClientSecret)
-    .WithEnvironment("Keycloak__Portals__MainWebsite__CallbackPath", builder.Configuration["Keycloak:Portals:MainWebsite:CallbackPath"] ?? "/signin-oidc")
-    .WithEnvironment("Keycloak__Portals__MainWebsite__SignedOutCallbackPath", builder.Configuration["Keycloak:Portals:MainWebsite:SignedOutCallbackPath"] ?? "/signout-callback-oidc");
-#endregion
-
 
 
 builder.Build().Run();

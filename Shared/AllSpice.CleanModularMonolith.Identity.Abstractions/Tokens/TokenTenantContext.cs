@@ -9,7 +9,7 @@ namespace AllSpice.CleanModularMonolith.Identity.Abstractions.Tokens;
 /// </summary>
 /// <param name="Issuer">Token issuer value.</param>
 /// <param name="Audience">Token audience value.</param>
-/// <param name="Portal">Authentik portal identifier.</param>
+/// <param name="Portal">Keycloak portal identifier.</param>
 public sealed record TokenTenantContext(string? Issuer, string? Audience, string? Portal)
 {
     /// <summary>

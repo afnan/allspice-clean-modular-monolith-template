@@ -38,7 +38,7 @@ public sealed class Notification : AggregateRoot
         CorrelationId = correlationId;
         CreatedUtc = DateTimeOffset.UtcNow;
 
-        RegisterDomainEvent(new NotificationQueuedDomainEvent(this));
+        RegisterDomainEvent(new NotificationQueuedDomainEvent(Id, recipient.UserId, channel.Name));
     }
 
     public NotificationChannel Channel { get; private set; } = null!;
@@ -79,6 +79,10 @@ public sealed class Notification : AggregateRoot
         = null;
 
     public string? CorrelationId { get; private set; }
+        = null;
+
+
+    public DateTimeOffset? ReadAt { get; private set; }
         = null;
 
     public static Notification Queue(
@@ -163,6 +167,13 @@ public sealed class Notification : AggregateRoot
         LastUpdatedUtc = DateTimeOffset.UtcNow;
         LastError = reason;
         NextAttemptUtc = null;
+    }
+
+    public void MarkAsRead()
+    {
+        if (ReadAt.HasValue) return;
+        ReadAt = DateTimeOffset.UtcNow;
+        LastUpdatedUtc = ReadAt;
     }
 
     public IReadOnlyDictionary<string, string> GetMetadata()

@@ -1,11 +1,6 @@
 <Solution>
   <Folder Name="/BFF/" />
-  <Folder Name="/Frontends/">
-    <Project Path="AllSpice.CleanModularMonolith.ErpPortal/AllSpice.CleanModularMonolith.ErpPortal.Client/AllSpice.CleanModularMonolith.ErpPortal.Client.csproj" />
-    <Project Path="AllSpice.CleanModularMonolith.ErpPortal/AllSpice.CleanModularMonolith.ErpPortal/AllSpice.CleanModularMonolith.ErpPortal.csproj" />
-    <Project Path="AllSpice.CleanModularMonolith.MainWebsite/AllSpice.CleanModularMonolith.MainWebsite.Client/AllSpice.CleanModularMonolith.MainWebsite.Client.csproj" />
-    <Project Path="AllSpice.CleanModularMonolith.MainWebsite/AllSpice.CleanModularMonolith.MainWebsite/AllSpice.CleanModularMonolith.MainWebsite.csproj" />
-  </Folder>
+  <Folder Name="/Frontends/" />
   <Folder Name="/Gateway/">
     <Project Path="AllSpice.CleanModularMonolith.ApiGateway/AllSpice.CleanModularMonolith.ApiGateway.csproj" />
   </Folder>
@@ -15,9 +10,11 @@
   </Folder>
   <Folder Name="/Shared/">
     <Project Path="Shared/AllSpice.CleanModularMonolith.Notifications.Contracts/AllSpice.CleanModularMonolith.Notifications.Contracts.csproj" />
+    <Project Path="Shared/AllSpice.CleanModularMonolith.Pdf/AllSpice.CleanModularMonolith.Pdf.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.RealTime/AllSpice.CleanModularMonolith.RealTime.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.SharedKernel/AllSpice.CleanModularMonolith.SharedKernel.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.Identity.Abstractions/AllSpice.CleanModularMonolith.Identity.Abstractions.csproj" />
+    <Project Path="Shared/AllSpice.CleanModularMonolith.Web/AllSpice.CleanModularMonolith.Web.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="tests/AllSpice.CleanModularMonolith.SharedKernel.UnitTests/AllSpice.CleanModularMonolith.SharedKernel.UnitTests.csproj" />
