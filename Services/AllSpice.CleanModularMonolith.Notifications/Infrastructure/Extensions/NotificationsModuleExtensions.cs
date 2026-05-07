@@ -92,15 +92,10 @@ public static class NotificationsModuleExtensions
     /// <returns>The application instance to support fluent configuration.</returns>
     public static async Task<WebApplication> EnsureNotificationsModuleDatabaseAsync(this WebApplication app)
     {
-        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("NotificationsDatabase");
-
-        await using var scope = app.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
-
-        await MigrationRunner.RunWithRetryAsync(
-            context,
-            logger,
-            app.Lifetime.ApplicationStopping,
+        await MigrationRunner.RunForModuleAsync<NotificationsDbContext>(
+            app.Services,
+            app.Lifetime,
+            loggerCategory: "NotificationsDatabase",
             seedAsync: SeedNotificationTemplatesAsync);
 
         return app;

@@ -11,7 +11,6 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 public class CorrelationIdMiddleware
 {
     private readonly RequestDelegate _next;
-    private const string CorrelationIdHeader = "X-Correlation-ID";
     private const int MaxCorrelationIdLength = 64;
 
     private static readonly Regex AllowedPattern = new(
@@ -28,14 +27,14 @@ public class CorrelationIdMiddleware
     /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
-        var supplied = context.Request.Headers[CorrelationIdHeader].FirstOrDefault();
+        var supplied = context.Request.Headers[HttpHeaderNames.CorrelationId].FirstOrDefault();
 
         var correlationId = !string.IsNullOrWhiteSpace(supplied) && IsValid(supplied)
             ? supplied
             : Guid.NewGuid().ToString("N");
 
-        context.Items[CorrelationIdHeader] = correlationId;
-        context.Response.Headers[CorrelationIdHeader] = correlationId;
+        context.Items[HttpHeaderNames.CorrelationId] = correlationId;
+        context.Response.Headers[HttpHeaderNames.CorrelationId] = correlationId;
 
         await _next(context);
     }

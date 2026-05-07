@@ -59,16 +59,23 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
         {
             var response = await next(request, cancellationToken).ConfigureAwait(false);
 
-            // Safety check: warn if multiple module DbContexts have pending changes.
-            // This indicates a cross-module write that won't be covered by the transaction.
+            // Architectural invariant: a single command must touch only ONE module's
+            // DbContext. The transaction was opened on the first dirty context above;
+            // any other dirty context's writes would NOT be covered by it, silently
+            // breaking atomicity. Cross-module communication must go through the
+            // Wolverine integration-event outbox instead.
+            //
+            // Fail fast — a logged warning was the previous behavior and was easily
+            // missed in production logs.
             var dirtyContexts = _dbContexts.Where(c => c.Instance.ChangeTracker.HasChanges()).ToList();
             if (dirtyContexts.Count > 1)
             {
-                _logger.LogWarning(
-                    "Multiple module DbContexts have pending changes for {RequestType}. " +
-                    "Only the first DbContext is covered by the transaction. " +
-                    "Use integration events for cross-module communication instead of direct writes.",
-                    typeof(TRequest).Name);
+                var contextNames = string.Join(", ", dirtyContexts.Select(c => c.Instance.GetType().Name));
+                throw new InvalidOperationException(
+                    $"{typeof(TRequest).Name} mutated multiple module DbContexts ({contextNames}). " +
+                    "A command must touch only one module. Cross-module side effects must be " +
+                    "published as integration events through IIntegrationEventPublisher so the " +
+                    "Wolverine outbox can deliver them transactionally.");
             }
 
             // Drain-loop: dispatch domain events, including second-generation events

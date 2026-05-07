@@ -36,7 +36,7 @@ public class ErrorHandlingMiddleware
         }
         catch (Exception ex)
         {
-            var correlationId = context.Items["X-Correlation-ID"]?.ToString() ?? "unknown";
+            var correlationId = context.Items[HttpHeaderNames.CorrelationId]?.ToString() ?? "unknown";
 
             _logger.LogError(
                 ex,

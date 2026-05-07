@@ -149,15 +149,10 @@ public static class IdentityModuleExtensions
     /// <returns>The application instance to continue fluent configuration.</returns>
     public static async Task<WebApplication> EnsureIdentityModuleDatabaseAsync(this WebApplication app)
     {
-        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("IdentityDatabase");
-
-        await using var scope = app.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-
-        await MigrationRunner.RunWithRetryAsync(
-            context,
-            logger,
-            app.Lifetime.ApplicationStopping);
+        await MigrationRunner.RunForModuleAsync<IdentityDbContext>(
+            app.Services,
+            app.Lifetime,
+            loggerCategory: "IdentityDatabase");
 
         return app;
     }

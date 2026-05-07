@@ -36,7 +36,7 @@ var parameters = builder.Configuration.GetSection("Parameters");
 var postgresUser = builder.AddParameter("postgres-user");
 var postgresPassword = builder.AddParameter("postgres-password", secret: true);
 
-var postgresUserValue = builder.Configuration["Parameters:postgres-user"] ?? "postgres";
+var postgresUserValue = GetParameter(parameters, "postgres-user", "postgres");
 var postgresPasswordValue = GetSecret("postgres-password", developmentDefault: "pass!");
 
 var keycloakAdminUser = GetParameter(parameters, "keycloak-admin-user", "admin");

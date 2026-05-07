@@ -63,7 +63,7 @@ public static class GatewayApplicationExtensions
             proxyPipeline.Use(async (context, next) =>
             {
                 var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-                var correlationId = context.Items["X-Correlation-ID"]?.ToString() ?? "unknown";
+                var correlationId = context.Items[HttpHeaderNames.CorrelationId]?.ToString() ?? "unknown";
 
                 var stopwatch = Stopwatch.StartNew();
 
