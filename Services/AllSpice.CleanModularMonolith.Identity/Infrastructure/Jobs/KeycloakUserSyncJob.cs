@@ -1,6 +1,5 @@
-using System.Text.Json;
+using AllSpice.CleanModularMonolith.Identity.Application.Contracts.External;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Entities;
-using AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -20,18 +19,15 @@ public sealed class KeycloakUserSyncJob : IJob
     public const string JobIdentity = "KeycloakUserSyncJob";
     private const string IssueType = "KeycloakUserSync";
 
-    private readonly IHttpClientFactory _httpClientFactory;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IOptions<IdentitySyncOptions> _options;
     private readonly ILogger<KeycloakUserSyncJob> _logger;
 
     public KeycloakUserSyncJob(
-        IHttpClientFactory httpClientFactory,
         IServiceScopeFactory scopeFactory,
         IOptions<IdentitySyncOptions> options,
         ILogger<KeycloakUserSyncJob> logger)
     {
-        _httpClientFactory = httpClientFactory;
         _scopeFactory = scopeFactory;
         _options = options;
         _logger = logger;
@@ -43,6 +39,7 @@ public sealed class KeycloakUserSyncJob : IJob
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var directoryClient = scope.ServiceProvider.GetRequiredService<IExternalDirectoryClient>();
 
         var history = new IdentitySyncHistory
         {
@@ -60,7 +57,7 @@ public sealed class KeycloakUserSyncJob : IJob
             var knownExternalIds = new HashSet<string>(localUserExternalIds, StringComparer.OrdinalIgnoreCase);
             var orphanCandidates = new Dictionary<string, OrphanCandidate>(StringComparer.OrdinalIgnoreCase);
 
-            await EnumerateKeycloakUsersAsync(orphanCandidates, knownExternalIds, history, cancellationToken);
+            await EnumerateKeycloakUsersAsync(directoryClient, orphanCandidates, knownExternalIds, history, cancellationToken);
 
             history.OrphanCount = orphanCandidates.Count;
 
@@ -113,7 +110,7 @@ public sealed class KeycloakUserSyncJob : IJob
     };
 
     /// <summary>
-    /// Enumerates all Keycloak users via paginated /users calls.
+    /// Enumerates all Keycloak users via paginated calls to the directory client.
     /// </summary>
     /// <remarks>
     /// KNOWN LIMITATION (pagination stability): Keycloak's /users endpoint does not
@@ -125,60 +122,39 @@ public sealed class KeycloakUserSyncJob : IJob
     ///
     /// Mitigation paths when accuracy matters:
     /// - Run this job during a low-write window
-    /// - Switch to the /users/count + /users?first=N&amp;max=M loop with a snapshot
-    ///   of known IDs and reconcile on a follow-up pass
     /// - Use Keycloak's events API for incremental sync instead of full enumeration
     /// </remarks>
     private async Task EnumerateKeycloakUsersAsync(
+        IExternalDirectoryClient directoryClient,
         Dictionary<string, OrphanCandidate> orphanCandidates,
         HashSet<string> knownExternalIds,
         IdentitySyncHistory history,
         CancellationToken cancellationToken)
     {
-        var httpClient = _httpClientFactory.CreateClient(IdentityModuleExtensions.KeycloakHttpClientName);
         var pageSize = Math.Max(1, _options.Value.PageSize);
         var first = 0;
 
         while (true)
         {
-            var path = $"/users?first={first}&max={pageSize}";
+            var users = await directoryClient.GetUsersPagedAsync(first, pageSize, cancellationToken);
 
-            using var response = await httpClient.GetAsync(path, cancellationToken);
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                break;
-            }
-            response.EnsureSuccessStatusCode();
-
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-
-            var users = document.RootElement;
-            if (users.ValueKind != JsonValueKind.Array)
-            {
-                break;
-            }
-
-            foreach (var element in users.EnumerateArray())
+            foreach (var user in users)
             {
                 history.ProcessedCount++;
 
-                var userId = element.TryGetProperty("id", out var idElement) ? idElement.GetString() : null;
-                if (string.IsNullOrWhiteSpace(userId) || knownExternalIds.Contains(userId))
+                if (string.IsNullOrWhiteSpace(user.Id) || knownExternalIds.Contains(user.Id))
                 {
                     continue;
                 }
 
-                orphanCandidates[userId] = new OrphanCandidate(
-                    userId,
-                    element.TryGetProperty("username", out var usernameElement) ? usernameElement.GetString() : null,
-                    element.TryGetProperty("email", out var emailElement) ? emailElement.GetString() : null,
-                    element.TryGetProperty("firstName", out var firstNameElement) && element.TryGetProperty("lastName", out var lastNameElement)
-                        ? $"{firstNameElement.GetString()} {lastNameElement.GetString()}".Trim()
-                        : null);
+                var displayName = !string.IsNullOrWhiteSpace(user.FirstName) || !string.IsNullOrWhiteSpace(user.LastName)
+                    ? $"{user.FirstName} {user.LastName}".Trim()
+                    : null;
+
+                orphanCandidates[user.Id] = new OrphanCandidate(user.Id, user.Username, user.Email, displayName);
             }
 
-            if (users.GetArrayLength() < pageSize)
+            if (users.Count < pageSize)
             {
                 break;
             }
