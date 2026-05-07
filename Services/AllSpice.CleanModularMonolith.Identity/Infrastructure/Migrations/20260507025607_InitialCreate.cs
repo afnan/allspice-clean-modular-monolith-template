@@ -91,56 +91,6 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "ModuleDefinitions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Key = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    DisplayName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    Description = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
-                    CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ModuleDefinitions", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ModuleRoleAssignments",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    UserObjectId = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    ModuleKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    RoleKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    AssignedBy = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    AssignedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    RevokedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    CreatedOnUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
-                    LastModifiedOnUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    LastModifiedBy = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ModuleRoleAssignments", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ModuleRoleTemplates",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TemplateKey = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    Name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    Description = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ModuleRoleTemplates", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
                 {
@@ -160,45 +110,6 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Users", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ModuleRoles",
-                columns: table => new
-                {
-                    RoleKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    ModuleId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    Description = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ModuleRoles", x => new { x.ModuleId, x.RoleKey });
-                    table.ForeignKey(
-                        name: "FK_ModuleRoles_ModuleDefinitions_ModuleId",
-                        column: x => x.ModuleId,
-                        principalTable: "ModuleDefinitions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ModuleRoleTemplateRoles",
-                columns: table => new
-                {
-                    ModuleKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    RoleKey = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    TemplateId = table.Column<Guid>(type: "uuid", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ModuleRoleTemplateRoles", x => new { x.TemplateId, x.ModuleKey, x.RoleKey });
-                    table.ForeignKey(
-                        name: "FK_ModuleRoleTemplateRoles_ModuleRoleTemplates_TemplateId",
-                        column: x => x.TemplateId,
-                        principalTable: "ModuleRoleTemplates",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(
@@ -221,24 +132,6 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Migrations
                 name: "IX_Invitations_Token",
                 table: "Invitations",
                 column: "Token",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ModuleDefinitions_Key",
-                table: "ModuleDefinitions",
-                column: "Key",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "UX_ModuleRoleAssignment_UserModuleRole",
-                table: "ModuleRoleAssignments",
-                columns: new[] { "UserObjectId", "ModuleKey", "RoleKey" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ModuleRoleTemplates_TemplateKey",
-                table: "ModuleRoleTemplates",
-                column: "TemplateKey",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -269,22 +162,7 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Migrations
                 name: "Invitations");
 
             migrationBuilder.DropTable(
-                name: "ModuleRoleAssignments");
-
-            migrationBuilder.DropTable(
-                name: "ModuleRoles");
-
-            migrationBuilder.DropTable(
-                name: "ModuleRoleTemplateRoles");
-
-            migrationBuilder.DropTable(
                 name: "Users");
-
-            migrationBuilder.DropTable(
-                name: "ModuleDefinitions");
-
-            migrationBuilder.DropTable(
-                name: "ModuleRoleTemplates");
         }
     }
 }

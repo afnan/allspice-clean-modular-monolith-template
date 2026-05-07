@@ -27,5 +27,4 @@ global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 
 // Type aliases
 global using AppAssemblyReference = AllSpice.CleanModularMonolith.Identity.Application.AssemblyReference;
-global using DomainModuleDefinition = AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleDefinition.ModuleDefinition;
 
