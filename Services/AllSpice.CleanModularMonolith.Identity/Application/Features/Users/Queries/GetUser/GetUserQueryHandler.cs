@@ -1,7 +1,5 @@
+using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Application.DTOs;
-using AllSpice.CleanModularMonolith.Identity.Application.Specifications.Users;
-using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
-using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 using Ardalis.Result;
 using Mediator;
 
@@ -9,16 +7,16 @@ namespace AllSpice.CleanModularMonolith.Identity.Application.Features.Users.Quer
 
 public sealed class GetUserQueryHandler : IRequestHandler<GetUserQuery, Result<UserDto>>
 {
-    private readonly IReadRepository<User> _users;
+    private readonly IUserRepository _userRepository;
 
-    public GetUserQueryHandler(IReadRepository<User> users)
+    public GetUserQueryHandler(IUserRepository userRepository)
     {
-        _users = users;
+        _userRepository = userRepository;
     }
 
     public async ValueTask<Result<UserDto>> Handle(GetUserQuery request, CancellationToken cancellationToken)
     {
-        var user = await _users.FirstOrDefaultAsync(new UserByExternalIdSpec(request.ExternalId), cancellationToken);
+        var user = await _userRepository.GetByExternalIdAsync(request.ExternalId, cancellationToken);
 
         if (user is null)
         {

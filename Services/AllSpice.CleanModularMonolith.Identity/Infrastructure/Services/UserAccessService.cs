@@ -1,7 +1,5 @@
+using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Services;
-using AllSpice.CleanModularMonolith.Identity.Application.Specifications.Users;
-using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
-using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 
@@ -10,16 +8,16 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// </summary>
 public sealed class UserAccessService : IUserAccessService
 {
-    private readonly IReadRepository<User> _users;
+    private readonly IUserRepository _userRepository;
 
-    public UserAccessService(IReadRepository<User> users)
+    public UserAccessService(IUserRepository userRepository)
     {
-        _users = users;
+        _userRepository = userRepository;
     }
 
     public async Task<bool> CanAccessAsync(string externalUserId, CancellationToken cancellationToken = default)
     {
-        var user = await _users.FirstOrDefaultAsync(new UserByExternalIdSpec(externalUserId), cancellationToken);
+        var user = await _userRepository.GetByExternalIdAsync(externalUserId, cancellationToken);
         return user is { IsActive: true };
     }
 }
