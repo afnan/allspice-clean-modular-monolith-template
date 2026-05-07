@@ -14,7 +14,6 @@ global using Microsoft.Extensions.Options;
 // Application layer contracts (safe for all layers to reference)
 global using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 global using AllSpice.CleanModularMonolith.Identity.Application.Contracts.External;
-global using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 
 // Infrastructure-only — used by Infrastructure and Api layers, not Domain
 // NOTE: These are global for convenience since Domain/Application types don't conflict,
@@ -22,7 +21,6 @@ global using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persis
 global using Aspire.Npgsql.EntityFrameworkCore.PostgreSQL;
 global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
-global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Repositories;
 global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 
 // Type aliases

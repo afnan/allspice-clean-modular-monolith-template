@@ -1,9 +1,12 @@
 using System.Net.Http;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Services;
+using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Invitation;
+using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
+using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Quartz;
@@ -31,8 +34,8 @@ public static class IdentityModuleExtensions
         builder.AddNpgsqlDbContext<IdentityDbContext>(DatabaseResourceName);
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
-        builder.Services.AddScoped<IUserRepository, UserRepository>();
-        builder.Services.AddScoped<IInvitationRepository, InvitationRepository>();
+        builder.Services.AddEfRepository<IdentityDbContext, User>();
+        builder.Services.AddEfRepository<IdentityDbContext, Invitation>();
 
         // New services
         builder.Services.AddScoped<IUserLookupService, UserLookupService>();
