@@ -63,7 +63,12 @@ public sealed class NotificationDispatcherHostedService : BackgroundService
                 _logger.LogError(ex, "Error occurred while dispatching notifications.");
             }
 
-            var delay = TimeSpan.FromSeconds(Math.Max(1, _options.PollIntervalSeconds));
+            // Jitter the delay by ±20% so multiple replicas don't synchronize their DB hits.
+            // Random.Shared is thread-safe and seeded per-process, which is fine for jitter
+            // (we don't need cryptographic randomness here).
+            var baseSeconds = Math.Max(1, _options.PollIntervalSeconds);
+            var jitterFactor = 0.8 + (Random.Shared.NextDouble() * 0.4); // 0.8 .. 1.2
+            var delay = TimeSpan.FromSeconds(baseSeconds * jitterFactor);
             await Task.Delay(delay, stoppingToken);
         }
 
