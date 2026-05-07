@@ -112,6 +112,23 @@ public sealed class KeycloakUserSyncJob : IJob
         _ => false
     };
 
+    /// <summary>
+    /// Enumerates all Keycloak users via paginated /users calls.
+    /// </summary>
+    /// <remarks>
+    /// KNOWN LIMITATION (pagination stability): Keycloak's /users endpoint does not
+    /// guarantee a stable ordering across pages. If users are created or deleted in
+    /// Keycloak while this job is paginating, individual users may be skipped or
+    /// returned twice. The DisallowConcurrentExecution attribute prevents two
+    /// instances of this job racing each other, but writes from outside (admin
+    /// console, other apps) can still shift pages mid-scan.
+    ///
+    /// Mitigation paths when accuracy matters:
+    /// - Run this job during a low-write window
+    /// - Switch to the /users/count + /users?first=N&amp;max=M loop with a snapshot
+    ///   of known IDs and reconcile on a follow-up pass
+    /// - Use Keycloak's events API for incremental sync instead of full enumeration
+    /// </remarks>
     private async Task EnumerateKeycloakUsersAsync(
         Dictionary<string, OrphanCandidate> orphanCandidates,
         HashSet<string> knownExternalIds,

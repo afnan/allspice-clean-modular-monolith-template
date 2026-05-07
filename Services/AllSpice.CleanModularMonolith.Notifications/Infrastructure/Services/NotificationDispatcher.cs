@@ -48,6 +48,18 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// KNOWN LIMITATION (multi-replica): the SELECT (Pending notifications) and the
+    /// subsequent UPDATE (mark Dispatched) are not atomic, so two replicas of the
+    /// gateway can both grab the same batch and double-send. The "mark Dispatched
+    /// before SendAsync" pattern below shrinks the window but does not close it.
+    ///
+    /// The proper fix when scaling beyond a single replica is an atomic claim via
+    /// `UPDATE notifications SET status='Dispatched' ... WHERE id IN (SELECT ...
+    /// FOR UPDATE SKIP LOCKED) RETURNING *` — implementable as raw SQL on the
+    /// repository or by adding a `ClaimedByDispatcherId` column. Document then
+    /// implement when multi-replica deployment is on the roadmap.
+    /// </remarks>
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTimeOffset.UtcNow;
