@@ -74,7 +74,11 @@ public static class NotificationsModuleExtensions
                 .WithCronSchedule("0 0 9 * * ?", cron => cron.InTimeZone(TimeZoneInfo.Utc)));
         });
 
+        builder.Services.AddSingleton<NotificationDispatcherHealthState>();
         builder.Services.AddHostedService<NotificationDispatcherHostedService>();
+
+        builder.Services.AddHealthChecks()
+            .AddCheck<NotificationDispatcherHealthCheck>("notification-dispatcher");
 
         logger.LogInformation("Notifications module services registered");
 
