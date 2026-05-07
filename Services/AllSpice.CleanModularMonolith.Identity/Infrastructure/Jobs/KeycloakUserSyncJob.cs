@@ -87,10 +87,30 @@ public sealed class KeycloakUserSyncJob : IJob
             dbContext.IdentitySyncHistories.Add(history);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            _logger.LogError(ex, "Keycloak user sync job failed with correlation id {CorrelationId}", history.CorrelationId);
-            throw new JobExecutionException(ex, false);
+            // Transient infrastructure outages (Keycloak unreachable, slow network) should
+            // refire — the next attempt may succeed without operator intervention.
+            // Permanent errors (auth misconfiguration, schema drift) should NOT refire;
+            // the issue row is already recorded and operators will see it on the dashboard.
+            var refireImmediately = IsTransient(ex);
+
+            _logger.Log(
+                refireImmediately ? LogLevel.Warning : LogLevel.Error,
+                ex,
+                "Keycloak user sync job failed with correlation id {CorrelationId} (refire={Refire})",
+                history.CorrelationId,
+                refireImmediately);
+
+            throw new JobExecutionException(ex, refireImmediately);
         }
     }
+
+    private static bool IsTransient(Exception ex) => ex switch
+    {
+        HttpRequestException => true,
+        TaskCanceledException tce when tce.InnerException is TimeoutException => true,
+        TimeoutException => true,
+        _ => false
+    };
 
     private async Task EnumerateKeycloakUsersAsync(
         Dictionary<string, OrphanCandidate> orphanCandidates,
