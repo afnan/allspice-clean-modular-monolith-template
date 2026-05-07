@@ -5,24 +5,46 @@ using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Reads a non-secret parameter with an optional default. Use only for non-sensitive values.
 static string GetParameter(IConfigurationSection section, string key, string defaultValue = "")
     => section[key] ?? defaultValue;
 
+// Reads a secret value. In Development, falls back to a dev-only default if missing so the
+// template runs out-of-the-box. In any other environment, missing secrets throw — the AppHost
+// refuses to launch with placeholder credentials in production.
+string GetSecret(string key, string developmentDefault)
+{
+    var value = builder.Configuration[$"Parameters:{key}"];
+    if (!string.IsNullOrEmpty(value))
+    {
+        return value;
+    }
+
+    if (builder.Environment.IsDevelopment())
+    {
+        return developmentDefault;
+    }
+
+    throw new InvalidOperationException(
+        $"Required secret 'Parameters:{key}' is not configured. Set it via dotnet user-secrets, " +
+        $"environment variable Parameters__{key.Replace('-', '_')}, or --parameter {key}=...");
+}
+
 var parameters = builder.Configuration.GetSection("Parameters");
 
-// Define parameters for PostgreSQL
+// Define parameters for PostgreSQL — password is secret-flagged so the dashboard masks it.
 var postgresUser = builder.AddParameter("postgres-user");
-var postgresPassword = builder.AddParameter("postgres-password");
+var postgresPassword = builder.AddParameter("postgres-password", secret: true);
 
 var postgresUserValue = builder.Configuration["Parameters:postgres-user"] ?? "postgres";
-var postgresPasswordValue = builder.Configuration["Parameters:postgres-password"] ?? "pass!";
+var postgresPasswordValue = GetSecret("postgres-password", developmentDefault: "pass!");
 
-var keycloakAdminUser = GetParameter(parameters, "keycloak-admin-user");
-var keycloakAdminPassword = GetParameter(parameters, "keycloak-admin-password");
+var keycloakAdminUser = GetParameter(parameters, "keycloak-admin-user", "admin");
+var keycloakAdminPassword = GetSecret("keycloak-admin-password", developmentDefault: "admin");
 var keycloakRealmValue = GetParameter(parameters, "keycloak-realm", "allspice-cleanmodularmonolith");
-var keycloakApiToken = GetParameter(parameters, "keycloak-api-token");
+var keycloakApiToken = GetSecret("keycloak-api-token", developmentDefault: "");
 var smtpUsername = GetParameter(parameters, "smtp-username");
-var smtpPassword = GetParameter(parameters, "smtp-password");
+var smtpPassword = GetSecret("smtp-password", developmentDefault: "");
 var emailFromAddress = GetParameter(parameters, "email-from-address");
 var emailReplyToAddress = GetParameter(parameters, "email-reply-to-address");
 
