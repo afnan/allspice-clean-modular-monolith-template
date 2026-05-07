@@ -22,7 +22,7 @@ public sealed class UserRepository : RepositoryBase<User>, IUserRepository
 
     public Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default) =>
         _dbContext.Users
-            .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == normalizedEmail.ToLower(), cancellationToken);
+            .FirstOrDefaultAsync(u => u.Email != null && EF.Functions.ILike(u.Email, normalizedEmail), cancellationToken);
 
     public Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         _dbContext.Users
