@@ -25,7 +25,10 @@ public class SecurityHeadersMiddleware
     {
         context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
         context.Response.Headers.Append("X-Frame-Options", "DENY");
-        context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+        // X-XSS-Protection is deprecated. OWASP recommends disabling the legacy filter
+        // because in some browsers `1; mode=block` introduced cross-site leaks. Modern
+        // defenses live in the CSP header below.
+        context.Response.Headers.Append("X-XSS-Protection", "0");
         context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
 
         if (context.Request.IsHttps)

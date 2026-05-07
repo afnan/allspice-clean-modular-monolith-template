@@ -1,11 +1,10 @@
-using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
 
-public sealed class NotificationsDbContext : DbContext, INotificationsDbContext, IModuleDbContext
+public sealed class NotificationsDbContext : DbContext, IModuleDbContext
 {
     public NotificationsDbContext(DbContextOptions<NotificationsDbContext> options)
         : base(options)

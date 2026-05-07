@@ -25,7 +25,6 @@ public static class NotificationsModuleExtensions
         builder.AddNpgsqlDbContext<NotificationsDbContext>(DatabaseResourceName);
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<NotificationsDbContext>());
 
-        builder.Services.AddScoped<INotificationsDbContext, NotificationsDbContext>();
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
         builder.Services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
         builder.Services.AddScoped<INotificationPreferenceRepository, NotificationPreferenceRepository>();
@@ -75,7 +74,11 @@ public static class NotificationsModuleExtensions
                 .WithCronSchedule("0 0 9 * * ?", cron => cron.InTimeZone(TimeZoneInfo.Utc)));
         });
 
+        builder.Services.AddSingleton<NotificationDispatcherHealthState>();
         builder.Services.AddHostedService<NotificationDispatcherHostedService>();
+
+        builder.Services.AddHealthChecks()
+            .AddCheck<NotificationDispatcherHealthCheck>("notification-dispatcher");
 
         logger.LogInformation("Notifications module services registered");
 
@@ -89,54 +92,44 @@ public static class NotificationsModuleExtensions
     /// <returns>The application instance to support fluent configuration.</returns>
     public static async Task<WebApplication> EnsureNotificationsModuleDatabaseAsync(this WebApplication app)
     {
-        using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
-        var logger = loggerFactory.CreateLogger("NotificationsDatabase");
+        await MigrationRunner.RunForModuleAsync<NotificationsDbContext>(
+            app.Services,
+            app.Lifetime,
+            loggerCategory: "NotificationsDatabase",
+            seedAsync: SeedNotificationTemplatesAsync);
 
-        const int maxAttempts = 5;
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        return app;
+    }
+
+    private static async Task SeedNotificationTemplatesAsync(DbContext db, CancellationToken ct)
+    {
+        var context = (NotificationsDbContext)db;
+
+        var seedTemplates = new (string Key, string Subject)[]
         {
-            try
+            ("invitation-created", "You've been invited to {{ProjectName}}!"),
+            ("registration-welcome", "Welcome to {{ProjectName}}, {{FirstName}}!"),
+            ("role-assigned", "New role assigned: {{RoleName}}"),
+            ("role-revoked", "Role revoked: {{RoleName}}"),
+            ("password-reset", "Password reset for {{ProjectName}}"),
+            ("profile-updated", "Profile updated")
+        };
+
+        foreach (var (key, subject) in seedTemplates)
+        {
+            var body = EmailTemplateLoader.LoadTemplate(key);
+            var existing = await context.NotificationTemplates.FirstOrDefaultAsync(t => t.Key == key, ct);
+
+            if (existing is null)
             {
-                using var scope = app.Services.CreateScope();
-                var context = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
-                await context.Database.MigrateAsync(app.Lifetime.ApplicationStopping);
-
-                // Seed/update email templates from embedded HTML resources
-                var seedTemplates = new (string Key, string Subject)[]
-                {
-                    ("invitation-created", "You've been invited to {{ProjectName}}!"),
-                    ("registration-welcome", "Welcome to {{ProjectName}}, {{FirstName}}!"),
-                    ("role-assigned", "New role assigned: {{RoleName}}"),
-                    ("role-revoked", "Role revoked: {{RoleName}}"),
-                    ("password-reset", "Password reset for {{ProjectName}}"),
-                    ("profile-updated", "Profile updated")
-                };
-
-                foreach (var (key, subject) in seedTemplates)
-                {
-                    var body = EmailTemplateLoader.LoadTemplate(key);
-                    var existing = await context.NotificationTemplates.FirstOrDefaultAsync(t => t.Key == key);
-
-                    if (existing is null)
-                    {
-                        context.NotificationTemplates.Add(NotificationTemplate.Create(key, subject, body, true));
-                    }
-                    else
-                    {
-                        existing.UpdateContent(subject, body, true);
-                    }
-                }
-
-                await context.SaveChangesAsync();
-                break;
+                context.NotificationTemplates.Add(NotificationTemplate.Create(key, subject, body, true));
             }
-            catch (Exception ex) when (attempt < maxAttempts)
+            else
             {
-                logger.LogWarning(ex, "Notifications database setup attempt {Attempt}/{Max} failed. Retrying...", attempt, maxAttempts);
-                await Task.Delay(TimeSpan.FromSeconds(attempt * 2), app.Lifetime.ApplicationStopping);
+                existing.UpdateContent(subject, body, true);
             }
         }
 
-        return app;
+        await context.SaveChangesAsync(ct);
     }
 }

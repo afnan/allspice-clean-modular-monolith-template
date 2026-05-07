@@ -48,6 +48,18 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// KNOWN LIMITATION (multi-replica): the SELECT (Pending notifications) and the
+    /// subsequent UPDATE (mark Dispatched) are not atomic, so two replicas of the
+    /// gateway can both grab the same batch and double-send. The "mark Dispatched
+    /// before SendAsync" pattern below shrinks the window but does not close it.
+    ///
+    /// The proper fix when scaling beyond a single replica is an atomic claim via
+    /// `UPDATE notifications SET status='Dispatched' ... WHERE id IN (SELECT ...
+    /// FOR UPDATE SKIP LOCKED) RETURNING *` — implementable as raw SQL on the
+    /// repository or by adding a `ClaimedByDispatcherId` column. Document then
+    /// implement when multi-replica deployment is on the roadmap.
+    /// </remarks>
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTimeOffset.UtcNow;
@@ -65,11 +77,25 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var preference = await _preferenceRepository.GetByUserAndChannelAsync(notification.Recipient.UserId, notification.Channel, cancellationToken);
-            if (preference is not null && !preference.IsEnabled)
+            // Preferences are keyed by local user UUID. Recipient.UserId follows the same
+            // convention (see InAppNotificationChannel xmldoc). If we can't parse it, skip
+            // the preference check rather than failing — the notification will dispatch
+            // with the channel's default opt-in state.
+            if (Guid.TryParse(notification.Recipient.UserId, out var localUserId))
             {
-                _logger.LogInformation("Notification {NotificationId} skipped due to user/channel preference.", notification.Id);
-                continue;
+                var preference = await _preferenceRepository.GetByUserAndChannelAsync(localUserId, notification.Channel, cancellationToken);
+                if (preference is not null && !preference.IsEnabled)
+                {
+                    _logger.LogInformation("Notification {NotificationId} skipped due to user/channel preference.", notification.Id);
+                    continue;
+                }
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Notification {NotificationId} has non-Guid Recipient.UserId '{UserId}'; preference check skipped.",
+                    notification.Id,
+                    notification.Recipient.UserId);
             }
 
             notification.RecordAttempt();

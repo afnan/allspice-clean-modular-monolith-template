@@ -13,8 +13,8 @@ public sealed class NotificationPreferenceConfiguration : IEntityTypeConfigurati
 
         builder.HasKey(preference => preference.Id);
 
+        // UserId is the local User.Id (Guid). Postgres maps to uuid; SQLite (test) uses TEXT.
         builder.Property(preference => preference.UserId)
-            .HasMaxLength(64)
             .IsRequired();
 
         builder.Property(preference => preference.Channel)
