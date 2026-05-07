@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
+using AllSpice.CleanModularMonolith.SharedKernel.Common;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 
@@ -50,7 +51,7 @@ public sealed class KeycloakHealthCheck : IHealthCheck
             // Keycloak error bodies can echo bearer tokens or partial session data.
             // Truncate aggressively before logging so we don't leak credentials into
             // the log sink.
-            var redactedBody = Truncate(body, 256);
+            var redactedBody = body.Truncate(256);
             _logger.LogWarning(
                 "Keycloak health request failed with status {Status}. Response (truncated): {ResponseBody}",
                 response.StatusCode,
@@ -71,7 +72,5 @@ public sealed class KeycloakHealthCheck : IHealthCheck
         }
     }
 
-    private static string Truncate(string value, int maxLength)
-        => value.Length <= maxLength ? value : value[..maxLength];
 }
 

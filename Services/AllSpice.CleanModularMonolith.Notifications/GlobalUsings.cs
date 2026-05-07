@@ -1,4 +1,3 @@
-global using System.Net.Http.Headers;
 global using Ardalis.GuardClauses;
 global using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
 global using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services;
