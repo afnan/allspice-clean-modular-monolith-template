@@ -1,5 +1,6 @@
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Application.DTOs;
+using AllSpice.CleanModularMonolith.Identity.Application.Mappers;
 using Ardalis.Result;
 using Mediator;
 
@@ -19,7 +20,7 @@ public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, Resu
         var (users, _) = await _userRepository.ListActivePagedAsync(request.Page, request.PageSize, cancellationToken);
 
         var dtos = users
-            .Select(UserDto.From)
+            .Select(UserMapper.ToDto)
             .ToList();
 
         return Result<IReadOnlyCollection<UserDto>>.Success(dtos);

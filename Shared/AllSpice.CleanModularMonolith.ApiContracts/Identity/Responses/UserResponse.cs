@@ -1,6 +1,9 @@
-namespace AllSpice.CleanModularMonolith.Identity.Application.DTOs;
+namespace AllSpice.CleanModularMonolith.ApiContracts.Identity.Responses;
 
-public sealed record UserDto(
+/// <summary>
+/// Public response shape for a synced identity user.
+/// </summary>
+public sealed record UserResponse(
     Guid Id,
     string ExternalId,
     string Username,

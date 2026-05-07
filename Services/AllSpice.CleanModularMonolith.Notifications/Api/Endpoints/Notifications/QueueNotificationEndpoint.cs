@@ -1,5 +1,6 @@
 using FastEndpoints;
 using Mediator;
+using AllSpice.CleanModularMonolith.ApiContracts.Notifications.Responses;
 using AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Commands.QueueNotification;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Enums;
 using Microsoft.AspNetCore.Http;
@@ -100,15 +101,3 @@ public sealed class QueueNotificationRequest
     public string? CorrelationId { get; set; }
         = null;
 }
-
-/// <summary>
-/// Response returned when a notification is queued successfully.
-/// </summary>
-public sealed record QueueNotificationResponse(Guid NotificationId);
-
-/// <summary>
-/// Response returned when a notification request fails validation or processing.
-/// </summary>
-public sealed record QueueNotificationErrorResponse(IReadOnlyCollection<string> Errors);
-
-
