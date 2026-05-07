@@ -53,19 +53,27 @@ public static class GatewayModuleRegistrationExtensions
             opts.Policies.UseDurableInboxOnAllListeners();
             opts.Policies.UseDurableOutboxOnAllSendingEndpoints();
 
-            // Retry only transient failures; non-transient errors go straight to error queue
+            // Retry only TYPED transient failures; programming errors and unknown
+            // exceptions go straight to the error queue / dead-letter via Wolverine's
+            // default policy. Previous code retried InvalidOperationException broadly,
+            // which trapped genuine bugs in an infinite refire loop.
+            opts.OnException<TransientMessagingException>().RetryWithCooldown(
+                TimeSpan.FromMilliseconds(500),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(30))
+                .Then.MoveToErrorQueue();
+
             opts.OnException<TimeoutException>().RetryWithCooldown(
                 TimeSpan.FromMilliseconds(500),
                 TimeSpan.FromSeconds(5),
-                TimeSpan.FromSeconds(30));
+                TimeSpan.FromSeconds(30))
+                .Then.MoveToErrorQueue();
+
             opts.OnException<HttpRequestException>().RetryWithCooldown(
                 TimeSpan.FromMilliseconds(500),
                 TimeSpan.FromSeconds(5),
-                TimeSpan.FromSeconds(30));
-            opts.OnException<InvalidOperationException>().RetryWithCooldown(
-                TimeSpan.FromMilliseconds(500),
-                TimeSpan.FromSeconds(5),
-                TimeSpan.FromSeconds(30));
+                TimeSpan.FromSeconds(30))
+                .Then.MoveToErrorQueue();
         });
 
         builder.Services.AddScoped<IIntegrationEventPublisher, WolverineIntegrationEventPublisher>();

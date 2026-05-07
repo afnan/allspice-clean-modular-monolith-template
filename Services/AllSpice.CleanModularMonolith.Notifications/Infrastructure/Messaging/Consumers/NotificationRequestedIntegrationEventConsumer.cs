@@ -1,5 +1,6 @@
 using AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Commands.QueueNotification;
 using AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging;
+using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
 using Mediator;
 using Microsoft.Extensions.Logging;
 using DomainChannel = AllSpice.CleanModularMonolith.Notifications.Domain.Enums.NotificationChannel;
@@ -34,9 +35,11 @@ public static class NotificationRequestedIntegrationEventConsumer
         var result = await mediator.Send(command, cancellationToken);
         if (!result.IsSuccess)
         {
-            // Throw so Wolverine's retry policies kick in for transient failures.
-            // The durable outbox will preserve the message for retry.
-            throw new InvalidOperationException(
+            // Use a typed transient exception so the gateway's Wolverine retry policy
+            // only retries genuine messaging failures — not arbitrary
+            // InvalidOperationExceptions thrown by application bugs (which would
+            // otherwise loop forever instead of being dead-lettered).
+            throw new TransientMessagingException(
                 $"Failed to queue notification for {message.RecipientEmail}: {string.Join("; ", result.Errors)}");
         }
     }

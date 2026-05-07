@@ -5,28 +5,33 @@ using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Enums;
 using AllSpice.CleanModularMonolith.RealTime;
-using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 using Microsoft.Extensions.Logging;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Channels;
 
 /// <summary>
 /// Notification channel that pushes messages to connected clients via SignalR.
-/// Resolves local user IDs to Keycloak external IDs for SignalR group matching.
 /// </summary>
+/// <remarks>
+/// Contract: <see cref="NotificationRecipient.UserId"/> MUST be the Keycloak external
+/// ID of the recipient (the value stored in the JWT <c>sub</c> claim and used as the
+/// SignalR group key in <see cref="AppHub"/>). Local Guid → external resolution must
+/// happen at the boundary where the notification is queued, not here. Keycloak user
+/// IDs are themselves Guid-formatted, so this channel cannot reliably distinguish
+/// "local user Guid that needs resolving" from "external user Guid that's already
+/// resolved" — accepting both modes used to silently mis-route notifications when
+/// the wrong format reached this layer.
+/// </remarks>
 public sealed class InAppNotificationChannel : INotificationChannel
 {
     private readonly IRealtimePublisher _realtimePublisher;
-    private readonly IUserExternalIdResolver _userExternalIdResolver;
     private readonly ILogger<InAppNotificationChannel> _logger;
 
     public InAppNotificationChannel(
         IRealtimePublisher realtimePublisher,
-        IUserExternalIdResolver userExternalIdResolver,
         ILogger<InAppNotificationChannel> logger)
     {
         _realtimePublisher = realtimePublisher;
-        _userExternalIdResolver = userExternalIdResolver;
         _logger = logger;
     }
 
@@ -39,20 +44,10 @@ public sealed class InAppNotificationChannel : INotificationChannel
         Guard.Against.Null(notification);
         Guard.Against.Null(notification.Recipient, nameof(notification.Recipient));
 
-        // Resolve local user ID to Keycloak external ID for SignalR group matching
-        var targetUserId = notification.Recipient.UserId;
-
-        if (Guid.TryParse(targetUserId, out var localUserId))
+        if (string.IsNullOrWhiteSpace(notification.Recipient.UserId))
         {
-            var externalId = await _userExternalIdResolver.GetExternalIdByLocalIdAsync(localUserId, cancellationToken);
-
-            if (string.IsNullOrEmpty(externalId))
-            {
-                _logger.LogWarning("Could not resolve external ID for user {UserId}", targetUserId);
-                return Result.Error("Could not resolve external user ID for in-app notification.");
-            }
-
-            targetUserId = externalId;
+            _logger.LogWarning("In-app notification {NotificationId} has empty recipient UserId; skipping.", notification.Id);
+            return Result.Error("In-app notifications require Recipient.UserId to be the Keycloak external ID.");
         }
 
         var metadata = notification.GetMetadata();
@@ -65,12 +60,12 @@ public sealed class InAppNotificationChannel : INotificationChannel
             notification.CorrelationId,
             metadata);
 
-        await _realtimePublisher.PublishNotificationAsync(targetUserId, dto, cancellationToken);
+        await _realtimePublisher.PublishNotificationAsync(notification.Recipient.UserId, dto, cancellationToken);
 
         _logger.LogInformation(
-            "In-app notification {NotificationId} delivered to user {UserId}.",
+            "In-app notification {NotificationId} delivered to user {ExternalUserId}.",
             notification.Id,
-            targetUserId);
+            notification.Recipient.UserId);
 
         return Result.Success();
     }
