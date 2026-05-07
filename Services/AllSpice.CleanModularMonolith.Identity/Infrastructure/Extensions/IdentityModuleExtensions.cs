@@ -118,6 +118,12 @@ public static class IdentityModuleExtensions
 
         client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        // Cap admin-API calls so a hung Keycloak doesn't block invitation flows forever.
+        // The Wolverine retry policy + Quartz refire handle the rest.
+        client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds <= 0
+            ? 30
+            : options.RequestTimeoutSeconds);
     }
 
     private static HttpMessageHandler CreateKeycloakHandler(IServiceProvider serviceProvider)
@@ -135,7 +141,9 @@ public static class IdentityModuleExtensions
     }
 
     /// <summary>
-    /// Ensures the identity database exists and seeds default module definitions when empty.
+    /// Ensures the identity database exists and migrations are applied. Runs the
+    /// shared <see cref="MigrationRunner.RunWithRetryAsync"/> with linear backoff so
+    /// startup tolerates a slow-to-come-up Postgres container.
     /// </summary>
     /// <param name="app">The web application instance.</param>
     /// <returns>The application instance to continue fluent configuration.</returns>

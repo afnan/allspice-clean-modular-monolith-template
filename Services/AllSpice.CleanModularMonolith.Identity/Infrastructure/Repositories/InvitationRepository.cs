@@ -25,7 +25,7 @@ public sealed class InvitationRepository : IInvitationRepository
 
     public Task<Invitation?> GetPendingByEmailAsync(string email, CancellationToken cancellationToken = default) =>
         _dbContext.Invitations
-            .FirstOrDefaultAsync(i => i.Email == email.ToLowerInvariant() && i.Status == InvitationStatus.Pending, cancellationToken);
+            .FirstOrDefaultAsync(i => EF.Functions.ILike(i.Email, email) && i.Status == InvitationStatus.Pending, cancellationToken);
 
     public async Task<List<Invitation>> ListAllAsync(CancellationToken cancellationToken = default) =>
         await _dbContext.Invitations

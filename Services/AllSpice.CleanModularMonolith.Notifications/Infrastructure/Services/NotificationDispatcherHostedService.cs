@@ -43,7 +43,7 @@ public sealed class NotificationDispatcherHostedService : BackgroundService
         {
             try
             {
-                using var scope = _serviceProvider.CreateScope();
+                await using var scope = _serviceProvider.CreateAsyncScope();
                 var dispatcher = scope.ServiceProvider.GetRequiredService<INotificationDispatcher>();
 
                 var processed = await dispatcher.DispatchPendingAsync(stoppingToken);

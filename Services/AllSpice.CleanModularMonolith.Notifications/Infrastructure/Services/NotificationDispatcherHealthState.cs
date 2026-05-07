@@ -14,6 +14,7 @@ public sealed class NotificationDispatcherHealthState
     private DateTimeOffset? _lastRunUtc;
     private bool _lastRunSucceeded;
     private string? _lastError;
+    private long _processedSinceStart;
 
     public void RecordSuccess(int processedCount)
     {
@@ -22,7 +23,7 @@ public sealed class NotificationDispatcherHealthState
             _lastRunUtc = DateTimeOffset.UtcNow;
             _lastRunSucceeded = true;
             _lastError = null;
-            ProcessedSinceStart += processedCount;
+            _processedSinceStart += processedCount;
         }
     }
 
@@ -36,13 +37,21 @@ public sealed class NotificationDispatcherHealthState
         }
     }
 
-    public (DateTimeOffset? LastRunUtc, bool LastRunSucceeded, string? LastError) Snapshot()
+    public DispatcherSnapshot Snapshot()
     {
         lock (_gate)
         {
-            return (_lastRunUtc, _lastRunSucceeded, _lastError);
+            return new DispatcherSnapshot(_lastRunUtc, _lastRunSucceeded, _lastError, _processedSinceStart);
         }
     }
-
-    public long ProcessedSinceStart { get; private set; }
 }
+
+/// <summary>
+/// Point-in-time snapshot of the dispatcher's health-relevant state. All reads of the
+/// underlying mutable fields happen inside the lock so callers see a consistent view.
+/// </summary>
+public readonly record struct DispatcherSnapshot(
+    DateTimeOffset? LastRunUtc,
+    bool LastRunSucceeded,
+    string? LastError,
+    long ProcessedSinceStart);

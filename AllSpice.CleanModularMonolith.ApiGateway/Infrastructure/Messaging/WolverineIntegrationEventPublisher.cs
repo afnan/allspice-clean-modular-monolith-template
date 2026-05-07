@@ -39,9 +39,12 @@ public sealed class WolverineIntegrationEventPublisher : IIntegrationEventPublis
                 "so the message is enrolled in the durable outbox and rolled back with the transaction.");
         }
 
-        // Enroll the active DbContext into the outbox — idempotent within a scope.
-        // After enrollment, PublishAsync writes to the wolverine envelope tables
-        // inside the same transaction; rollback discards the message, commit ships it.
+        // Enroll the active DbContext into the outbox. Wolverine's behavior on repeat
+        // Enroll calls within the same scope is to swap the active context; we only
+        // ever pass the same instance for a given scope so this is effectively a no-op
+        // after the first call. After enrollment, PublishAsync writes to the wolverine
+        // envelope tables inside the same transaction; rollback discards the message,
+        // commit ships it.
         _outbox.Enroll(transactionalContext.Instance);
 
         await _outbox.PublishAsync(message);

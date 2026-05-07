@@ -25,19 +25,19 @@ public sealed class NotificationDispatcherHealthCheck : IHealthCheck
 
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        var (lastRunUtc, lastRunSucceeded, lastError) = _state.Snapshot();
+        var snapshot = _state.Snapshot();
         var pollSeconds = Math.Max(1, _options.Value.PollIntervalSeconds);
         var staleAfter = TimeSpan.FromSeconds(pollSeconds * StaleMultiplier);
 
         var data = new Dictionary<string, object>
         {
-            ["lastRunUtc"] = lastRunUtc?.ToString("o") ?? "(never)",
+            ["lastRunUtc"] = snapshot.LastRunUtc?.ToString("o") ?? "(never)",
             ["pollIntervalSeconds"] = pollSeconds,
             ["staleThresholdSeconds"] = staleAfter.TotalSeconds,
-            ["processedSinceStart"] = _state.ProcessedSinceStart
+            ["processedSinceStart"] = snapshot.ProcessedSinceStart
         };
 
-        if (lastRunUtc is null)
+        if (snapshot.LastRunUtc is null)
         {
             // Service may still be warming up. Don't fail the host immediately;
             // surface the state so dashboards know the loop hasn't ticked yet.
@@ -46,7 +46,7 @@ public sealed class NotificationDispatcherHealthCheck : IHealthCheck
                 data: data));
         }
 
-        var age = DateTimeOffset.UtcNow - lastRunUtc.Value;
+        var age = DateTimeOffset.UtcNow - snapshot.LastRunUtc.Value;
         if (age > staleAfter)
         {
             return Task.FromResult(HealthCheckResult.Unhealthy(
@@ -54,9 +54,9 @@ public sealed class NotificationDispatcherHealthCheck : IHealthCheck
                 data: data));
         }
 
-        if (!lastRunSucceeded)
+        if (!snapshot.LastRunSucceeded)
         {
-            data["lastError"] = lastError ?? "(no error message captured)";
+            data["lastError"] = snapshot.LastError ?? "(no error message captured)";
             return Task.FromResult(HealthCheckResult.Degraded(
                 "Last notification dispatcher cycle failed.",
                 data: data));
