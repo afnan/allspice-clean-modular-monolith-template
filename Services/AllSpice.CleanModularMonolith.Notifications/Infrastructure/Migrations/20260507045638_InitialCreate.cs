@@ -16,7 +16,7 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    UserId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     Channel = table.Column<string>(type: "character varying(25)", maxLength: 25, nullable: false),
                     IsEnabled = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),

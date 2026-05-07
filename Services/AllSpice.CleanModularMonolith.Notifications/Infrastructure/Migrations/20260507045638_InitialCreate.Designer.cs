@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Migrations
 {
     [DbContext(typeof(NotificationsDbContext))]
-    [Migration("20260405100927_InitialCreate")]
+    [Migration("20260507045638_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -115,10 +115,8 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("UpdatedUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 

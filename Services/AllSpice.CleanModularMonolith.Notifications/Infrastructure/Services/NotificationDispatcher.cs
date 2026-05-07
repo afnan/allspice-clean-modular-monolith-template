@@ -77,11 +77,25 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var preference = await _preferenceRepository.GetByUserAndChannelAsync(notification.Recipient.UserId, notification.Channel, cancellationToken);
-            if (preference is not null && !preference.IsEnabled)
+            // Preferences are keyed by local user UUID. Recipient.UserId follows the same
+            // convention (see InAppNotificationChannel xmldoc). If we can't parse it, skip
+            // the preference check rather than failing — the notification will dispatch
+            // with the channel's default opt-in state.
+            if (Guid.TryParse(notification.Recipient.UserId, out var localUserId))
             {
-                _logger.LogInformation("Notification {NotificationId} skipped due to user/channel preference.", notification.Id);
-                continue;
+                var preference = await _preferenceRepository.GetByUserAndChannelAsync(localUserId, notification.Channel, cancellationToken);
+                if (preference is not null && !preference.IsEnabled)
+                {
+                    _logger.LogInformation("Notification {NotificationId} skipped due to user/channel preference.", notification.Id);
+                    continue;
+                }
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Notification {NotificationId} has non-Guid Recipient.UserId '{UserId}'; preference check skipped.",
+                    notification.Id,
+                    notification.Recipient.UserId);
             }
 
             notification.RecordAttempt();

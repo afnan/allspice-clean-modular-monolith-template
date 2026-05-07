@@ -7,8 +7,7 @@ public sealed class UpsertNotificationPreferenceCommandValidator : AbstractValid
     public UpsertNotificationPreferenceCommandValidator()
     {
         RuleFor(x => x.UserId)
-            .NotEmpty();
+            .NotEqual(Guid.Empty)
+            .WithMessage("UserId must be a non-empty local user UUID.");
     }
 }
-
-
