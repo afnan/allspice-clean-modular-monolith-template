@@ -36,14 +36,21 @@ public static class MigrationRunner
 
                 return;
             }
-            catch (Exception ex) when (attempt < maxAttempts)
+            catch (Exception ex)
             {
                 logger.LogWarning(
                     ex,
-                    "Database migration attempt {Attempt}/{Max} failed for {DbContext}. Retrying...",
+                    "Database migration attempt {Attempt}/{Max} failed for {DbContext}.",
                     attempt,
                     maxAttempts,
                     context.GetType().Name);
+
+                if (attempt >= maxAttempts)
+                {
+                    // Exhausted retries — propagate so the host fails fast instead of
+                    // silently booting against an un-migrated database.
+                    throw;
+                }
 
                 await Task.Delay(TimeSpan.FromSeconds(attempt * 2), cancellationToken);
             }

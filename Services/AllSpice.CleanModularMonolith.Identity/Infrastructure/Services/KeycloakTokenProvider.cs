@@ -67,8 +67,13 @@ public sealed class KeycloakTokenProvider : IDisposable
 
     private async Task<string> RefreshTokenAsync(KeycloakOptions opts, CancellationToken cancellationToken)
     {
+        // Match the scheme used by the Keycloak admin HttpClient
+        // (IdentityModuleExtensions.ConfigureKeycloakClient). Aspire service discovery
+        // resolves bare http://service-name; the previous "http+https://" scheme
+        // requires service-discovery middleware on the HttpClient and is not consistent
+        // with how the rest of the module addresses Keycloak.
         var baseUrl = !string.IsNullOrWhiteSpace(opts.ServiceName)
-            ? $"http+https://{opts.ServiceName}"
+            ? $"http://{opts.ServiceName}"
             : opts.BaseUrl.TrimEnd('/');
 
         var tokenUrl = $"{baseUrl}/realms/{opts.Realm}/protocol/openid-connect/token";
