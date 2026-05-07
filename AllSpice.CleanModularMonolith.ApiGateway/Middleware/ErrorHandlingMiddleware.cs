@@ -76,8 +76,12 @@ public class ErrorHandlingMiddleware
                 ? "Identity service is temporarily unavailable."
                 : "An error occurred while processing your request.",
             Status = (int)statusCode,
+            // Keep the development Detail short — exception.ToString() can include
+            // connection strings, JWTs, and other secrets in inner-exception messages.
+            // The full exception is already in the structured log (LogError above);
+            // dev consumers can correlate via the correlationId extension.
             Detail = _environment.IsDevelopment()
-                ? exception.ToString()
+                ? $"{exception.GetType().Name}: {Truncate(exception.Message, 512)}"
                 : (isIdentityError ? "The identity provider is unreachable. Please try again later." : "An error occurred while processing your request."),
             Instance = context.Request.Path
         };
@@ -99,6 +103,11 @@ public class ErrorHandlingMiddleware
         context.Response.StatusCode = (int)statusCode;
         return context.Response.WriteAsync(result);
     }
+
+    private static string Truncate(string value, int maxLength)
+        => value is null
+            ? string.Empty
+            : value.Length <= maxLength ? value : value[..maxLength];
 
     private sealed class GatewayProblemDetails
     {

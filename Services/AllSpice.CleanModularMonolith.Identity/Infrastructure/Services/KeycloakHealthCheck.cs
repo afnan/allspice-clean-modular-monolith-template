@@ -47,17 +47,21 @@ public sealed class KeycloakHealthCheck : IHealthCheck
             }
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            // Keycloak error bodies can echo bearer tokens or partial session data.
+            // Truncate aggressively before logging so we don't leak credentials into
+            // the log sink.
+            var redactedBody = Truncate(body, 256);
             _logger.LogWarning(
-                "Keycloak health request failed with status {Status}. Response: {ResponseBody}",
+                "Keycloak health request failed with status {Status}. Response (truncated): {ResponseBody}",
                 response.StatusCode,
-                body);
+                redactedBody);
 
             return HealthCheckResult.Unhealthy(
                 $"Keycloak responded with status {(int)response.StatusCode}",
                 data: new Dictionary<string, object>
                 {
                     ["statusCode"] = (int)response.StatusCode,
-                    ["response"] = Truncate(body, 2048)
+                    ["response"] = redactedBody
                 });
         }
         catch (Exception ex)
