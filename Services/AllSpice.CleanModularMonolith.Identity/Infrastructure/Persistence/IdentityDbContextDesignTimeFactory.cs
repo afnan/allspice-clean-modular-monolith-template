@@ -28,7 +28,13 @@ public sealed class IdentityDbContextDesignTimeFactory : IDesignTimeDbContextFac
     {
         var host = Environment.GetEnvironmentVariable("EF_DESIGN_DB_HOST") ?? "localhost";
         var user = Environment.GetEnvironmentVariable("EF_DESIGN_DB_USER") ?? "postgres";
-        var password = Environment.GetEnvironmentVariable("EF_DESIGN_DB_PASSWORD") ?? "pass!";
+        var password = Environment.GetEnvironmentVariable("EF_DESIGN_DB_PASSWORD");
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new InvalidOperationException(
+                "Set EF_DESIGN_DB_PASSWORD (or a full connection string in EF_DESIGN_IDENTITY_CONNECTION / EF_DESIGN_CONNECTION) for design-time migrations.");
+        }
+
         return $"Host={host};Database={DatabaseName};Username={user};Password={password}";
     }
 }

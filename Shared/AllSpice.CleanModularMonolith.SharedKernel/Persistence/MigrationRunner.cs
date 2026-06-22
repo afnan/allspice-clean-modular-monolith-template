@@ -58,6 +58,10 @@ public static class MigrationRunner
         Func<DbContext, CancellationToken, Task>? seedAsync = null,
         int maxAttempts = DefaultMaxAttempts)
     {
+        // A non-positive count would skip the loop entirely and return without migrating —
+        // exactly the "boot against an un-migrated DB" failure this method exists to prevent.
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxAttempts, 1);
+
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try

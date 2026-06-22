@@ -69,7 +69,9 @@ public sealed class NotificationDispatcherHostedService : BackgroundService
             // (we don't need cryptographic randomness here).
             var baseSeconds = Math.Max(1, _options.PollIntervalSeconds);
             var jitterFactor = 0.8 + (Random.Shared.NextDouble() * 0.4); // 0.8 .. 1.2
-            var delay = TimeSpan.FromSeconds(baseSeconds * jitterFactor);
+            // Re-clamp after jitter: down-jitter (0.8x) on a 1s base would otherwise drop below
+            // the 1s minimum and increase DB polling pressure.
+            var delay = TimeSpan.FromSeconds(Math.Max(1d, baseSeconds * jitterFactor));
             await Task.Delay(delay, stoppingToken);
         }
 

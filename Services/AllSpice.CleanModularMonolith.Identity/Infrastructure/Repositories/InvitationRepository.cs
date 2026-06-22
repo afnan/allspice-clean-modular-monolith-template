@@ -1,5 +1,6 @@
 using Ardalis.Specification.EntityFrameworkCore;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
+using AllSpice.CleanModularMonolith.SharedKernel.Common;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Invitation;
 using AllSpice.CleanModularMonolith.Identity.Domain.Enums;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
@@ -21,9 +22,13 @@ public sealed class InvitationRepository : RepositoryBase<Invitation>, IInvitati
         _dbContext.Invitations
             .FirstOrDefaultAsync(i => i.Token == token, cancellationToken);
 
-    public Task<Invitation?> GetPendingByEmailAsync(string email, CancellationToken cancellationToken = default) =>
-        _dbContext.Invitations
-            .FirstOrDefaultAsync(i => EF.Functions.ILike(i.Email, email) && i.Status == InvitationStatus.Pending, cancellationToken);
+    public Task<Invitation?> GetPendingByEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        // Escape LIKE wildcards so emails containing '_' or '%' match literally (ILIKE treats them as wildcards).
+        var pattern = email.EscapeLikePattern();
+        return _dbContext.Invitations
+            .FirstOrDefaultAsync(i => EF.Functions.ILike(i.Email, pattern, "\\") && i.Status == InvitationStatus.Pending, cancellationToken);
+    }
 
     public async Task<IReadOnlyList<Invitation>> ListAllAsync(CancellationToken cancellationToken = default) =>
         await _dbContext.Invitations

@@ -1,6 +1,7 @@
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
+using AllSpice.CleanModularMonolith.SharedKernel.Common;
 using Ardalis.Specification.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,9 +21,14 @@ public sealed class UserRepository : RepositoryBase<User>, IUserRepository
         _dbContext.Users
             .FirstOrDefaultAsync(u => u.ExternalId.Value == externalId, cancellationToken);
 
-    public Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default) =>
-        _dbContext.Users
-            .FirstOrDefaultAsync(u => u.Email != null && EF.Functions.ILike(u.Email, normalizedEmail), cancellationToken);
+    public Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default)
+    {
+        // "normalized" only lowercases; it does not escape LIKE wildcards. Escape so an email
+        // such as "john_doe@example.com" matches literally rather than treating '_' as a wildcard.
+        var pattern = normalizedEmail.EscapeLikePattern();
+        return _dbContext.Users
+            .FirstOrDefaultAsync(u => u.Email != null && EF.Functions.ILike(u.Email, pattern, "\\"), cancellationToken);
+    }
 
     public Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         _dbContext.Users

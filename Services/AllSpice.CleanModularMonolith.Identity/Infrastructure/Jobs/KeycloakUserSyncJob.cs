@@ -70,6 +70,12 @@ public sealed class KeycloakUserSyncJob : IJob
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Host/scheduler shutdown — not a sync failure. Let Quartz unwind without recording
+            // an issue row (a false positive on the dashboard) or trying to persist on a cancelled token.
+            throw;
+        }
         catch (Exception ex)
         {
             history.Succeeded = false;
@@ -80,9 +86,11 @@ public sealed class KeycloakUserSyncJob : IJob
             // alongside the issue row in a single SaveChanges.
             dbContext.ChangeTracker.Clear();
 
-            await RecordSyncIssueAsync(dbContext, ex, cancellationToken);
+            // Persist with CancellationToken.None: if the failure stemmed from a slow/cancelled
+            // token, we still want the failure record and issue row durably written.
+            await RecordSyncIssueAsync(dbContext, ex, CancellationToken.None);
             dbContext.IdentitySyncHistories.Add(history);
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await dbContext.SaveChangesAsync(CancellationToken.None);
 
             // Transient infrastructure outages (Keycloak unreachable, slow network) should
             // refire — the next attempt may succeed without operator intervention.
