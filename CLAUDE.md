@@ -139,6 +139,7 @@ dotnet ef migrations add <MigrationName> \
 
 ## Conventions
 
+- **Commit messages:** do NOT add a Claude / AI co-author trailer (no `Co-Authored-By: Claude ...`). Keep commit messages free of AI attribution.
 - **File-scoped namespaces** enforced (`csharp_style_namespace_declarations = file_scoped:warning`)
 - **Private fields** prefixed with `_` (camelCase): `_myField`
 - **Constants** use PascalCase

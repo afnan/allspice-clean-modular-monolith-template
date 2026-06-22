@@ -1,11 +1,23 @@
 <Project>
     <PropertyGroup>
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
         <TargetFramework>net10.0</TargetFramework>
     </PropertyGroup>
     <PropertyGroup>
         <NoWarn>1591;NU1608</NoWarn>
         <!-- Remove this to turn on warnings for missing XML Comments -->
     </PropertyGroup>
+    <!--
+      Suppress NuGet audit advisories for transitive packages that are NOT on the shipped runtime path,
+      so `TreatWarningsAsErrors` doesn't fail the build on dependencies we don't control. Auditing stays
+      on for everything else. Revisit when an upstream fix ships, or pin a fixed version instead.
+        - GHSA-hv8m-jj95-wg3x  MessagePack: transitive via the Aspire AppHost (dev-time orchestrator only).
+        - GHSA-2m69-gcr7-jv3q  SQLitePCLRaw.lib.e_sqlite3: transitive via EF Core SQLite in the
+          integration-test project only (test-time).
+    -->
+    <ItemGroup>
+        <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-hv8m-jj95-wg3x" />
+        <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
+    </ItemGroup>
 </Project>

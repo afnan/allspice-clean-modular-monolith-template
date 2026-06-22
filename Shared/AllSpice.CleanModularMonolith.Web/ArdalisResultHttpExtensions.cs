@@ -36,6 +36,36 @@ public static class ArdalisResultHttpExtensions
     public static ProblemHttpResult ToProblem<T>(this Result<T> result) =>
         result.ToProblem(StatusCodes.Status500InternalServerError);
 
+    /// <summary>
+    /// Writes the appropriate RFC7807 ProblemDetails response for a failed <see cref="Result"/>,
+    /// mapping <see cref="ResultStatus"/> to the conventional HTTP status code. Use from an endpoint
+    /// when a result is unsuccessful so each handler doesn't hand-roll the status switch.
+    /// </summary>
+    public static Task ExecuteFailureAsync(this Result result, HttpContext httpContext) =>
+        result.Status switch
+        {
+            ResultStatus.Invalid => result.ToValidationProblem().ExecuteAsync(httpContext),
+            ResultStatus.NotFound => result.ToProblem(StatusCodes.Status404NotFound).ExecuteAsync(httpContext),
+            ResultStatus.Conflict => result.ToProblem(StatusCodes.Status409Conflict).ExecuteAsync(httpContext),
+            ResultStatus.Forbidden => result.ToProblem(StatusCodes.Status403Forbidden).ExecuteAsync(httpContext),
+            ResultStatus.Unauthorized => result.ToProblem(StatusCodes.Status401Unauthorized).ExecuteAsync(httpContext),
+            ResultStatus.Error => result.ToProblem(StatusCodes.Status400BadRequest).ExecuteAsync(httpContext),
+            _ => result.ToProblem(StatusCodes.Status500InternalServerError).ExecuteAsync(httpContext)
+        };
+
+    /// <inheritdoc cref="ExecuteFailureAsync(Result, HttpContext)"/>
+    public static Task ExecuteFailureAsync<T>(this Result<T> result, HttpContext httpContext) =>
+        result.Status switch
+        {
+            ResultStatus.Invalid => result.ToValidationProblem().ExecuteAsync(httpContext),
+            ResultStatus.NotFound => result.ToProblem(StatusCodes.Status404NotFound).ExecuteAsync(httpContext),
+            ResultStatus.Conflict => result.ToProblem(StatusCodes.Status409Conflict).ExecuteAsync(httpContext),
+            ResultStatus.Forbidden => result.ToProblem(StatusCodes.Status403Forbidden).ExecuteAsync(httpContext),
+            ResultStatus.Unauthorized => result.ToProblem(StatusCodes.Status401Unauthorized).ExecuteAsync(httpContext),
+            ResultStatus.Error => result.ToProblem(StatusCodes.Status400BadRequest).ExecuteAsync(httpContext),
+            _ => result.ToProblem(StatusCodes.Status500InternalServerError).ExecuteAsync(httpContext)
+        };
+
     private static ValidationProblem CreateValidationProblem(IEnumerable<ValidationError>? validationErrors, IEnumerable<string> errors)
     {
         var dictionary = validationErrors?

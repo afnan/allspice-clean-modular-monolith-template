@@ -76,7 +76,8 @@ public static class IdentityModuleExtensions
         builder.Services.AddHealthChecks()
             .AddCheck<KeycloakHealthCheck>("keycloak")
             .AddCheck<IdentitySyncHealthCheck>("identity-sync")
-            .AddCheck<IdentityOrphanHealthCheck>("identity-orphans");
+            .AddCheck<IdentityOrphanHealthCheck>("identity-orphans")
+            .AddCheck<SharedKernel.HealthChecks.DbContextHealthCheck<IdentityDbContext>>("identitydb");
 
         RegisterKeycloakSync(builder);
 

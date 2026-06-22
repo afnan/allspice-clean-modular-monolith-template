@@ -78,7 +78,8 @@ public static class NotificationsModuleExtensions
         builder.Services.AddHostedService<NotificationDispatcherHostedService>();
 
         builder.Services.AddHealthChecks()
-            .AddCheck<NotificationDispatcherHealthCheck>("notification-dispatcher");
+            .AddCheck<NotificationDispatcherHealthCheck>("notification-dispatcher")
+            .AddCheck<SharedKernel.HealthChecks.DbContextHealthCheck<NotificationsDbContext>>("notificationsdb");
 
         logger.LogInformation("Notifications module services registered");
 

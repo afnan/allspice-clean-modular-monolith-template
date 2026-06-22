@@ -1,6 +1,7 @@
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.IntegrationTests.Helpers;
 
@@ -24,6 +25,7 @@ internal sealed class TestSqliteDatabase : IAsyncDisposable
 
         var options = new DbContextOptionsBuilder<NotificationsDbContext>()
             .UseSqlite(connection)
+            .ReplaceService<IModelCustomizer, SqliteJsonbModelCustomizer>()
             .EnableSensitiveDataLogging()
             .Options;
 
