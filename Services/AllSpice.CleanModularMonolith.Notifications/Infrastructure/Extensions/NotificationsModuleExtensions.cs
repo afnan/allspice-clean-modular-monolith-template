@@ -22,7 +22,14 @@ public static class NotificationsModuleExtensions
         this IHostApplicationBuilder builder,
         ILogger logger)
     {
-        builder.AddNpgsqlDbContext<NotificationsDbContext>(DatabaseResourceName);
+        // Register the pooled context with the (serviceProvider, options) overload so the cross-cutting
+        // EF Core save interceptors (registered via AddSharedKernelInterceptors) are attached — EF Core
+        // does NOT auto-discover IInterceptor services from DI. EnrichNpgsqlDbContext layers on Aspire's
+        // retries/telemetry; its own DB health check is disabled in favor of the explicit one below.
+        builder.Services.AddDbContextPool<NotificationsDbContext>((sp, options) => options
+            .UseNpgsql(builder.Configuration[$"ConnectionStrings:{DatabaseResourceName}"])
+            .AddInterceptors(sp.GetServices<Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor>()));
+        builder.EnrichNpgsqlDbContext<NotificationsDbContext>(settings => settings.DisableHealthChecks = true);
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<NotificationsDbContext>());
 
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -79,7 +86,7 @@ public static class NotificationsModuleExtensions
 
         builder.Services.AddHealthChecks()
             .AddCheck<NotificationDispatcherHealthCheck>("notification-dispatcher")
-            .AddCheck<SharedKernel.HealthChecks.DbContextHealthCheck<NotificationsDbContext>>("notificationsdb");
+            .AddCheck<SharedKernel.HealthChecks.DbContextHealthCheck<NotificationsDbContext>>("notifications-db");
 
         logger.LogInformation("Notifications module services registered");
 
