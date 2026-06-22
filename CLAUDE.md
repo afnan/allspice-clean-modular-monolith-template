@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Agents: read [`AGENTS.md`](./AGENTS.md) first.** It is the prescriptive operating manual — golden rules,
+> DO/DON'T, recipes, and the Definition of Done — for any AI agent (Claude, Codex, Copilot, Cursor, …).
+> `CLAUDE.md` (this file) is the descriptive architecture reference that `AGENTS.md` builds on.
+
 ## What This Is
 
 A .NET 10 modular monolith template (`dotnet new allspice-modular`) using Clean Architecture, CQRS, and event-driven patterns. The solution ships as a `dotnet new` template where `AllSpice.CleanModularMonolith` is the `sourceName` replaced by the user's chosen project name.
