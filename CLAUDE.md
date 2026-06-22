@@ -1,167 +1,63 @@
-# CLAUDE.md
+# CLAUDE.md — working on the template itself
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file guides Claude Code (and other agents) when **developing and maintaining this template
+repository**. It is intentionally **excluded from generated projects** (see `.template.config/template.json`)
+because it is about the template, not about apps built from it.
 
-> **Agents: read [`AGENTS.md`](./AGENTS.md) first.** It is the prescriptive operating manual — golden rules,
-> DO/DON'T, recipes, and the Definition of Done — for any AI agent (Claude, Codex, Copilot, Cursor, …).
-> `CLAUDE.md` (this file) is the descriptive architecture reference that `AGENTS.md` builds on.
+**If you are building a project that was scaffolded from this template, this file is not for you.** Read:
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — how a generated project is structured (hosting, modules, CQRS, libraries, DB).
+- [`AGENTS.md`](./AGENTS.md) — the prescriptive agent rules (golden rules, DO/DON'T, recipes, Definition of Done).
 
-## What This Is
+Both of those **ship with generated projects** and get `sourceName`-renamed; this file does not.
 
-A .NET 10 modular monolith template (`dotnet new allspice-modular`) using Clean Architecture, CQRS, and event-driven patterns. The solution ships as a `dotnet new` template where `AllSpice.CleanModularMonolith` is the `sourceName` replaced by the user's chosen project name.
+---
 
-## Build & Run
+## What this repo is
+
+A .NET 10 modular monolith **`dotnet new` template** (`shortName: allspice-modular`). The `sourceName`
+`AllSpice.CleanModularMonolith` is replaced by the user's chosen project name on scaffold. Architecture,
+patterns, and conventions are documented in `ARCHITECTURE.md` / `AGENTS.md` — keep those authoritative and
+avoid duplicating them here.
+
+## Template mechanics (the part unique to maintaining the template)
+
+- **Config:** `.template.config/template.json`. `sourceName` drives the rename; the `sources.modifiers.exclude`
+  list controls what is left out of generated projects.
+- **Excluded from generated projects:** `.git/**`, `.serena/**`, `.mcp.json`, `.template.config/**`,
+  `**/bin/**`, `**/obj/**`, and **`CLAUDE.md`** (this file). Everything else ships — including `AGENTS.md`,
+  `ARCHITECTURE.md`, `README.md`, `GETTING_STARTED.md`, and `.github/`.
+- **When you add a maintainer-only or machine-local file**, decide whether it should reach generated projects
+  and update the exclude list accordingly. When you add agent rules or architecture that *should* reach users,
+  put them in `AGENTS.md` / `ARCHITECTURE.md` (not here).
+- **Test the template locally** before publishing changes:
+  ```bash
+  dotnet new install .            # install this template from the repo root
+  dotnet new allspice-modular -n Acme.Demo -o ../_tmpl-smoketest
+  dotnet build ../_tmpl-smoketest/Acme.Demo.slnx
+  dotnet new uninstall AllSpice.CleanModularMonolith
+  ```
+  Verify the smoke-test output renamed correctly and that `CLAUDE.md`/`.serena` did **not** come across while
+  `AGENTS.md`/`ARCHITECTURE.md` did, with their `sourceName` references rewritten.
+
+## Build & test (same as a generated project)
 
 ```bash
-# Restore and build
-dotnet restore AllSpice.CleanModularMonolith.slnx
-dotnet build AllSpice.CleanModularMonolith.slnx
-
-# Run with Aspire (spins up PostgreSQL, Redis, Keycloak, Papercut SMTP)
+dotnet build AllSpice.CleanModularMonolith.slnx     # 0 warnings (TreatWarningsAsErrors=true)
+dotnet test  AllSpice.CleanModularMonolith.slnx
 dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModularMonolith.AppHost.csproj
-
-# Run all tests
-dotnet test AllSpice.CleanModularMonolith.slnx
-
-# Run a single test project
-dotnet test tests/AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests
-
-# Run a specific test by filter
-dotnet test tests/AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests --filter "FullyQualifiedName~TestMethodName"
 ```
 
-## Architecture
+The full command/architecture/migration reference is in `ARCHITECTURE.md`.
 
-### Hosting Model
+## Conventions for commits to this repo
 
-Everything runs as a single deployable unit. The **ApiGateway** is the sole runnable host — modules register their services into it, not as separate processes. **AppHost** is the Aspire orchestrator that provisions infrastructure (Postgres, Redis, Keycloak containers) and launches the gateway.
+- **No AI co-author trailer** on commits (`Co-Authored-By: Claude ...` etc.). Keep commit messages free of AI attribution.
+- Follow the code conventions in `ARCHITECTURE.md` (file-scoped namespaces, `_camelCase` fields, central package
+  versioning, warnings-as-errors) and the rules in `AGENTS.md`.
+- Keep `AGENTS.md` and `ARCHITECTURE.md` up to date when you change patterns — they are what downstream projects inherit.
 
-### Module Structure (Clean Architecture per module)
+## Use Serena MCP for semantic code analysis
 
-Each module under `Services/` follows this layout:
-```
-Services/{Module}/
-  Domain/          -- Aggregates, ValueObjects, Enums, Events, Specifications
-  Application/     -- Features (Commands/Queries with Handlers + Validators), Contracts, DTOs
-  Infrastructure/  -- Persistence (EF DbContext, Configurations), Services, Messaging, Jobs, Extensions
-  Api/             -- FastEndpoints endpoint classes
-```
-
-### How Modules Wire Into the Gateway
-
-1. Each module exposes an `Infrastructure/Extensions/{Module}ModuleExtensions.cs` with:
-   - `Add{Module}ModuleServices(builder, logger)` — registers DI (DbContext, repos, Mediator, Quartz jobs, validators)
-   - `Ensure{Module}ModuleDatabaseAsync(app)` — runs `MigrateAsync` + seeds
-2. `ApiGateway/Extensions/GatewayModuleRegistrationExtensions.cs` calls each module's registration in `RegisterGatewayModules()`
-3. `Program.cs` calls `builder.RegisterGatewayModules()` then `app.Ensure{Module}ModuleDatabaseAsync()` for each module
-
-**To add a new module:** Create the Clean Architecture folders under `Services/`, write the module extension, and add one line in `RegisterGatewayModules()` + one `Ensure` call in `Program.cs`.
-
-### Key Libraries & Patterns
-
-| Concern | Library/Pattern |
-|---|---|
-| CQRS / Mediator | **Mediator** (source-generated, scoped lifetime via `MediatorConfiguration.cs`) |
-| Validation | **FluentValidation** + SharedKernel `ValidationBehavior` pipeline |
-| API endpoints | **FastEndpoints** (not controllers) |
-| Messaging | **WolverineFx** with PostgreSQL durable outbox (`WolverineFx.EntityFrameworkCore` + `WolverineFx.Postgresql`), centralized in gateway with scoped retry policies (transient exceptions only) |
-| Integration events | **IIntegrationEventPublisher** abstraction in SharedKernel, implemented by `WolverineIntegrationEventPublisher` in gateway. Outbox ensures delivery survives crashes |
-| Transactional commands | `TransactionBehavior` in SharedKernel pipeline — commands implement `ITransactional` marker for automatic DB transaction wrapping with domain event dispatch |
-| Options validation | `ValidateDataAnnotations().ValidateOnStart()` on critical options (`KeycloakOptions`, `IdentitySyncOptions`, `NotificationDispatcherOptions`); email provider options intentionally skip for graceful fallback |
-| Soft delete | `SoftDeleteQueryFilterConvention.ApplySoftDeleteFilters()` in `DbContext.OnModelCreating` — auto-filters `ISoftDelete` entities |
-| Scheduling | **Quartz.NET** (registered globally in ServiceDefaults, jobs per module) |
-| Realtime | **SignalR** via `Shared/RealTime/AppHub` mapped at `/hubs/app` |
-| ORM | **EF Core** with PostgreSQL (Npgsql), each module owns its own DbContext |
-| Specifications | **Ardalis.Specification** for query objects |
-| Domain modeling | **Ardalis.GuardClauses**, **Ardalis.Result**, **Ardalis.SmartEnum** |
-| Reverse proxy | **YARP** configured in `appsettings.json` under `ReverseProxy` section |
-| Auth | **Keycloak** OIDC with portal-aware JWT, client credentials flow via `KeycloakTokenProvider` |
-| Email | **Resend** (primary) -> **SendGrid** (fallback) -> **MailKit** (dev/last resort) via `EmailSenderDispatcher` |
-| PDF generation | **PuppeteerSharp** via `Shared/AllSpice.CleanModularMonolith.Pdf` — headless Chromium, A4 output |
-| Logging | **Serilog** + **OpenTelemetry** |
-| Cross-module identity | **IUserExternalIdResolver** in SharedKernel — resolves local user GUIDs to Keycloak external IDs |
-
-### Shared Libraries
-
-- **SharedKernel** — Base entity types (`Entity`, `AggregateRoot`, `AuditableEntity`, `SoftDeletableEntity`), domain events, `EfRepository<T>`, value objects, Mediator pipeline behaviors (Logging, Performance, Validation, Transaction, DomainException), `IIntegrationEventPublisher`, `IUserExternalIdResolver`, `IModuleDbContext`, `SoftDeleteQueryFilterConvention`
-- **Notifications.Contracts** — Integration event DTOs consumed by other modules to request notifications via Wolverine
-- **RealTime** — `AppHub` SignalR hub and `IRealtimePublisher` abstraction for broadcasting to user groups
-- **Identity.Abstractions** — Portal-aware JWT registration (`AddIdentityPortals`), claims utilities, module-role authorization
-- **Web** — `Ardalis.Result` HTTP mapping extensions, `ClaimsPrincipalExtensions`
-- **Pdf** — `PdfGeneratorBase` (PuppeteerSharp), `PdfTheme` (A4 CSS), `PdfFooterBuilder` (header/footer/page-frame)
-
-### CQRS Flow
-
-`FastEndpoint` -> `IMediator.Send(Command/Query)` -> `Handler` (with pipeline behaviors) -> `Repository` (Ardalis.Specification) -> `DbContext`
-
-**Pipeline order (outermost to innermost):** Logging → Performance → Validation → Transaction → DomainException
-
-Commands implement `ITransactional` for automatic transaction wrapping. The `TransactionBehavior` begins a DB transaction on the first module's DbContext, calls the handler, dispatches domain events (drain loop for multi-generation events), then commits. On failure, the transaction rolls back.
-
-**Important constraint:** Each command should only touch ONE module's DbContext. Cross-module communication must use Wolverine integration events via `IIntegrationEventPublisher`, not direct writes to another module's DbContext. The `TransactionBehavior` logs a warning if multiple DbContexts have pending changes within a single command.
-
-Domain events are dispatched via `MediatorDomainEventDispatcher` (registered in gateway). Cross-module communication uses Wolverine integration events via `IIntegrationEventPublisher` (not domain events). The Wolverine durable outbox ensures integration events survive process crashes.
-
-### Identity Module
-
-Full Keycloak integration with client credentials flow:
-- **Domain:** User, Invitation, ModuleDefinition, ModuleRoleAssignment, ModuleRoleTemplate aggregates
-- **Keycloak:** `KeycloakTokenProvider` (singleton, SemaphoreSlim-cached client credentials flow) + `KeycloakTokenHandler` (DelegatingHandler for auto Bearer injection)
-- **KeycloakDirectoryClient:** Full Admin REST API — create/sync users, manage realm roles, temp passwords
-- **Sync:** `KeycloakUserSyncJob` (Quartz) syncs Keycloak users to local User table
-- **Invitation compensation:** `InviteUserCommandHandler` creates the Keycloak user first, then local records. If local persistence fails, the handler compensates by deleting the Keycloak user to prevent orphans.
-- **API endpoints:** `GET /api/identity/users/{externalId}`, `GET /api/identity/users`, `POST /api/identity/invitations`
-
-### Notifications Module
-
-Email delivery with provider fallback chain:
-- **Development:** Always MailKit (Papercut SMTP container via Aspire)
-- **Production:** Resend -> SendGrid -> MailKit fallback via `EmailSenderDispatcher`
-- **HTML Templates:** Embedded resources in `Infrastructure/Templates/`, loaded by `EmailTemplateLoader`, merged with `_Layout.html`, seeded to DB on startup
-- **Channels:** Email, InApp (SignalR with external ID resolution via `IUserExternalIdResolver`)
-- **Templates:** `invitation-created`, `registration-welcome`, `role-assigned`, `role-revoked`, `password-reset`, `profile-updated`
-
-### FastEndpoints Assembly Discovery
-
-FastEndpoints uses explicit assembly discovery (auto-discovery disabled) in `GatewayServiceCollectionExtensions`. When adding a new module, add its assembly to the `Assemblies` array.
-
-### Database Strategy
-
-Each module has its own DbContext and Aspire database resource (e.g., `notificationsdb`, `identitydb`). Schema changes use **EF Core migrations** — `MigrateAsync` runs at startup with retry logic. Design-time factories (`IDesignTimeDbContextFactory`) exist in each module for CLI migration generation without running infrastructure. Wolverine uses a dedicated `messagingdb` for durable outbox envelope storage.
-
-The design-time factories read DB credentials from environment variables (no hardcoded password). Before generating a migration, provide either a full connection string (`EF_DESIGN_<MODULE>_CONNECTION` or `EF_DESIGN_CONNECTION`) or at minimum `EF_DESIGN_DB_PASSWORD` (with optional `EF_DESIGN_DB_HOST` / `EF_DESIGN_DB_USER`, defaulting to `localhost` / `postgres`). The factory throws if no password/connection is supplied.
-
-To generate a new migration:
-```bash
-EF_DESIGN_DB_PASSWORD=<your-local-pg-password> \
-dotnet ef migrations add <MigrationName> \
-  --project Services/AllSpice.CleanModularMonolith.<Module>/AllSpice.CleanModularMonolith.<Module>.csproj \
-  --startup-project AllSpice.CleanModularMonolith.ApiGateway/AllSpice.CleanModularMonolith.ApiGateway.csproj \
-  --context <Module>DbContext \
-  --output-dir Infrastructure/Migrations
-```
-
-## Conventions
-
-- **Commit messages:** do NOT add a Claude / AI co-author trailer (no `Co-Authored-By: Claude ...`). Keep commit messages free of AI attribution.
-- **File-scoped namespaces** enforced (`csharp_style_namespace_declarations = file_scoped:warning`)
-- **Private fields** prefixed with `_` (camelCase): `_myField`
-- **Constants** use PascalCase
-- Central package versioning via `Directory.Packages.props` — never specify versions in individual `.csproj` files
-- Test projects use **xunit** with **Moq** and **coverlet**, naming: `{Module}.{Layer}.UnitTests` or `{Module}.{Layer}.IntegrationTests`
-- Template variables `{{ProjectName}}` and `{{ProjectNameLower}}` appear in config files — these are replaced when users scaffold from the template
-
-## Use Serena MCP for Semantic Code Analysis
-
-Serena MCP is available for advanced code retrieval and editing capabilities.
-
-**When to use Serena:**
-- Symbol-based code navigation (find definitions, references, implementations)
-- Precise code manipulation in structured codebases
-- Prefer symbol-based operations over file-based grep/sed when available
-
-**Key tools:**
-- `find_symbol` - Find symbol by name across the codebase
-- `find_referencing_symbols` - Find all symbols that reference a given symbol
-- `get_symbols_overview` - Get overview of top-level symbols in a file
-- `read_file` - Read file content within the project directory
+Serena MCP is available for symbol-based navigation and precise edits (prefer it over grep/sed when available):
+`find_symbol`, `find_referencing_symbols`, `get_symbols_overview`, `read_file`. Serena memories live in
+`.serena/` and are excluded from generated projects.

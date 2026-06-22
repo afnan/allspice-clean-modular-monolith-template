@@ -2,7 +2,7 @@
 
 This file is the **operating manual for any AI agent** (Claude Code, Codex, Copilot, Cursor, etc.)
 working in this repository. It is prescriptive: it says what to **DO**, what **NOT** to do, and how to
-verify your work. For the descriptive "how the system is built" reference, see [`CLAUDE.md`](./CLAUDE.md).
+verify your work. For the descriptive "how the system is built" reference, see [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 If a rule here conflicts with a direct instruction from the human you're working with, the human wins —
 but call out the conflict.
@@ -42,7 +42,7 @@ but call out the conflict.
 - **Flow:** FastEndpoint → `IMediator.Send(Command/Query)` → Handler (pipeline behaviors) → bespoke
   Repository (Ardalis.Specification) → module `DbContext`.
 - **Pipeline order:** Logging → Performance → Validation → Transaction → DomainException.
-- Full detail lives in [`CLAUDE.md`](./CLAUDE.md). Read it before designing anything non-trivial.
+- Full detail lives in [`ARCHITECTURE.md`](./ARCHITECTURE.md). Read it before designing anything non-trivial.
 
 ---
 
@@ -169,8 +169,6 @@ deliberately **not** wired (it would double-dispatch with `TransactionBehavior`)
 - File-scoped namespaces; private fields `_camelCase`; constants `PascalCase`.
 - Central package versioning (`Directory.Packages.props`); `TreatWarningsAsErrors=true`.
 - Tests: xUnit + Moq + coverlet, named `{Module}.{Layer}.UnitTests` / `IntegrationTests`.
-- Template tokens `AllSpice.CleanModularMonolith` (sourceName) and `{{ProjectName}}` are rewritten on scaffold —
-  keep using them so generated projects rename cleanly.
 
 ---
 
