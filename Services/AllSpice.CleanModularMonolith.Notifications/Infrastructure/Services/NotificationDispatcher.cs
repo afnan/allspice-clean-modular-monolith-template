@@ -8,6 +8,7 @@ using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Specifications;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Wolverine;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
@@ -23,6 +24,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     private readonly INotificationPreferenceRepository _preferenceRepository;
     private readonly INotificationContentBuilder _contentBuilder;
     private readonly IMessageBus _messageBus;
+    private readonly NotificationDispatcherOptions _options;
     private readonly ILogger<NotificationDispatcher> _logger;
 
     /// <summary>
@@ -41,6 +43,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         INotificationPreferenceRepository preferenceRepository,
         INotificationContentBuilder contentBuilder,
         IMessageBus messageBus,
+        IOptions<NotificationDispatcherOptions> options,
         ILogger<NotificationDispatcher> logger)
     {
         _notificationRepository = notificationRepository;
@@ -49,6 +52,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         _preferenceRepository = preferenceRepository;
         _contentBuilder = contentBuilder;
         _messageBus = messageBus;
+        _options = options.Value;
         _logger = logger;
     }
 
@@ -79,7 +83,8 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTimeOffset.UtcNow;
-        var specification = new DueNotificationsSpecification(utcNow);
+        var reclaimBefore = utcNow.AddSeconds(-_options.ReclaimAfterSeconds);
+        var specification = new DueNotificationsSpecification(utcNow, reclaimBefore);
         var pendingNotifications = await _notificationRepository.ListAsync(specification, cancellationToken);
 
         if (pendingNotifications.Count == 0)

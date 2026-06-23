@@ -9,6 +9,7 @@ using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Repositories;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using Wolverine;
 
@@ -60,6 +61,7 @@ public sealed class NotificationDispatcherPersistenceTests
             preferenceRepository,
             contentBuilder.Object,
             Mock.Of<IMessageBus>(),
+            Microsoft.Extensions.Options.Options.Create(new NotificationDispatcherOptions()),
             NullLogger<NotificationDispatcher>.Instance);
 
         var processed = await dispatcher.DispatchPendingAsync(CancellationToken.None);
