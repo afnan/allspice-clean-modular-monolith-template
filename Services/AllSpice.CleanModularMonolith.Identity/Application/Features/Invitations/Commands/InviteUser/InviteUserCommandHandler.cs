@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.External;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Invitation;
@@ -38,7 +37,7 @@ public sealed class InviteUserCommandHandler : IRequestHandler<InviteUserCommand
             return Result<Guid>.Conflict("A pending invitation already exists for this email.");
         }
 
-        var tempPassword = GenerateTempPassword();
+        var tempPassword = TempPasswordGenerator.Generate();
 
         // Create user in Keycloak first (external side-effect)
         var keycloakUserId = await _directoryClient.CreateUserWithTempPasswordAsync(
@@ -105,11 +104,5 @@ public sealed class InviteUserCommandHandler : IRequestHandler<InviteUserCommand
 
             throw;
         }
-    }
-
-    private static string GenerateTempPassword()
-    {
-        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%";
-        return RandomNumberGenerator.GetString(chars, 16);
     }
 }
