@@ -7,9 +7,10 @@ using AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Specifications;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Wolverine;
+using Wolverine.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 
@@ -23,7 +24,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     private readonly IEnumerable<INotificationChannel> _channels;
     private readonly INotificationPreferenceRepository _preferenceRepository;
     private readonly INotificationContentBuilder _contentBuilder;
-    private readonly IMessageBus _messageBus;
+    private readonly IDbContextOutbox _outbox;
     private readonly NotificationDispatcherOptions _options;
     private readonly ILogger<NotificationDispatcher> _logger;
 
@@ -42,7 +43,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         IEnumerable<INotificationChannel> channels,
         INotificationPreferenceRepository preferenceRepository,
         INotificationContentBuilder contentBuilder,
-        IMessageBus messageBus,
+        IDbContextOutbox outbox,
         IOptions<NotificationDispatcherOptions> options,
         ILogger<NotificationDispatcher> logger)
     {
@@ -51,7 +52,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         _channels = channels;
         _preferenceRepository = preferenceRepository;
         _contentBuilder = contentBuilder;
-        _messageBus = messageBus;
+        _outbox = outbox;
         _options = options.Value;
         _logger = logger;
     }
@@ -161,10 +162,6 @@ public sealed class NotificationDispatcher : INotificationDispatcher
 
                 if (sendResult.IsSuccess)
                 {
-                    notification.MarkDelivered();
-                    await PersistAsync(notification, cancellationToken);
-                    processed++;
-
                     var deliveryEvent = new NotificationDeliveredIntegrationEvent(
                         Guid.NewGuid(),
                         notification.Id,
@@ -174,7 +171,17 @@ public sealed class NotificationDispatcher : INotificationDispatcher
                         notification.AttemptCount,
                         DateTimeOffset.UtcNow);
 
-                    await _messageBus.PublishAsync(deliveryEvent);
+                    // Atomic: the Delivered status and the integration-event envelope commit in ONE
+                    // transaction via the module's co-located outbox — no fire-and-forget. A crash can't
+                    // deliver the event without persisting Delivered, or persist Delivered without the event.
+                    await using var deliveredTx = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+                    notification.MarkDelivered();
+                    await _notificationRepository.UpdateAsync(notification, cancellationToken);
+                    _outbox.Enroll(_dbContext);
+                    await _outbox.PublishAsync(deliveryEvent);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    await deliveredTx.CommitAsync(cancellationToken);
+                    processed++;
 
                     _logger.LogInformation("Notification {NotificationId} delivered via {Channel}", notification.Id, notification.Channel.Name);
                 }

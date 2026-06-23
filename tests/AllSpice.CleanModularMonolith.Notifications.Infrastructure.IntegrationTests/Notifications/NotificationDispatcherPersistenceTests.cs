@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
-using Wolverine;
+using Wolverine.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.IntegrationTests.Notifications;
 
@@ -54,19 +54,25 @@ public sealed class NotificationDispatcherPersistenceTests
             .Setup(b => b.BuildAsync(It.IsAny<Notification>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<NotificationContent>.Success(new NotificationContent("Subject", "Body", false)));
 
+        var outbox = new Mock<IDbContextOutbox>();
         var dispatcher = new NotificationDispatcher(
             repository,
             database.Context,
             [new AlwaysSucceedsEmailChannel()],
             preferenceRepository,
             contentBuilder.Object,
-            Mock.Of<IMessageBus>(),
+            outbox.Object,
             Microsoft.Extensions.Options.Options.Create(new NotificationDispatcherOptions()),
             NullLogger<NotificationDispatcher>.Instance);
 
         var processed = await dispatcher.DispatchPendingAsync(CancellationToken.None);
 
         Assert.Equal(1, processed);
+
+        // F3: the delivered event is routed through the co-located outbox, not fire-and-forget.
+        outbox.Verify(o => o.PublishAsync(
+            It.IsAny<AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging.NotificationDeliveredIntegrationEvent>(),
+            It.IsAny<Wolverine.DeliveryOptions?>()), Times.Once);
 
         // Force a reload from the database — proves the status change was actually persisted, not just
         // mutated in memory (the regression left it unsaved → still Pending on reload).
