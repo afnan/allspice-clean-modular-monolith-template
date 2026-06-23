@@ -5,6 +5,7 @@ using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services.Channels;
 using AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
+using AllSpice.CleanModularMonolith.Notifications.Domain.Enums;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Specifications;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -99,6 +100,20 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // Reclaimed row (Status == Dispatched) that has already exhausted its attempt budget: do NOT
+            // re-send (that attempt was already counted before the crash). Terminalize it to Failed so it
+            // doesn't sit in Dispatched forever. NOTE (at-least-once): a row stranded AFTER a successful
+            // send but before MarkDelivered committed will, if still within budget, be re-sent on reclaim —
+            // i.e. reclaim can duplicate a real delivery. Channel-level idempotency is the true mitigation.
+            if (notification.Status == NotificationStatus.Dispatched &&
+                notification.AttemptCount >= Notification.MaxDeliveryAttempts)
+            {
+                notification.HandleFailure("Stranded in Dispatched after exhausting delivery attempts.");
+                await PersistAsync(notification, cancellationToken);
+                _logger.LogWarning("Notification {NotificationId} terminalized: stranded in Dispatched at max attempts.", notification.Id);
+                continue;
+            }
+
             // Preferences are keyed by local user UUID. Recipient.UserId has three cases:
             //   - empty/whitespace  -> a userless transactional/system notification (e.g. an invitation
             //     email to someone with no account yet). No opt-out preferences apply, so send it.
@@ -181,6 +196,10 @@ public sealed class NotificationDispatcher : INotificationDispatcher
                     await _outbox.PublishAsync(deliveryEvent);
                     await _dbContext.SaveChangesAsync(cancellationToken);
                     await deliveredTx.CommitAsync(cancellationToken);
+
+                    // Deliver promptly rather than waiting for Wolverine's recovery sweep, and reset the
+                    // outbox's in-memory outstanding list so it doesn't accumulate across the batch.
+                    await _outbox.FlushOutgoingMessagesAsync();
                     processed++;
 
                     _logger.LogInformation("Notification {NotificationId} delivered via {Channel}", notification.Id, notification.Channel.Name);

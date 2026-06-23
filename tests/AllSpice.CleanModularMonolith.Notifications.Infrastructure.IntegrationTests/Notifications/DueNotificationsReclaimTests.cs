@@ -48,6 +48,32 @@ public sealed class DueNotificationsReclaimTests
     }
 
     [Fact]
+    public async Task Dispatched_row_at_max_attempts_is_still_reclaimable()
+    {
+        await using var database = await TestSqliteDatabase.CreateAsync();
+        var repository = new NotificationRepository(database.Context);
+
+        var notification = QueuedEmail();
+        const int maxDeliveryAttempts = 5; // mirrors Notification.MaxDeliveryAttempts (internal const)
+        for (var i = 0; i < maxDeliveryAttempts; i++)
+        {
+            notification.RecordAttempt();
+        }
+        notification.MarkDispatched(); // Dispatched, AttemptCount == Max
+        await repository.AddAsync(notification, CancellationToken.None);
+        await database.Context.SaveChangesAsync(CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+
+        // Must still be selected despite AttemptCount == Max, so the dispatcher can terminalize it to
+        // Failed instead of leaving it stranded in Dispatched forever.
+        var selected = await repository.ListAsync(
+            new DueNotificationsSpecification(now, reclaimBefore: now.AddMinutes(5)), CancellationToken.None);
+
+        Assert.Contains(selected, n => n.Id == notification.Id);
+    }
+
+    [Fact]
     public async Task Pending_due_notification_is_always_selected()
     {
         await using var database = await TestSqliteDatabase.CreateAsync();

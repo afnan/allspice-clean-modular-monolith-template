@@ -77,7 +77,7 @@ public static class IdentityPortalAuthenticationBuilderExtensions
             {
                 var accessToken = context.Request.Query["access_token"];
                 if (!string.IsNullOrEmpty(accessToken) &&
-                    context.HttpContext.Request.Path.StartsWithSegments(HubsPathPrefix))
+                    context.Request.Path.StartsWithSegments(HubsPathPrefix))
                 {
                     context.Token = accessToken;
                 }
