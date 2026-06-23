@@ -4,7 +4,9 @@ using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persiste
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services;
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services.Channels;
 using AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging;
+using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Specifications;
+using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
 using Microsoft.Extensions.Logging;
 using Wolverine;
 
@@ -16,6 +18,7 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 public sealed class NotificationDispatcher : INotificationDispatcher
 {
     private readonly INotificationRepository _notificationRepository;
+    private readonly NotificationsDbContext _dbContext;
     private readonly IEnumerable<INotificationChannel> _channels;
     private readonly INotificationPreferenceRepository _preferenceRepository;
     private readonly INotificationContentBuilder _contentBuilder;
@@ -33,6 +36,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     /// <param name="logger">Logger used to record dispatcher activity.</param>
     public NotificationDispatcher(
         INotificationRepository notificationRepository,
+        NotificationsDbContext dbContext,
         IEnumerable<INotificationChannel> channels,
         INotificationPreferenceRepository preferenceRepository,
         INotificationContentBuilder contentBuilder,
@@ -40,11 +44,23 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         ILogger<NotificationDispatcher> logger)
     {
         _notificationRepository = notificationRepository;
+        _dbContext = dbContext;
         _channels = channels;
         _preferenceRepository = preferenceRepository;
         _contentBuilder = contentBuilder;
         _messageBus = messageBus;
         _logger = logger;
+    }
+
+    // The dispatcher runs in a BackgroundService scope, NOT through an ITransactional Mediator command,
+    // so TransactionBehavior never runs for it. Repositories only STAGE writes (see EfRepository), so the
+    // dispatcher owns its own unit of work: stage via the repository, then flush via the module DbContext.
+    // Each notification is persisted independently so a mid-batch failure doesn't lose prior progress, and
+    // the "mark Dispatched before SendAsync" crash-safety guarantee actually reaches the database.
+    private async Task PersistAsync(Notification notification, CancellationToken cancellationToken)
+    {
+        await _notificationRepository.UpdateAsync(notification, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -103,7 +119,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
                     notification.Id,
                     notification.Recipient.UserId);
                 notification.HandleFailure("Invalid Recipient.UserId format; cannot evaluate notification preferences.");
-                await _notificationRepository.UpdateAsync(notification, cancellationToken);
+                await PersistAsync(notification, cancellationToken);
                 continue;
             }
 
@@ -112,14 +128,14 @@ public sealed class NotificationDispatcher : INotificationDispatcher
             // Mark as Dispatched and persist BEFORE sending to prevent duplicate dispatch
             // by the background service polling concurrently.
             notification.MarkDispatched();
-            await _notificationRepository.UpdateAsync(notification, cancellationToken);
+            await PersistAsync(notification, cancellationToken);
 
             var contentResult = await _contentBuilder.BuildAsync(notification, cancellationToken);
             if (!contentResult.IsSuccess)
             {
                 var errorDetail = contentResult.Errors.FirstOrDefault() ?? "Failed to build notification content.";
                 notification.HandleFailure(errorDetail);
-                await _notificationRepository.UpdateAsync(notification, cancellationToken);
+                await PersistAsync(notification, cancellationToken);
                 _logger.LogWarning("Notification {NotificationId} content build failed: {Error}", notification.Id, errorDetail);
                 continue;
             }
@@ -129,7 +145,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
             if (channelHandler is null)
             {
                 notification.HandleFailure($"No notification channel registered for '{notification.Channel.Name}'.");
-                await _notificationRepository.UpdateAsync(notification, cancellationToken);
+                await PersistAsync(notification, cancellationToken);
                 _logger.LogWarning("No channel handler for notification {NotificationId} ({Channel})", notification.Id, notification.Channel.Name);
                 continue;
             }
@@ -141,7 +157,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
                 if (sendResult.IsSuccess)
                 {
                     notification.MarkDelivered();
-                    await _notificationRepository.UpdateAsync(notification, cancellationToken);
+                    await PersistAsync(notification, cancellationToken);
                     processed++;
 
                     var deliveryEvent = new NotificationDeliveredIntegrationEvent(
@@ -161,14 +177,14 @@ public sealed class NotificationDispatcher : INotificationDispatcher
                 {
                     var errorDetail = sendResult.Errors.FirstOrDefault() ?? "Unknown delivery error";
                     notification.HandleFailure(errorDetail);
-                    await _notificationRepository.UpdateAsync(notification, cancellationToken);
+                    await PersistAsync(notification, cancellationToken);
                     _logger.LogWarning("Notification {NotificationId} failed via {Channel}: {Error}", notification.Id, notification.Channel.Name, errorDetail);
                 }
             }
             catch (Exception ex)
             {
                 notification.HandleFailure(ex.Message);
-                await _notificationRepository.UpdateAsync(notification, cancellationToken);
+                await PersistAsync(notification, cancellationToken);
                 _logger.LogError(ex, "Error dispatching notification {NotificationId}", notification.Id);
             }
         }
