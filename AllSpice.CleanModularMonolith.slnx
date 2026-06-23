@@ -22,6 +22,7 @@
     <Project Path="tests/AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests/AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.Notifications.Application.UnitTests/AllSpice.CleanModularMonolith.Notifications.Application.UnitTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.Notifications.Infrastructure.IntegrationTests/AllSpice.CleanModularMonolith.Notifications.Infrastructure.IntegrationTests.csproj" />
+    <Project Path="tests/AllSpice.CleanModularMonolith.Foundation.IntegrationTests/AllSpice.CleanModularMonolith.Foundation.IntegrationTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.Identity.Domain.UnitTests/AllSpice.CleanModularMonolith.Identity.Domain.UnitTests.csproj" />
   </Folder>
   <Folder Name="/_Host/">
