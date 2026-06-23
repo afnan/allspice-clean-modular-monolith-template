@@ -29,35 +29,33 @@ public sealed class QueueNotificationCommandHandler : IRequestHandler<QueueNotif
     /// <inheritdoc />
     public async ValueTask<Result<Guid>> Handle(QueueNotificationCommand request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var recipient = NotificationRecipient.Create(
-                request.RecipientUserId,
-                request.RecipientEmail,
-                request.RecipientPhoneNumber);
+        // No blanket try/catch: invalid input is already rejected as Result.Invalid by ValidationBehavior
+        // (QueueNotificationCommandValidator mirrors the domain guards), and genuine infrastructure faults
+        // must propagate so the integration-event consumer can classify them as transient and retry —
+        // swallowing everything into Result.Error both leaked internal messages and mislabelled permanent
+        // failures as retryable.
+        var recipient = NotificationRecipient.Create(
+            request.RecipientUserId,
+            request.RecipientEmail,
+            request.RecipientPhoneNumber);
 
-            var metadataJson = request.Metadata is null
-                ? null
-                : JsonSerializer.Serialize(request.Metadata);
+        var metadataJson = request.Metadata is null
+            ? null
+            : JsonSerializer.Serialize(request.Metadata);
 
-            var notification = Notification.Queue(
-                request.Channel,
-                recipient,
-                request.Subject,
-                request.Body,
-                request.TemplateKey,
-                metadataJson,
-                request.ScheduledSendUtc,
-                request.CorrelationId);
+        var notification = Notification.Queue(
+            request.Channel,
+            recipient,
+            request.Subject,
+            request.Body,
+            request.TemplateKey,
+            metadataJson,
+            request.ScheduledSendUtc,
+            request.CorrelationId);
 
-            await _notificationRepository.AddAsync(notification, cancellationToken);
+        await _notificationRepository.AddAsync(notification, cancellationToken);
 
-            return Result.Success(notification.Id);
-        }
-        catch (Exception ex)
-        {
-            return Result.Error(ex.Message);
-        }
+        return Result.Success(notification.Id);
     }
 }
 

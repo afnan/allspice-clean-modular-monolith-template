@@ -21,6 +21,20 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   Wolverine main store for shared infrastructure only. Proven by `OutboxAtomicityTests` and
   `HybridOutboxTopologyTests` (Testcontainers).
 
+## Phase 2 notes
+
+- [ ] **F6 — temp password in the invitation pipeline (NEEDS DECISION).** The chosen "minimal" fix (keep the
+  temp password but keep it out of the outbox) is **not cleanly achievable**: invitations flow through the
+  async notification pipeline, so the password is necessarily persisted somewhere on the path (the integration
+  event envelope AND the `Notification.Body` row in notificationsdb). Removing it from only the envelope leaves
+  it in notificationsdb — marginal security gain. The clean fix is the **ideal**: create the Keycloak user with
+  an `UPDATE_PASSWORD` required action and email a set-password link (no credential transported/persisted at
+  all). Recommend adopting the ideal flow; revisit with the user.
+- [x] **F-idemp — addressed by durable messaging (2026-06-24).** Envelope-level redelivery (the realistic
+  duplicate) is deduped by Wolverine's durable inbox / durable local queues (Phase 0). Documented in
+  `NotificationRequestedIntegrationEventConsumer`. Explicit cross-envelope dedup (processed-event store keyed on
+  EventId) remains available as future hardening if needed.
+
 ## Phase 1 review follow-ups (deferred)
 
 - [ ] **Dispatcher outbox atomicity not integration-tested against real Postgres.** The F3 dispatcher test

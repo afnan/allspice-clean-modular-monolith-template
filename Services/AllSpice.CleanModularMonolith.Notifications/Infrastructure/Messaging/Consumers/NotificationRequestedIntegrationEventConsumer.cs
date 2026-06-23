@@ -13,6 +13,11 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.C
 /// </summary>
 public static class NotificationRequestedIntegrationEventConsumer
 {
+    // Idempotency: redelivery of the SAME envelope (the realistic duplicate — handler succeeded but the ack
+    // was lost, or a transient retry) is deduped by Wolverine's durable inbox / durable local queues
+    // (configured in the gateway), which track and skip already-processed envelope IDs. If cross-envelope
+    // dedup is ever required (the same logical event published under two envelope IDs), add an explicit
+    // processed-event store keyed on EventId — tracked in TODOS.md.
     public static async Task HandleAsync(
         NotificationRequestedIntegrationEvent message,
         IMediator mediator,

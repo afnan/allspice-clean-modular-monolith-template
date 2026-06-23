@@ -54,8 +54,12 @@ public class QueueNotificationCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ReturnsError_WhenRecipientInvalid()
+    public async Task Handle_Throws_WhenRecipientInvalid_RatherThanSwallowing()
     {
+        // F-swallow: the handler no longer wraps everything in try/catch → Result.Error. Invalid input is
+        // rejected upstream by ValidationBehavior as Result.Invalid; if a domain guard is still violated the
+        // exception propagates (so the integration-event consumer can classify it) instead of being swallowed
+        // and mislabelled as a generic transient error.
         var command = new QueueNotificationCommand(
             "user-123",
             null,
@@ -68,10 +72,8 @@ public class QueueNotificationCommandHandlerTests
             null,
             null);
 
-        var result = await _handler.Handle(command, CancellationToken.None);
+        await Assert.ThrowsAsync<ArgumentException>(() => _handler.Handle(command, CancellationToken.None).AsTask());
 
-        Assert.Equal(ResultStatus.Error, result.Status);
-        Assert.NotEmpty(result.Errors);
         _repositoryMock.Verify(
             repository => repository.AddAsync(It.IsAny<Notification>(), It.IsAny<CancellationToken>()),
             Times.Never);

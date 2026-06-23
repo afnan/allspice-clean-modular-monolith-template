@@ -34,7 +34,7 @@ public sealed class NotificationContentBuilder : INotificationContentBuilder
         if (string.IsNullOrWhiteSpace(notification.TemplateKey))
         {
             var body = WrapInBrandedLayout(notification.Body, notification.GetMetadata());
-            return Result.Success(new NotificationContent(notification.Subject, body, true));
+            return Result.Success(new NotificationContent(SanitizeSubject(notification.Subject), body, true));
         }
 
         var template = await _templateRepository.GetByKeyAsync(notification.TemplateKey, cancellationToken);
@@ -42,7 +42,7 @@ public sealed class NotificationContentBuilder : INotificationContentBuilder
         if (template is null)
         {
             _logger.LogWarning("Notification template '{TemplateKey}' not found; falling back to stored content.", notification.TemplateKey);
-            return Result.Success(new NotificationContent(notification.Subject, notification.Body, true));
+            return Result.Success(new NotificationContent(SanitizeSubject(notification.Subject), notification.Body, true));
         }
 
         var metadata = notification.GetMetadata();
@@ -50,8 +50,20 @@ public sealed class NotificationContentBuilder : INotificationContentBuilder
         var subject = ReplaceTokens(template.SubjectTemplate, metadata, htmlEncode: false);
         var body2 = ReplaceTokens(template.BodyTemplate, metadata, htmlEncode: template.IsHtml);
 
-        return Result.Success(new NotificationContent(subject, body2, template.IsHtml));
+        return Result.Success(new NotificationContent(SanitizeSubject(subject), body2, template.IsHtml));
     }
+
+    /// <summary>
+    /// Strips CR/LF from a subject line to prevent email-header injection (some senders pass the subject
+    /// through verbatim). Collapses any line breaks to a single space.
+    /// </summary>
+    private static string SanitizeSubject(string subject) =>
+        string.IsNullOrEmpty(subject) ? subject : subject.Replace("\r", " ").Replace("\n", " ").Trim();
+
+    /// <summary>Only http/https URLs are safe to render as a clickable link (blocks <c>javascript:</c> etc.).</summary>
+    private static bool IsHttpUrl(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
     private static string ReplaceTokens(string template, IReadOnlyDictionary<string, string> metadata, bool htmlEncode)
     {
@@ -68,7 +80,7 @@ public sealed class NotificationContentBuilder : INotificationContentBuilder
         var firstName = metadata.TryGetValue("FirstName", out var fn)
             ? System.Net.WebUtility.HtmlEncode(fn)
             : null;
-        var actionUrl = metadata.TryGetValue("ActionUrl", out var url) ? url : null;
+        var actionUrl = metadata.TryGetValue("ActionUrl", out var url) && IsHttpUrl(url) ? url : null;
         var encodedBody = System.Net.WebUtility.HtmlEncode(body);
 
         var contentHtml = "<div style=\"font-size:15px;line-height:1.6;color:#374151;\">";
