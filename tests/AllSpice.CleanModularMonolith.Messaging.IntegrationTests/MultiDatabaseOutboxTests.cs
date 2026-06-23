@@ -56,8 +56,13 @@ public sealed class MultiDatabaseOutboxTests : IAsyncLifetime
 
         await _host.StartAsync();
 
-        // Force provisioning of ALL Wolverine stores, including the enrolled ancillary module database.
+        // Force provisioning of ALL Wolverine stores, including the enrolled module database, by
+        // migrating each registered message store directly.
         await _host.SetupResources();
+        foreach (var store in _host.Services.GetServices<IMessageStore>())
+        {
+            await store.Admin.MigrateAsync();
+        }
     }
 
     public async Task DisposeAsync()
@@ -67,10 +72,7 @@ public sealed class MultiDatabaseOutboxTests : IAsyncLifetime
         await Task.WhenAll(_businessDb.DisposeAsync().AsTask(), _messagingDb.DisposeAsync().AsTask());
     }
 
-    [Fact(Skip = "WIP: Wolverine 5 multi-database provisioning — the enrolled ANCILLARY module DB's envelope " +
-                 "tables are not provisioned by SetupResources/AddResourceSetupOnStartup, so the co-located " +
-                 "outbox write fails. The single-DB transactional outbox is proven in TransactionalOutboxTests. " +
-                 "Resolving the per-module store topology is tracked separately.")]
+    [Fact]
     public async Task Event_from_module_db_outbox_is_delivered_with_a_separate_main_store()
     {
         var probeId = Guid.NewGuid();
