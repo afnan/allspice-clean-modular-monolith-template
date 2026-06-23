@@ -2,16 +2,24 @@ using AllSpice.CleanModularMonolith.SharedKernel.Events;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 
 /// <summary>
-/// Pipeline behavior that wraps transactional commands in an explicit database transaction.
-/// Domain events are dispatched after the handler completes but before the transaction commits,
-/// ensuring atomicity between state changes and event processing.
-/// Only activates for requests implementing <see cref="ITransactional"/>.
+/// Pipeline behavior that owns the unit-of-work boundary for <see cref="ITransactional"/> commands.
+/// <para>
+/// Repositories stage writes only (see <c>EfRepository.SaveChangesAsync</c>), so the handler performs no
+/// database writes itself. After the handler returns, this behavior finds the single dirty module
+/// <see cref="IModuleDbContext"/>, opens a transaction <b>on that context</b>, flushes the staged writes,
+/// drains domain events (which may stage more and may publish integration events that enrol the same
+/// transaction's outbox), then commits — or rolls everything back on any failure.
+/// </para>
+/// <para>
+/// This is what makes commands atomic for <b>every</b> module regardless of DI registration order. The
+/// previous implementation opened the transaction on the first registered context before the handler ran,
+/// which silently targeted the wrong database for any module that was not registered first.
+/// </para>
 /// </summary>
 public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : class, IMessage, ITransactional
@@ -35,99 +43,79 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
         MessageHandlerDelegate<TRequest, TResponse> next,
         CancellationToken cancellationToken)
     {
-        // Design constraint: each command should only touch ONE module's DbContext.
-        // Cross-module communication must use integration events (Wolverine outbox), not
-        // direct writes to another module's DbContext. This behavior begins a transaction
-        // on the first DbContext without one and commits/rolls back atomically.
-        IDbContextTransaction? transaction = null;
-        IModuleDbContext? transactionalContext = null;
+        // Repositories stage only (see EfRepository.SaveChangesAsync), so the handler performs no DB
+        // writes itself. If it throws, nothing was flushed and there is nothing to roll back.
+        var response = await next(request, cancellationToken).ConfigureAwait(false);
 
-        foreach (var ctx in _dbContexts)
+        // Exactly one module DbContext may be dirty. Cross-module side effects must go through
+        // integration events (Wolverine outbox), never a direct write to another module's context.
+        var dirtyContexts = _dbContexts
+            .Where(c => c.Instance.ChangeTracker.HasChanges())
+            .ToList();
+
+        if (dirtyContexts.Count == 0)
         {
-            var db = ctx.Instance;
-            if (db.Database.CurrentTransaction is null)
-            {
-                transactionalContext = ctx;
-                transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogDebug("Began transaction {TransactionId} for {RequestType}",
-                    transaction.TransactionId, typeof(TRequest).Name);
-                break;
-            }
+            return response; // nothing staged — no transaction needed
         }
 
+        if (dirtyContexts.Count > 1)
+        {
+            var contextNames = string.Join(", ", dirtyContexts.Select(c => c.Instance.GetType().Name));
+            throw new InvalidOperationException(
+                $"{typeof(TRequest).Name} mutated multiple module DbContexts ({contextNames}). " +
+                "A command must touch only one module. Cross-module side effects must be " +
+                "published as integration events through IIntegrationEventPublisher so the " +
+                "Wolverine outbox can deliver them transactionally.");
+        }
+
+        var db = dirtyContexts[0].Instance;
+        var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        _logger.LogDebug("Began transaction {TransactionId} for {RequestType}",
+            transaction.TransactionId, typeof(TRequest).Name);
         try
         {
-            var response = await next(request, cancellationToken).ConfigureAwait(false);
+            // Flush the handler's staged writes inside the transaction.
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-            // Architectural invariant: a single command must touch only ONE module's
-            // DbContext. The transaction was opened on the first dirty context above;
-            // any other dirty context's writes would NOT be covered by it, silently
-            // breaking atomicity. Cross-module communication must go through the
-            // Wolverine integration-event outbox instead.
-            //
-            // Fail fast — a logged warning was the previous behavior and was easily
-            // missed in production logs.
-            var dirtyContexts = _dbContexts.Where(c => c.Instance.ChangeTracker.HasChanges()).ToList();
-            if (dirtyContexts.Count > 1)
+            // Drain-loop: dispatch domain events (including second-generation events raised by event
+            // handlers) until none remain. Integration events are published here — by domain-event
+            // handlers running inside this open transaction — so the publisher's "active transaction
+            // required" guard is satisfied and the outbox envelope enrols this same transaction.
+            bool hasMore = true;
+            while (hasMore)
             {
-                var contextNames = string.Join(", ", dirtyContexts.Select(c => c.Instance.GetType().Name));
-                throw new InvalidOperationException(
-                    $"{typeof(TRequest).Name} mutated multiple module DbContexts ({contextNames}). " +
-                    "A command must touch only one module. Cross-module side effects must be " +
-                    "published as integration events through IIntegrationEventPublisher so the " +
-                    "Wolverine outbox can deliver them transactionally.");
-            }
+                var events = db.ChangeTracker
+                    .Entries<IHasDomainEvents>()
+                    .SelectMany(e => e.Entity.TakeDomainEvents())
+                    .ToList();
 
-            // Drain-loop: dispatch domain events, including second-generation events
-            // raised by event handlers, until no more remain.
-            foreach (var ctx in _dbContexts)
-            {
-                bool hasMore = true;
-                while (hasMore)
+                if (events.Count == 0)
                 {
-                    var events = ctx.Instance.ChangeTracker
-                        .Entries<IHasDomainEvents>()
-                        .SelectMany(e => e.Entity.TakeDomainEvents())
-                        .ToList();
-
-                    if (events.Count == 0)
-                    {
-                        hasMore = false;
-                        continue;
-                    }
-
-                    _logger.LogDebug("Dispatching {Count} domain events", events.Count);
-                    await _dispatcher.DispatchAsync(events, cancellationToken).ConfigureAwait(false);
-                    await ctx.Instance.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                    hasMore = false;
+                    continue;
                 }
+
+                _logger.LogDebug("Dispatching {Count} domain events", events.Count);
+                await _dispatcher.DispatchAsync(events, cancellationToken).ConfigureAwait(false);
+                await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            if (transaction is not null)
-            {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogDebug("Committed transaction {TransactionId} for {RequestType}",
-                    transaction.TransactionId, typeof(TRequest).Name);
-            }
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogDebug("Committed transaction {TransactionId} for {RequestType}",
+                transaction.TransactionId, typeof(TRequest).Name);
 
             return response;
         }
         catch
         {
-            if (transaction is not null)
-            {
-                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogWarning("Rolled back transaction {TransactionId} for {RequestType}",
-                    transaction.TransactionId, typeof(TRequest).Name);
-            }
-
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogWarning("Rolled back transaction {TransactionId} for {RequestType}",
+                transaction.TransactionId, typeof(TRequest).Name);
             throw;
         }
         finally
         {
-            if (transaction is not null)
-            {
-                await transaction.DisposeAsync().ConfigureAwait(false);
-            }
+            await transaction.DisposeAsync().ConfigureAwait(false);
         }
     }
 }
