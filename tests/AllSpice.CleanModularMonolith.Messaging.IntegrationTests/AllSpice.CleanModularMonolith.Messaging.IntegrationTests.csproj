@@ -25,4 +25,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Services\AllSpice.CleanModularMonolith.Identity\AllSpice.CleanModularMonolith.Identity.csproj" />
+    <ProjectReference Include="..\..\Services\AllSpice.CleanModularMonolith.Notifications\AllSpice.CleanModularMonolith.Notifications.csproj" />
+  </ItemGroup>
+
 </Project>

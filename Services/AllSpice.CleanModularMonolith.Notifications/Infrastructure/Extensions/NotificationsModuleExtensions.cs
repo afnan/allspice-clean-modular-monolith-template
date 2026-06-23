@@ -2,6 +2,7 @@ using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Resend;
+using Wolverine.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
 
@@ -22,7 +23,11 @@ public static class NotificationsModuleExtensions
         this IHostApplicationBuilder builder,
         ILogger logger)
     {
-        builder.AddNpgsqlDbContext<NotificationsDbContext>(DatabaseResourceName);
+        // Register the DbContext with Wolverine's EF Core integration so this module's database hosts
+        // its own durable outbox/inbox (see NotificationsDbContext.OnModelCreating). The connection string
+        // is injected by Aspire via the referenced "notificationsdb" resource.
+        var connectionString = builder.Configuration[$"ConnectionStrings:{DatabaseResourceName}"];
+        builder.Services.AddDbContextWithWolverineIntegration<NotificationsDbContext>(options => options.UseNpgsql(connectionString));
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<NotificationsDbContext>());
 
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
