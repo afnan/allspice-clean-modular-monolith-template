@@ -33,6 +33,28 @@ public class NotificationContentBuilderTests
         Assert.DoesNotContain('\n', result.Value.Subject);
     }
 
+    [Theory]
+    [InlineData("Hello\rBcc: evil")]
+    [InlineData("Hello\nBcc: evil")]
+    public async Task BuildAsync_strips_lone_cr_or_lf_from_subject(string rawSubject)
+    {
+        var result = await BuildSut().BuildAsync(QueuedWith(rawSubject, metadataJson: null));
+
+        Assert.True(result.IsSuccess);
+        Assert.DoesNotContain('\r', result.Value.Subject);
+        Assert.DoesNotContain('\n', result.Value.Subject);
+    }
+
+    [Fact]
+    public async Task BuildAsync_drops_protocol_relative_action_url()
+    {
+        var metadataJson = JsonSerializer.Serialize(new Dictionary<string, string> { ["ActionUrl"] = "//evil.com/x" });
+        var result = await BuildSut().BuildAsync(QueuedWith("Subject", metadataJson));
+
+        Assert.True(result.IsSuccess);
+        Assert.DoesNotContain("evil.com", result.Value.Body, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task BuildAsync_drops_non_http_action_url()
     {

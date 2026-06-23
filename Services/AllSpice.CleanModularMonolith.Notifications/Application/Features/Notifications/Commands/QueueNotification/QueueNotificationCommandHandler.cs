@@ -29,8 +29,9 @@ public sealed class QueueNotificationCommandHandler : IRequestHandler<QueueNotif
     /// <inheritdoc />
     public async ValueTask<Result<Guid>> Handle(QueueNotificationCommand request, CancellationToken cancellationToken)
     {
-        // No blanket try/catch: invalid input is already rejected as Result.Invalid by ValidationBehavior
-        // (QueueNotificationCommandValidator mirrors the domain guards), and genuine infrastructure faults
+        // No blanket try/catch: invalid input is thrown by ValidationBehavior and mapped to Result.Invalid by
+        // DomainExceptionBehavior (QueueNotificationCommandValidator mirrors the domain guards). If either
+        // behavior is removed/reordered this safety net breaks. Genuine infrastructure faults
         // must propagate so the integration-event consumer can classify them as transient and retry —
         // swallowing everything into Result.Error both leaked internal messages and mislabelled permanent
         // failures as retryable.

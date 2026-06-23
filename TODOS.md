@@ -35,6 +35,13 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   `NotificationRequestedIntegrationEventConsumer`. Explicit cross-envelope dedup (processed-event store keyed on
   EventId) remains available as future hardening if needed.
 
+- [ ] **Unknown notification channel 500s before the pipeline (pre-existing).** `QueueNotificationEndpoint`
+  calls `NotificationChannel.FromName(req.Channel, ignoreCase: true)` before the mediator pipeline; SmartEnum
+  throws `SmartEnumNotFoundException` (→ 500) for an unrecognized channel, and there's no request validator on
+  `QueueNotificationRequest`. Add an endpoint validator (or `TryFromName`) returning 400. Also `MapChannel` in
+  the consumer throws plain `ArgumentOutOfRangeException` for an unknown channel — inconsistent with that file's
+  transient/permanent split (would dead-letter). Not a regression; surfaced during Phase 2a review.
+
 ## Phase 1 review follow-ups (deferred)
 
 - [ ] **Dispatcher outbox atomicity not integration-tested against real Postgres.** The F3 dispatcher test

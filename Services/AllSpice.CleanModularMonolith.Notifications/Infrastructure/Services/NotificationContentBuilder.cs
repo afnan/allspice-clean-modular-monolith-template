@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.RegularExpressions;
 using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
@@ -16,6 +17,10 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 public sealed class NotificationContentBuilder : INotificationContentBuilder
 {
     private static readonly Regex TokenRegex = new(@"{{(?<key>[^}]+)}}", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    // Line-break characters that must not survive in an email subject (header-injection vectors):
+    // CR, LF, NEL (0x85), and the Unicode line/paragraph separators (0x2028/0x2029).
+    private static readonly char[] LineBreakChars = ['\r', '\n', (char)0x0085, (char)0x2028, (char)0x2029];
 
     private readonly INotificationTemplateRepository _templateRepository;
     private readonly ILogger<NotificationContentBuilder> _logger;
@@ -54,11 +59,20 @@ public sealed class NotificationContentBuilder : INotificationContentBuilder
     }
 
     /// <summary>
-    /// Strips CR/LF from a subject line to prevent email-header injection (some senders pass the subject
-    /// through verbatim). Collapses any line breaks to a single space.
+    /// Replaces every line-break character with a space to prevent email-header injection (some senders
+    /// pass the subject through verbatim). Covers CR, LF, NEL (0x85), and the Unicode line/paragraph
+    /// separators (0x2028/0x2029) — not just ASCII CRLF — then trims the result.
     /// </summary>
-    private static string SanitizeSubject(string subject) =>
-        string.IsNullOrEmpty(subject) ? subject : subject.Replace("\r", " ").Replace("\n", " ").Trim();
+    private static string SanitizeSubject(string subject)
+    {
+        if (string.IsNullOrEmpty(subject))
+        {
+            return subject;
+        }
+
+        var cleaned = new string(subject.Select(c => LineBreakChars.Contains(c) ? ' ' : c).ToArray());
+        return cleaned.Trim();
+    }
 
     /// <summary>Only http/https URLs are safe to render as a clickable link (blocks <c>javascript:</c> etc.).</summary>
     private static bool IsHttpUrl(string? value) =>
