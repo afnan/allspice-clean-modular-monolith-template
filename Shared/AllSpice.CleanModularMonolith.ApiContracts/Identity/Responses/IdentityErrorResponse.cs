@@ -4,4 +4,4 @@ namespace AllSpice.CleanModularMonolith.ApiContracts.Identity.Responses;
 /// Standard error response returned by identity endpoints.
 /// </summary>
 /// <param name="Errors">Collection of error messages.</param>
-public sealed record IdentityErrorResponse(string[] Errors);
+public sealed record IdentityErrorResponse(IReadOnlyCollection<string> Errors);

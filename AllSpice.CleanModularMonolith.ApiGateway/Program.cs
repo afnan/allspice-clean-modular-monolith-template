@@ -1,6 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using Wolverine.Persistence.Durability;
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure Serilog
@@ -21,13 +18,6 @@ try
   // Ensure module databases
   await app.EnsureNotificationsModuleDatabaseAsync();
   await app.EnsureIdentityModuleDatabaseAsync();
-
-  // Provision each module's co-located Wolverine outbox/inbox schema. Wolverine auto-builds its main
-  // store, but the enrolled ancillary module store must be migrated explicitly.
-  foreach (var messageStore in app.Services.GetServices<IMessageStore>())
-  {
-    await messageStore.Admin.MigrateAsync();
-  }
 
   app.UseGatewayPipeline();
   app.MapHub<AppHub>("/hubs/app");

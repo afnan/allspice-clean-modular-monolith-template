@@ -1,12 +1,10 @@
 using AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.Messaging;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consumers;
-using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
 using AllSpice.CleanModularMonolith.SharedKernel.Events;
 using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
 using Wolverine;
 using Wolverine.EntityFrameworkCore;
 using Wolverine.ErrorHandling;
-using Wolverine.Persistence.Durability;
 using Wolverine.Postgresql;
 
 namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
@@ -30,14 +28,12 @@ public static class GatewayModuleRegistrationExtensions
         builder.AddNotificationsModuleServices(logger);
         builder.AddIdentityModuleServices(logger);
 
-        var identityConnectionString = builder.Configuration.GetConnectionString("identitydb");
-        var notificationsConnectionString = builder.Configuration.GetConnectionString("notificationsdb");
-        if (string.IsNullOrWhiteSpace(identityConnectionString) || string.IsNullOrWhiteSpace(notificationsConnectionString))
+        var messagingConnectionString = builder.Configuration.GetConnectionString("messagingdb");
+        if (string.IsNullOrWhiteSpace(messagingConnectionString))
         {
             throw new InvalidOperationException(
-                "Connection strings 'identitydb' and 'notificationsdb' are required. Each module hosts its own " +
-                "Wolverine durable outbox co-located with its data; ensure the AppHost references both database " +
-                "resources on the gateway project.");
+                "Connection string 'messagingdb' is required. Wolverine is configured for durable PostgreSQL persistence " +
+                "and refuses to start in-memory. Ensure the AppHost references the messagingdb resource on the gateway project.");
         }
 
         builder.Host.UseWolverine(opts =>
@@ -47,14 +43,10 @@ public static class GatewayModuleRegistrationExtensions
             // EF Core transaction middleware: Wolverine wraps handlers in EF Core transactions
             opts.UseEntityFrameworkCoreTransactions();
 
-            // True transactional outbox: each module's durable outbox/inbox is co-located in its OWN
-            // database (see {Module}DbContext.OnModelCreating + AddDbContextWithWolverineIntegration), so an
-            // integration event is persisted in the SAME transaction as the command's business data. There is
-            // no shared messaging database. Identity's database is the main Wolverine store; Notifications is
-            // an enrolled ancillary store. The non-main store's schema is provisioned at startup (Program.cs).
-            opts.PersistMessagesWithPostgresql(identityConnectionString, "wolverine");
-            opts.PersistMessagesWithPostgresql(notificationsConnectionString, "wolverine", MessageStoreRole.Ancillary)
-                .Enroll<NotificationsDbContext>();
+            // Durable outbox/inbox: store message envelopes in PostgreSQL ("wolverine" schema).
+            // AutoBuildMessageStorageOnStartup defaults to CreateOrUpdate, so the schema is
+            // provisioned automatically on first run — no manual migration required.
+            opts.PersistMessagesWithPostgresql(messagingConnectionString, "wolverine");
 
             // Make every transport durable by default.
             opts.Policies.UseDurableLocalQueues();

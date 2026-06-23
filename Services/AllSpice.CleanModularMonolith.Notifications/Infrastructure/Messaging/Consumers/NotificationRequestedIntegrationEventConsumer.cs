@@ -1,3 +1,4 @@
+using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Commands.QueueNotification;
 using AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging;
 using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
@@ -35,10 +36,22 @@ public static class NotificationRequestedIntegrationEventConsumer
         var result = await mediator.Send(command, cancellationToken);
         if (!result.IsSuccess)
         {
-            // Use a typed transient exception so the gateway's Wolverine retry policy
-            // only retries genuine messaging failures — not arbitrary
-            // InvalidOperationExceptions thrown by application bugs (which would
-            // otherwise loop forever instead of being dead-lettered).
+            // Permanent failures (validation, not-found, authorization) will fail identically on
+            // every retry, so retrying only wastes the budget before dead-lettering. Log and drop.
+            if (result.Status is ResultStatus.Invalid or ResultStatus.NotFound
+                or ResultStatus.Forbidden or ResultStatus.Unauthorized)
+            {
+                var errors = result.Status == ResultStatus.Invalid
+                    ? string.Join("; ", result.ValidationErrors.Select(e => e.ErrorMessage))
+                    : string.Join("; ", result.Errors);
+                logger.LogError(
+                    "Dropping notification request for {Recipient}: permanent failure ({Status}): {Errors}",
+                    message.RecipientEmail, result.Status, errors);
+                return;
+            }
+
+            // Transient failures (e.g. database unavailable) — surface a typed transient exception so
+            // the gateway's Wolverine retry policy retries, rather than dead-lettering immediately.
             throw new TransientMessagingException(
                 $"Failed to queue notification for {message.RecipientEmail}: {string.Join("; ", result.Errors)}");
         }

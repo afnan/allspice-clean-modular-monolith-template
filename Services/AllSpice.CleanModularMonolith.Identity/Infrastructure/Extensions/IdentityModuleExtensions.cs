@@ -7,7 +7,6 @@ using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Quartz;
-using Wolverine.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 
@@ -29,11 +28,7 @@ public static class IdentityModuleExtensions
         this IHostApplicationBuilder builder,
         ILogger logger)
     {
-        // Register the DbContext with Wolverine's EF Core integration so this module's database hosts
-        // its own durable outbox/inbox (see IdentityDbContext.OnModelCreating). The connection string is
-        // injected by Aspire via the referenced "identitydb" resource.
-        var connectionString = builder.Configuration[$"ConnectionStrings:{DatabaseResourceName}"];
-        builder.Services.AddDbContextWithWolverineIntegration<IdentityDbContext>(options => options.UseNpgsql(connectionString));
+        builder.AddNpgsqlDbContext<IdentityDbContext>(DatabaseResourceName);
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
         builder.Services.AddScoped<IUserRepository, UserRepository>();

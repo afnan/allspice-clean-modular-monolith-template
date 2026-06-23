@@ -1,4 +1,3 @@
-using AllSpice.CleanModularMonolith.ApiContracts.Notifications.Responses;
 using AllSpice.CleanModularMonolith.Notifications.Application.DTOs;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 
@@ -19,18 +18,4 @@ public static class NotificationMapper
         notification.LastUpdatedUtc,
         notification.CorrelationId,
         notification.Status.Name);
-
-    public static NotificationResponse ToResponse(NotificationDto dto) => new(
-        dto.Id,
-        dto.Channel,
-        dto.Subject,
-        dto.Body,
-        dto.RecipientUserId,
-        dto.RecipientEmail,
-        dto.RecipientPhoneNumber,
-        dto.CreatedUtc,
-        dto.ScheduledSendUtc,
-        dto.LastUpdatedUtc,
-        dto.CorrelationId,
-        dto.Status);
 }

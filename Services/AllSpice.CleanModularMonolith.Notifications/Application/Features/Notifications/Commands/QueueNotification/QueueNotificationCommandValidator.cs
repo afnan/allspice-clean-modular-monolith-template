@@ -6,8 +6,15 @@ public sealed class QueueNotificationCommandValidator : AbstractValidator<QueueN
 {
     public QueueNotificationCommandValidator()
     {
-        RuleFor(x => x.RecipientUserId)
-            .NotEmpty();
+        // RecipientUserId is optional: a notification can target a "userless" recipient identified
+        // only by a contact method (e.g. an invitation email to someone with no local account yet).
+        // When present it must be the recipient's canonical local UUID.
+        When(x => !string.IsNullOrWhiteSpace(x.RecipientUserId), () =>
+        {
+            RuleFor(x => x.RecipientUserId)
+                .Must(id => Guid.TryParse(id, out _))
+                .WithMessage("RecipientUserId must be a valid GUID when provided.");
+        });
 
         When(x => string.IsNullOrWhiteSpace(x.TemplateKey), () =>
         {

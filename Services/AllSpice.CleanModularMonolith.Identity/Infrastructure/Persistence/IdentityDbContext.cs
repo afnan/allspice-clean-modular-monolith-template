@@ -3,7 +3,6 @@ using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Entities;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Wolverine.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
 
@@ -37,10 +36,6 @@ public sealed class IdentityDbContext : DbContext, IModuleDbContext
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdentityDbContext).Assembly);
         modelBuilder.ApplySoftDeleteFilters();
-
-        // Co-locate the Wolverine durable outbox/inbox tables in this module's own database so
-        // integration events are persisted in the SAME transaction as the business data.
-        modelBuilder.MapWolverineEnvelopeStorage("wolverine");
     }
 }
 
