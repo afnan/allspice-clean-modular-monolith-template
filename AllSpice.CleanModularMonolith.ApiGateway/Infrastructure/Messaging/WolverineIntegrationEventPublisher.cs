@@ -16,10 +16,12 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.Messaging;
 /// context</b>, the lookup below resolves exactly that context and enrols it into the outbox.
 /// </para>
 /// <para>
-/// Outbox atomicity depends on where the envelope tables live: once they are co-located in each
-/// module's own database (see the per-module Wolverine wiring), the envelope insert and the command's
-/// data commit are one atomic transaction. Until then the envelope store is separate and the two
-/// commits are independent.
+/// The envelope tables are co-located in each module's own database (see
+/// <c>{Module}DbContext.MapWolverineEnvelopeStorage</c> + the gateway's ancillary-store registration),
+/// so the envelope insert and the command's data commit are ONE atomic transaction — a crash can no
+/// longer drop or orphan an event. The shared <c>messagingdb</c> store holds only Wolverine's
+/// cross-module infrastructure (inbox, durable local queues, scheduled, dead-letter), never business
+/// outbox envelopes.
 /// </para>
 /// </summary>
 public sealed class WolverineIntegrationEventPublisher : IIntegrationEventPublisher

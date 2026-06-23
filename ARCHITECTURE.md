@@ -57,10 +57,10 @@ Services/{Module}/
 | CQRS / Mediator | **Mediator** (source-generated, scoped lifetime via `MediatorConfiguration.cs`) |
 | Validation | **FluentValidation** + SharedKernel `ValidationBehavior` pipeline |
 | API endpoints | **FastEndpoints** (not controllers) |
-| Messaging | **WolverineFx** with PostgreSQL durable outbox, centralized in the gateway with typed transient-only retry |
-| Integration events | **IIntegrationEventPublisher** (SharedKernel) → `WolverineIntegrationEventPublisher` (gateway). Outbox survives crashes |
-| Transactional commands | `TransactionBehavior` — commands implement `ITransactional` for automatic transaction + domain-event dispatch |
-| EF interceptors | `ConcurrencyDiagnosticInterceptor`, `AuditableEntityInterceptor` (attached via the SP-aware pooled registration — see AGENTS.md §6) |
+| Messaging | **WolverineFx** with a per-module **co-located transactional outbox** (envelopes in each module DB; `messagingdb` = infra-only main store), typed transient-only retry |
+| Integration events | **IIntegrationEventPublisher** (SharedKernel) → `WolverineIntegrationEventPublisher` (gateway). Envelope commits atomically with the state change; survives crashes |
+| Transactional commands | `TransactionBehavior` — repositories stage only; the behavior owns the single flush+commit on the dirty module context (a real unit of work) + domain-event dispatch |
+| EF interceptors | `ConcurrencyDiagnosticInterceptor`, `AuditableEntityInterceptor` (attached via the SP-aware `AddDbContextWithWolverineIntegration` registration — see AGENTS.md §6) |
 | Soft delete | `SoftDeleteQueryFilterConvention` auto-filters `ISoftDelete` entities in `OnModelCreating` |
 | Scheduling | **Quartz.NET** (registered in ServiceDefaults, jobs per module) |
 | Realtime | **SignalR** via `Shared/RealTime/AppHub` at `/hubs/app` |
@@ -127,10 +127,15 @@ Email with provider fallback + in-app channel:
 
 ## Database strategy
 
-Each module owns its DbContext and an Aspire database resource (`identitydb`, `notificationsdb`); Wolverine
-uses a dedicated `messagingdb` for outbox envelopes. Schema changes use **EF Core migrations** — `MigrateAsync`
-runs at startup with retry (`MigrationRunner`). Design-time `DbContextFactory` classes read connection details
-from `EF_DESIGN_*` env vars (no hardcoded password; they fail fast if none is provided).
+Each module owns its DbContext and an Aspire database resource (`identitydb`, `notificationsdb`). The Wolverine
+outbox is a **true transactional outbox**: each module's outbox envelope tables are **co-located in its own
+database** (`MapWolverineEnvelopeStorage` + an enrolled ancillary store), so an integration event commits
+atomically with the state change that produced it. The dedicated `messagingdb` is the Wolverine **main store**
+and holds only shared infrastructure (inbox, durable local queues, scheduled messages, dead-letter). Schema
+changes use **EF Core migrations** — `MigrateAsync` runs at startup with retry and a **Postgres advisory lock**
+(`MigrationRunner`) so concurrent instances can't race the same migration; Wolverine envelope schemas are
+provisioned at startup via `IMessageStore.Admin.MigrateAsync`. Design-time `DbContextFactory` classes read
+connection details from `EF_DESIGN_*` env vars (no hardcoded password; they fail fast if none is provided).
 
 ```bash
 EF_DESIGN_DB_PASSWORD=<local-pg-password> dotnet ef migrations add <Name> \

@@ -15,22 +15,19 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   implemented in the gateway. Add an integration test (Testcontainers Postgres) that asserts
   commit → immediate send before changing behavior.
 
-- [ ] **Cross-DB atomicity is a known limitation of the shared `messagingdb` model.** Envelope
-  inserts (messagingdb) and command data commits (identitydb/notificationsdb) are separate
-  transactions, so a crash between them can drop/orphan an event. Documented in
-  `WolverineIntegrationEventPublisher` XML-doc. Revisit if true exactly-once is required
-  (co-locate the outbox per module — was prototyped then reverted in favor of the single store).
+- [x] **Cross-DB atomicity — RESOLVED (2026-06-23, Phase 0).** Now a true transactional outbox: each
+  module's envelope tables are co-located in its own database (`MapWolverineEnvelopeStorage` + enrolled
+  ancillary store), so the envelope commits atomically with the state change. `messagingdb` is now the
+  Wolverine main store for shared infrastructure only. Proven by `OutboxAtomicityTests` and
+  `HybridOutboxTopologyTests` (Testcontainers).
 
 ## Startup / Migrations
 
-- [ ] **Concurrent migration race (P1).** `MigrationRunner.RunWithRetryAsync` runs
-  `MigrateAsync` with no cross-instance lock. Multiple gateway instances booting against the
-  same database can race the same un-applied migration ("relation already exists" / partial
-  apply); the retry just re-races. Serialize with a Postgres advisory lock
-  (`pg_advisory_lock(<stable-hash>)` on a dedicated Npgsql connection) around the migrate, in
-  the module `EnsureXModuleDatabaseAsync` extensions (Npgsql is available there; SharedKernel
-  stays provider-agnostic and the SQLite test DBs are unaffected). Guard so it only runs for
-  the Npgsql provider.
+- [x] **Concurrent migration race (P1) — RESOLVED (2026-06-23, Phase 0).** `MigrationRunner` now wraps
+  `MigrateAsync` in a session-scoped `pg_advisory_lock` keyed per DbContext (held on an explicitly-opened
+  connection), so concurrent instances serialize instead of racing. Npgsql-only (detected by provider name);
+  SharedKernel stays provider-agnostic and SQLite test DBs migrate directly. Proven by
+  `AdvisoryLockMigrationTests`.
 
 ## In-app notification dispatch
 
