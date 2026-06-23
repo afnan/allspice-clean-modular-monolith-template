@@ -7,20 +7,19 @@ using Wolverine.EntityFrameworkCore;
 namespace AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.Messaging;
 
 /// <summary>
-/// Publishes integration events through Wolverine's durable outbox (a shared <c>messagingdb</c>
-/// PostgreSQL store) for reliable at-least-once delivery with crash recovery.
+/// Publishes integration events through Wolverine's durable outbox for reliable at-least-once
+/// delivery with crash recovery.
 /// <para>
 /// Refuses to publish outside an active transaction — callers must run inside an
-/// <c>ITransactional</c> command so <c>TransactionBehavior</c> has opened a DbContext
-/// transaction beforehand, scoping publication to a command context.
+/// <c>ITransactional</c> command so <c>TransactionBehavior</c> has opened a DbContext transaction
+/// beforehand. Because the behavior now opens that transaction on the <b>single dirty module
+/// context</b>, the lookup below resolves exactly that context and enrols it into the outbox.
 /// </para>
 /// <para>
-/// NOTE: because the outbox store (<c>messagingdb</c>) is a separate database from the module's
-/// data (<c>identitydb</c>/<c>notificationsdb</c>), the envelope insert and the command's data
-/// commit are two independent transactions. They are therefore NOT atomic: a crash between the
-/// two commits can drop or orphan an event. Durable recovery still re-delivers persisted
-/// envelopes, but exactly-once/atomic semantics require co-locating the outbox in each module's
-/// own database. Accepted trade-off for the simpler single-store model.
+/// Outbox atomicity depends on where the envelope tables live: once they are co-located in each
+/// module's own database (see the per-module Wolverine wiring), the envelope insert and the command's
+/// data commit are one atomic transaction. Until then the envelope store is separate and the two
+/// commits are independent.
 /// </para>
 /// </summary>
 public sealed class WolverineIntegrationEventPublisher : IIntegrationEventPublisher
