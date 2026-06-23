@@ -141,7 +141,7 @@ EF_DESIGN_DB_PASSWORD=<local-pg-pw> dotnet ef migrations add <Name> \
 
 | Need | Use |
 |---|---|
-| Result → HTTP ProblemDetails | `result.ExecuteFailureAsync(HttpContext)` (`SharedKernel`/`Web`) |
+| Result → HTTP ProblemDetails | `result.ExecuteFailureAsync(HttpContext)` (`Web`) |
 | Argument/invariant validation | `Ardalis.GuardClauses` |
 | Request validation | FluentValidation + `ValidationBehavior` |
 | Transaction + domain-event dispatch | implement `ITransactional` (pre-commit dispatch in `TransactionBehavior`) |

@@ -23,6 +23,11 @@ avoid duplicating them here.
 
 - **Config:** `.template.config/template.json`. `sourceName` drives the rename; the `sources.modifiers.exclude`
   list controls what is left out of generated projects.
+- **Placeholder tokens:** several shipping files (`*/appsettings.json`, `GatewayServiceCollectionExtensions.cs`,
+  email templates, `README.md`) contain `{{ProjectName}}` / `{{ProjectNameLower}}` tokens. ⚠️ These are NOT
+  `sourceName` and are **not currently wired** — `template.json` has no `symbols` for them, so a scaffolded
+  project ships the literal `{{...}}` strings. Either add `symbols` (with `replaces`) for them or convert them
+  to `sourceName`-derived values, and cover it in the smoke test below. See `TODOS.md`.
 - **Excluded from generated projects:** `.git/**`, `.serena/**`, `.mcp.json`, `.template.config/**`,
   `**/bin/**`, `**/obj/**`, and **`CLAUDE.md`** (this file). Everything else ships — including `AGENTS.md`,
   `ARCHITECTURE.md`, `README.md`, `GETTING_STARTED.md`, and `.github/`.
