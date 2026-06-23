@@ -28,6 +28,9 @@ public class NotificationRepositoryIntegrationTests
             correlationId: "corr-1");
 
         await repository.AddAsync(notification, CancellationToken.None);
+        // Repositories now stage only; flush via the context (the unit-of-work boundary that
+        // TransactionBehavior owns in production). See EfRepository.SaveChangesAsync.
+        await database.Context.SaveChangesAsync(CancellationToken.None);
 
         var stored = await database.Context.Notifications
             .Include(n => n.Recipient)
@@ -63,6 +66,7 @@ public class NotificationRepositoryIntegrationTests
 
         await repository.AddAsync(matching, CancellationToken.None);
         await repository.AddAsync(other, CancellationToken.None);
+        await database.Context.SaveChangesAsync(CancellationToken.None);
 
         var specification = new NotificationsByUserSpecification("user-123");
 

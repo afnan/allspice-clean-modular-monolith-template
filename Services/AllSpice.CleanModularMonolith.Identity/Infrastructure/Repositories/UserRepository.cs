@@ -2,12 +2,12 @@ using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
 using AllSpice.CleanModularMonolith.SharedKernel.Common;
-using Ardalis.Specification.EntityFrameworkCore;
+using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Repositories;
 
-public sealed class UserRepository : RepositoryBase<User>, IUserRepository
+public sealed class UserRepository : EfRepository<IdentityDbContext, User>, IUserRepository
 {
     private readonly IdentityDbContext _dbContext;
 

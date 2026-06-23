@@ -28,6 +28,19 @@ public class EfRepository<TContext, TAggregate> :
         : base(dbContext)
     {
     }
+
+    /// <summary>
+    /// Track-only: the inherited write methods (<c>AddAsync</c>/<c>UpdateAsync</c>/<c>DeleteAsync</c>)
+    /// call this to persist, but here it is a no-op so they only STAGE entities in the change tracker.
+    /// The unit-of-work boundary — the single real <c>SaveChanges</c> + <c>Commit</c> — is owned by
+    /// <c>TransactionBehavior</c>, which calls <c>SaveChanges</c> on the module <see cref="DbContext"/>
+    /// directly inside one transaction. This is what makes <c>ITransactional</c> commands atomic:
+    /// nothing is written until the behavior commits, so any failure rolls back every change together.
+    /// Reads are unaffected. Background/seed code that needs an immediate flush must call
+    /// <c>SaveChangesAsync</c> on the <see cref="DbContext"/> itself, not through the repository.
+    /// </summary>
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(0);
 }
 
 

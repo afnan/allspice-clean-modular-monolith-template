@@ -1,12 +1,12 @@
-using Ardalis.Specification.EntityFrameworkCore;
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
+using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Repositories;
 
-public sealed class NotificationTemplateRepository : RepositoryBase<NotificationTemplate>, INotificationTemplateRepository
+public sealed class NotificationTemplateRepository : EfRepository<NotificationsDbContext, NotificationTemplate>, INotificationTemplateRepository
 {
     private readonly NotificationsDbContext _dbContext;
 

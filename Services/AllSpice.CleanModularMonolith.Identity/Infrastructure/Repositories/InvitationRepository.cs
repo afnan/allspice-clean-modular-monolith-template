@@ -1,6 +1,6 @@
-using Ardalis.Specification.EntityFrameworkCore;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.SharedKernel.Common;
+using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Invitation;
 using AllSpice.CleanModularMonolith.Identity.Domain.Enums;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Repositories;
 
-public sealed class InvitationRepository : RepositoryBase<Invitation>, IInvitationRepository
+public sealed class InvitationRepository : EfRepository<IdentityDbContext, Invitation>, IInvitationRepository
 {
     private readonly IdentityDbContext _dbContext;
 
