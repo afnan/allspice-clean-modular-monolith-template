@@ -50,12 +50,10 @@ public sealed class WolverineIntegrationEventPublisher : IIntegrationEventPublis
                 "so publication is scoped to a command context and enrolled in the durable outbox.");
         }
 
-        // Enroll the active DbContext into the outbox. Wolverine's behavior on repeat
-        // Enroll calls within the same scope is to swap the active context; we only
-        // ever pass the same instance for a given scope so this is effectively a no-op
-        // after the first call. PublishAsync then persists the envelope to the durable
-        // outbox store for at-least-once delivery. (See the type-level note: with the
-        // shared messagingdb store this persistence is NOT in the command's transaction.)
+        // Enroll the active DbContext (the single one TransactionBehavior opened a transaction on)
+        // into the outbox, then persist the envelope. Because the envelope tables are co-located in
+        // that module's own database, the envelope is written in the SAME transaction as the command's
+        // business data — committed atomically when TransactionBehavior commits.
         _outbox.Enroll(transactionalContext.Instance);
 
         await _outbox.PublishAsync(message);

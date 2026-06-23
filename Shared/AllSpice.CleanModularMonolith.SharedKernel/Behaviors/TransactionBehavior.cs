@@ -97,6 +97,21 @@ public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior
 
                 _logger.LogDebug("Dispatching {Count} domain events", events.Count);
                 await _dispatcher.DispatchAsync(events, cancellationToken).ConfigureAwait(false);
+
+                // A domain-event handler must not write to a DIFFERENT module's context — the
+                // pre-loop guard only saw the handler's own writes, so re-check here. A foreign
+                // dirty context would otherwise be silently dropped (it's not flushed and has no
+                // transaction). Cross-module side effects must go through integration events.
+                var foreignDirty = _dbContexts.FirstOrDefault(c =>
+                    !ReferenceEquals(c.Instance, db) && c.Instance.ChangeTracker.HasChanges());
+                if (foreignDirty is not null)
+                {
+                    throw new InvalidOperationException(
+                        $"A domain-event handler for {typeof(TRequest).Name} mutated a different module " +
+                        $"DbContext ({foreignDirty.Instance.GetType().Name}). Cross-module side effects must " +
+                        "be published as integration events through IIntegrationEventPublisher.");
+                }
+
                 await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             }
 

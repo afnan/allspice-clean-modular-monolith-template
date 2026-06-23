@@ -81,11 +81,10 @@ public sealed class InviteUserCommandHandler : IRequestHandler<InviteUserCommand
             await _invitationRepository.AddAsync(invitation, cancellationToken);
 
             // Do NOT call SaveChangesAsync here. The command implements ITransactional, so
-            // SharedKernel's TransactionBehavior owns the unit-of-work boundary: it begins
-            // the DB transaction before the handler runs, drains domain events after, then
-            // calls SaveChanges + Commit. An explicit SaveChanges here is redundant and
-            // would teach a pattern that's easy to extend incorrectly (post-commit work
-            // would escape the transaction).
+            // SharedKernel's TransactionBehavior owns the unit-of-work boundary: repositories
+            // only stage, then after the handler returns the behavior opens a transaction on the
+            // dirty module context, flushes, drains domain events, and commits. An explicit
+            // SaveChanges here would flush outside that transaction and defeat atomicity.
             return Result<Guid>.Created(invitation.Id);
         }
         catch (Exception ex)

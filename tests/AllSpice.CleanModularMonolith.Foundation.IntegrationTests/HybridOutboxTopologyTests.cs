@@ -55,15 +55,18 @@ public sealed class HybridOutboxTopologyTests : IAsyncLifetime
 
         _host = builder.Build();
 
+        // Provision exactly the way production (Program.cs) does: EF migrations create the BUSINESS
+        // tables (which do NOT contain Wolverine envelope tables), then Wolverine's Admin.MigrateAsync
+        // provisions the co-located envelope tables. Using MigrateAsync (not EnsureCreatedAsync) means a
+        // broken ancillary-store provisioning genuinely fails this test instead of being masked.
         await using (var scope = _host.Services.CreateAsyncScope())
         {
-            await scope.ServiceProvider.GetRequiredService<IdentityDbContext>().Database.EnsureCreatedAsync();
-            await scope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Database.EnsureCreatedAsync();
+            await scope.ServiceProvider.GetRequiredService<IdentityDbContext>().Database.MigrateAsync();
+            await scope.ServiceProvider.GetRequiredService<NotificationsDbContext>().Database.MigrateAsync();
         }
 
         await _host.StartAsync();
 
-        // Same startup provisioning Program.cs performs for the ancillary stores.
         foreach (var store in _host.Services.GetServices<IMessageStore>())
         {
             await store.Admin.MigrateAsync();
