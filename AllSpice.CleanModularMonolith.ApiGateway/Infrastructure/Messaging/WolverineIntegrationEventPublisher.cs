@@ -7,20 +7,21 @@ using Wolverine.EntityFrameworkCore;
 namespace AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.Messaging;
 
 /// <summary>
-/// Publishes integration events through Wolverine's durable outbox (a shared <c>messagingdb</c>
-/// PostgreSQL store) for reliable at-least-once delivery with crash recovery.
+/// Publishes integration events through Wolverine's durable outbox for reliable at-least-once
+/// delivery with crash recovery.
 /// <para>
 /// Refuses to publish outside an active transaction — callers must run inside an
-/// <c>ITransactional</c> command so <c>TransactionBehavior</c> has opened a DbContext
-/// transaction beforehand, scoping publication to a command context.
+/// <c>ITransactional</c> command so <c>TransactionBehavior</c> has opened a DbContext transaction
+/// beforehand. Because the behavior now opens that transaction on the <b>single dirty module
+/// context</b>, the lookup below resolves exactly that context and enrols it into the outbox.
 /// </para>
 /// <para>
-/// NOTE: because the outbox store (<c>messagingdb</c>) is a separate database from the module's
-/// data (<c>identitydb</c>/<c>notificationsdb</c>), the envelope insert and the command's data
-/// commit are two independent transactions. They are therefore NOT atomic: a crash between the
-/// two commits can drop or orphan an event. Durable recovery still re-delivers persisted
-/// envelopes, but exactly-once/atomic semantics require co-locating the outbox in each module's
-/// own database. Accepted trade-off for the simpler single-store model.
+/// The envelope tables are co-located in each module's own database (see
+/// <c>{Module}DbContext.MapWolverineEnvelopeStorage</c> + the gateway's ancillary-store registration),
+/// so the envelope insert and the command's data commit are ONE atomic transaction — a crash can no
+/// longer drop or orphan an event. The shared <c>messagingdb</c> store holds only Wolverine's
+/// cross-module infrastructure (inbox, durable local queues, scheduled, dead-letter), never business
+/// outbox envelopes.
 /// </para>
 /// </summary>
 public sealed class WolverineIntegrationEventPublisher : IIntegrationEventPublisher
@@ -49,12 +50,10 @@ public sealed class WolverineIntegrationEventPublisher : IIntegrationEventPublis
                 "so publication is scoped to a command context and enrolled in the durable outbox.");
         }
 
-        // Enroll the active DbContext into the outbox. Wolverine's behavior on repeat
-        // Enroll calls within the same scope is to swap the active context; we only
-        // ever pass the same instance for a given scope so this is effectively a no-op
-        // after the first call. PublishAsync then persists the envelope to the durable
-        // outbox store for at-least-once delivery. (See the type-level note: with the
-        // shared messagingdb store this persistence is NOT in the command's transaction.)
+        // Enroll the active DbContext (the single one TransactionBehavior opened a transaction on)
+        // into the outbox, then persist the envelope. Because the envelope tables are co-located in
+        // that module's own database, the envelope is written in the SAME transaction as the command's
+        // business data — committed atomically when TransactionBehavior commits.
         _outbox.Enroll(transactionalContext.Instance);
 
         await _outbox.PublishAsync(message);

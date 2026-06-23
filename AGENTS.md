@@ -15,8 +15,10 @@ but call out the conflict.
    `DbContext`. Never write to another module's `DbContext`. Cross-module communication goes through
    **Wolverine integration events** via `IIntegrationEventPublisher` — never a direct cross-module DB write.
 2. **Publish integration events only inside an `ITransactional` command.** `IIntegrationEventPublisher`
-   enrolls the active DbContext transaction (durable outbox). Publishing outside a transaction throws by design.
-   No fire-and-forget integration events.
+   enrolls the active module DbContext transaction. The outbox envelope tables are **co-located in each
+   module's own database**, so the envelope commits **atomically** with the state change (a true
+   transactional outbox; the shared `messagingdb` holds only Wolverine infrastructure). Publishing outside a
+   transaction throws by design. No fire-and-forget integration events.
 3. **Local user `Guid` is the canonical identity.** Keycloak external IDs are only for Keycloak admin calls
    and the JWT/SignalR boundary. Resolve between them with `IUserExternalIdResolver`. Don't store or compare
    external IDs where a local `Guid` is expected.
@@ -156,10 +158,11 @@ EF_DESIGN_DB_PASSWORD=<local-pg-pw> dotnet ef migrations add <Name> \
 | Startup migrations w/ retry | `MigrationRunner.RunForModuleAsync<TContext>` |
 
 **Attaching a new EF interceptor:** register it in `AddSharedKernelInterceptors` (as a singleton `IInterceptor`).
-It is applied because each module registers its pooled `DbContext` with the **SP-aware** overload:
-`AddDbContextPool<T>((sp, options) => options.UseNpgsql(cs).AddInterceptors(sp.GetServices<IInterceptor>()))`
-followed by `EnrichNpgsqlDbContext<T>()`. EF Core does **not** auto-discover DI interceptors — this explicit
-attach is mandatory. `DomainEventDispatchInterceptor` exists as an **opt-in** post-commit alternative and is
+It is applied because each module registers its `DbContext` with the **SP-aware** Wolverine overload:
+`AddDbContextWithWolverineIntegration<T>((sp, options) => options.UseNpgsql(cs).AddInterceptors(sp.GetServices<IInterceptor>()))`.
+EF Core does **not** auto-discover DI interceptors — this explicit attach is mandatory. (That registration also
+co-locates the module's Wolverine outbox tables; it is not pooled and does not layer Aspire's
+`EnrichNpgsqlDbContext` resilience/telemetry — a deferred enrichment item in `TODOS.md`.) `DomainEventDispatchInterceptor` exists as an **opt-in** post-commit alternative and is
 deliberately **not** wired (it would double-dispatch with `TransactionBehavior`).
 
 ---

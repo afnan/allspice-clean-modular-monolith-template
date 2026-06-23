@@ -17,6 +17,8 @@ public class NotificationPreferenceRepositoryIntegrationTests
 
         var preference = NotificationPreference.Create(SampleUserId, NotificationChannel.InApp, isEnabled: true);
         await repository.AddAsync(preference, CancellationToken.None);
+        // Repositories stage only; flush via the context (TransactionBehavior owns this in production).
+        await database.Context.SaveChangesAsync(CancellationToken.None);
 
         var retrieved = await repository.GetByUserAndChannelAsync(SampleUserId, NotificationChannel.InApp, CancellationToken.None);
 

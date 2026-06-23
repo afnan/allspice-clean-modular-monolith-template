@@ -111,6 +111,9 @@ var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
 var notificationsDatabase = postgres.AddDatabase("notificationsdb");
 var identityDatabase = postgres.AddDatabase("identitydb");
 var keycloakDb = postgres.AddDatabase("keycloakdb");
+// messagingdb is the Wolverine MAIN store for shared infrastructure only (inbox, durable local queues,
+// scheduled, dead-letter). Each module's transactional outbox envelopes live co-located in the module's
+// own database (identitydb/notificationsdb), not here.
 var messagingDatabase = postgres.AddDatabase("messagingdb");
 #endregion
 

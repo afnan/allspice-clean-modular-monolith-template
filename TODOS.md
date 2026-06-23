@@ -15,22 +15,46 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   implemented in the gateway. Add an integration test (Testcontainers Postgres) that asserts
   commit → immediate send before changing behavior.
 
-- [ ] **Cross-DB atomicity is a known limitation of the shared `messagingdb` model.** Envelope
-  inserts (messagingdb) and command data commits (identitydb/notificationsdb) are separate
-  transactions, so a crash between them can drop/orphan an event. Documented in
-  `WolverineIntegrationEventPublisher` XML-doc. Revisit if true exactly-once is required
-  (co-locate the outbox per module — was prototyped then reverted in favor of the single store).
+- [x] **Cross-DB atomicity — RESOLVED (2026-06-23, Phase 0).** Now a true transactional outbox: each
+  module's envelope tables are co-located in its own database (`MapWolverineEnvelopeStorage` + enrolled
+  ancillary store), so the envelope commits atomically with the state change. `messagingdb` is now the
+  Wolverine main store for shared infrastructure only. Proven by `OutboxAtomicityTests` and
+  `HybridOutboxTopologyTests` (Testcontainers).
 
 ## Startup / Migrations
 
-- [ ] **Concurrent migration race (P1).** `MigrationRunner.RunWithRetryAsync` runs
-  `MigrateAsync` with no cross-instance lock. Multiple gateway instances booting against the
-  same database can race the same un-applied migration ("relation already exists" / partial
-  apply); the retry just re-races. Serialize with a Postgres advisory lock
-  (`pg_advisory_lock(<stable-hash>)` on a dedicated Npgsql connection) around the migrate, in
-  the module `EnsureXModuleDatabaseAsync` extensions (Npgsql is available there; SharedKernel
-  stays provider-agnostic and the SQLite test DBs are unaffected). Guard so it only runs for
-  the Npgsql provider.
+- [x] **Concurrent migration race (P1) — RESOLVED (2026-06-23, Phase 0).** `MigrationRunner` now wraps
+  `MigrateAsync` in a session-scoped `pg_advisory_lock` keyed per DbContext (held on an explicitly-opened
+  connection), so concurrent instances serialize instead of racing. Npgsql-only (detected by provider name);
+  SharedKernel stays provider-agnostic and SQLite test DBs migrate directly. Proven by
+  `AdvisoryLockMigrationTests`.
+
+## Phase 0 review follow-ups (deferred, not bugs in shipped behavior)
+
+- [ ] **InviteUser Keycloak compensation no longer fires on commit-time failure (HIGH, → Phase 2 saga).**
+  The UoW change means repositories stage and `TransactionBehavior` commits *after* the handler returns, so
+  the handler's `try/catch` (which deletes the Keycloak user when local persistence fails) can no longer
+  observe a commit-time DB failure — a failed commit orphans the Keycloak user. The window is narrow (the
+  pending-invite pre-check + absence of a unique email constraint mean duplicates don't fail at commit; only
+  infra faults do), but the documented compensation invariant is weaker than before. Proper fix is the
+  deferred `F-compensate` saga (outbox-driven or post-commit compensation) in Phase 2; do not bolt a
+  half-measure onto the clean UoW model. Tracks with the spec's open F-compensate item.
+
+- [ ] **Outbox tests don't drive the real publisher/pipeline end-to-end (test coverage).** `OutboxAtomicity`
+  and `HybridOutboxTopology` hand-roll the publish/commit sequence; they don't exercise
+  `WolverineIntegrationEventPublisher` + a real `ITransactional` command through `TransactionBehavior`. The
+  mechanism, co-location, and UoW are each proven separately, but an end-to-end test (real command → publisher
+  → co-located outbox → delivery) would lock the wiring. Needs the Mediator source-generator-in-test setup.
+
+- [ ] **Durability/crash-recovery path untested (test coverage).** The commit tests call
+  `FlushOutgoingMessagesAsync()` for prompt in-process delivery; the "survives a crash" guarantee (envelope
+  persisted, delivered by Wolverine's recovery sweep after a restart) is not exercised. Add a test that commits
+  without flushing and asserts recovery-loop delivery (size the wait against the agent poll interval).
+
+- [ ] **`EfRepository` track-only write methods fail silently for non-UoW callers (LOW, harden).** A caller
+  that writes through a bespoke repository outside an `ITransactional` command (as the dispatcher did) gets a
+  silent no-op. Consider making misuse loud (e.g. throw when there is no ambient transaction and the caller
+  never flushes), so it fails at test time rather than in production.
 
 ## In-app notification dispatch
 

@@ -7,6 +7,7 @@ using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Quartz;
+using Wolverine.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
 
@@ -28,14 +29,18 @@ public static class IdentityModuleExtensions
         this IHostApplicationBuilder builder,
         ILogger logger)
     {
-        // Register the pooled context with the (serviceProvider, options) overload so the cross-cutting
-        // EF Core save interceptors (registered via AddSharedKernelInterceptors) are attached — EF Core
-        // does NOT auto-discover IInterceptor services from DI. EnrichNpgsqlDbContext layers on Aspire's
-        // retries/telemetry; its own DB health check is disabled in favor of the explicit one below.
-        builder.Services.AddDbContextPool<IdentityDbContext>((sp, options) => options
-            .UseNpgsql(builder.Configuration[$"ConnectionStrings:{DatabaseResourceName}"])
+        // Register the context with Wolverine's EF Core integration so this module's database hosts its
+        // OWN durable outbox tables (see IdentityDbContext.OnModelCreating + the gateway's ancillary-store
+        // registration), giving a true transactional outbox. The (IServiceProvider, options) overload lets
+        // us keep attaching the cross-cutting EF Core save interceptors (audit + concurrency) registered via
+        // AddSharedKernelInterceptors — EF Core does NOT auto-discover IInterceptor services from DI.
+        // NOTE: this registration is not pooled and does not layer Aspire's EnrichNpgsqlDbContext
+        // resilience/telemetry (deferred — see TODOS.md); the explicit DbContextHealthCheck below still
+        // covers connectivity.
+        var connectionString = builder.Configuration[$"ConnectionStrings:{DatabaseResourceName}"];
+        builder.Services.AddDbContextWithWolverineIntegration<IdentityDbContext>((sp, options) => options
+            .UseNpgsql(connectionString)
             .AddInterceptors(sp.GetServices<Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor>()));
-        builder.EnrichNpgsqlDbContext<IdentityDbContext>(settings => settings.DisableHealthChecks = true);
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
         builder.Services.AddScoped<IUserRepository, UserRepository>();

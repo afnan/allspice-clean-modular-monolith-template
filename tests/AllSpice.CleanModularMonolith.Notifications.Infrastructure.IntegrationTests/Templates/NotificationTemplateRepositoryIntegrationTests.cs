@@ -14,6 +14,8 @@ public class NotificationTemplateRepositoryIntegrationTests
 
         var template = NotificationTemplate.Create("welcome", "Subject", "Body", isHtml: true);
         await repository.AddAsync(template, CancellationToken.None);
+        // Repositories stage only; flush via the context (TransactionBehavior owns this in production).
+        await database.Context.SaveChangesAsync(CancellationToken.None);
 
         var retrieved = await repository.GetByKeyAsync("welcome", CancellationToken.None);
 

@@ -1,6 +1,8 @@
 using AllSpice.CleanModularMonolith.ApiGateway.Identity;
 using AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.Messaging;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consumers;
+using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
 using AllSpice.CleanModularMonolith.SharedKernel.Events;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 using AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
@@ -8,6 +10,7 @@ using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
 using Wolverine;
 using Wolverine.EntityFrameworkCore;
 using Wolverine.ErrorHandling;
+using Wolverine.Persistence.Durability;
 using Wolverine.Postgresql;
 
 namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
@@ -38,12 +41,21 @@ public static class GatewayModuleRegistrationExtensions
         builder.AddNotificationsModuleServices(logger);
         builder.AddIdentityModuleServices(logger);
 
+        // messagingdb is the Wolverine MAIN store: it holds ONLY shared messaging infrastructure
+        // (inbox, durable local queues, scheduled messages, dead-letter, node/agent coordination).
+        // Each module's database is an ANCILLARY store holding only its OWN outbox envelopes, so an
+        // integration event commits atomically with the business data that produced it.
         var messagingConnectionString = builder.Configuration.GetConnectionString("messagingdb");
-        if (string.IsNullOrWhiteSpace(messagingConnectionString))
+        var identityConnectionString = builder.Configuration.GetConnectionString("identitydb");
+        var notificationsConnectionString = builder.Configuration.GetConnectionString("notificationsdb");
+        if (string.IsNullOrWhiteSpace(messagingConnectionString)
+            || string.IsNullOrWhiteSpace(identityConnectionString)
+            || string.IsNullOrWhiteSpace(notificationsConnectionString))
         {
             throw new InvalidOperationException(
-                "Connection string 'messagingdb' is required. Wolverine is configured for durable PostgreSQL persistence " +
-                "and refuses to start in-memory. Ensure the AppHost references the messagingdb resource on the gateway project.");
+                "Connection strings 'messagingdb', 'identitydb' and 'notificationsdb' are required. messagingdb " +
+                "holds shared Wolverine infrastructure (inbox/queues/scheduled/dead-letter); each module database " +
+                "hosts its own co-located transactional outbox. Ensure the AppHost references all three on the gateway.");
         }
 
         builder.Host.UseWolverine(opts =>
@@ -53,10 +65,16 @@ public static class GatewayModuleRegistrationExtensions
             // EF Core transaction middleware: Wolverine wraps handlers in EF Core transactions
             opts.UseEntityFrameworkCoreTransactions();
 
-            // Durable outbox/inbox: store message envelopes in PostgreSQL ("wolverine" schema).
-            // AutoBuildMessageStorageOnStartup defaults to CreateOrUpdate, so the schema is
-            // provisioned automatically on first run — no manual migration required.
+            // MAIN store (shared infrastructure only). Auto-builds its schema on startup.
             opts.PersistMessagesWithPostgresql(messagingConnectionString, "wolverine");
+
+            // ANCILLARY stores: each module DB hosts its own outbox envelopes, enrolled so the
+            // WolverineIntegrationEventPublisher writes the envelope in the module's own transaction.
+            // The ancillary schemas are provisioned explicitly at startup (see Program.cs).
+            opts.PersistMessagesWithPostgresql(identityConnectionString, "wolverine", MessageStoreRole.Ancillary)
+                .Enroll<IdentityDbContext>();
+            opts.PersistMessagesWithPostgresql(notificationsConnectionString, "wolverine", MessageStoreRole.Ancillary)
+                .Enroll<NotificationsDbContext>();
 
             // Make every transport durable by default.
             opts.Policies.UseDurableLocalQueues();
