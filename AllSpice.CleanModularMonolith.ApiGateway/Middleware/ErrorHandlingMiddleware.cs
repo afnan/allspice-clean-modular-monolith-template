@@ -56,6 +56,7 @@ public class ErrorHandlingMiddleware
         {
             NotFoundException => HttpStatusCode.NotFound,
             DomainValidationException => HttpStatusCode.BadRequest,
+            FluentValidation.ValidationException => HttpStatusCode.BadRequest,
             UnauthorizedException => HttpStatusCode.Unauthorized,
             ForbiddenException => HttpStatusCode.Forbidden,
             ConflictException => HttpStatusCode.Conflict,
@@ -88,6 +89,15 @@ public class ErrorHandlingMiddleware
         };
 
         problemDetails.Extensions["correlationId"] = correlationId;
+
+        // Surface field-level validation errors so clients get actionable 400s. This is the defensive
+        // net: the Mediator pipeline normally maps ValidationException to Result.Invalid first.
+        if (exception is FluentValidation.ValidationException validationException)
+        {
+            problemDetails.Extensions["errors"] = validationException.Errors
+                .GroupBy(e => e.PropertyName)
+                .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
+        }
 
         if (_environment.IsDevelopment())
         {
