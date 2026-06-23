@@ -21,6 +21,21 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   Wolverine main store for shared infrastructure only. Proven by `OutboxAtomicityTests` and
   `HybridOutboxTopologyTests` (Testcontainers).
 
+## Phase 1 review follow-ups (deferred)
+
+- [ ] **Dispatcher outbox atomicity not integration-tested against real Postgres.** The F3 dispatcher test
+  mocks `IDbContextOutbox`; it verifies the delivered event is routed through the outbox but does not prove the
+  envelope + `Delivered` status commit/rollback together. The mechanism is proven by `HybridOutboxTopologyTests`
+  and the dispatcher mirrors it, but a Testcontainers test driving `DispatchPendingAsync` end-to-end (commit →
+  both present; rollback → neither) would lock the dispatcher's own atomicity.
+- [ ] **Two ProblemDetails shapes for validation 400s.** The Mediator pipeline path returns Ardalis
+  `Result.Invalid` (root `errors` via FastEndpoints); the `ErrorHandlingMiddleware` fallback nests under
+  `extensions.errors` (non-RFC7807 root). Unify if a single client-facing error contract is desired.
+- [ ] **Mapper 500s for `DomainException`/`ValidationException` on non-`Result` response types.**
+  `DomainExceptionResultMapper` only maps to `Result`/`Result<T>`; a handler whose response isn't an Ardalis
+  Result that throws a domain/validation exception yields `InvalidOperationException` → 500. Pre-existing; the F2
+  reorder slightly widens exposure. Consider a graceful fallback.
+
 ## Startup / Migrations
 
 - [x] **Concurrent migration race (P1) — RESOLVED (2026-06-23, Phase 0).** `MigrationRunner` now wraps

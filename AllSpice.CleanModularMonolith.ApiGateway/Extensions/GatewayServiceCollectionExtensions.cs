@@ -65,16 +65,18 @@ public static class GatewayServiceCollectionExtensions
     private static void AddMediatorServices(IServiceCollection services)
     {
         // Pipeline execution order (outermost to innermost):
+        // Order = execution order (first registered = outermost).
         // 1. Logging — logs request/response and elapsed time
-        // 2. Performance — traces slow requests
-        // 3. Validation — rejects invalid requests before starting a transaction
-        // 4. Transaction — wraps handler + domain events in a DB transaction (commands only)
-        // 5. DomainException — maps domain/validation exceptions to Result types
+        // 2. DomainException — maps domain/validation exceptions to Result types. MUST wrap Validation
+        //    so a FluentValidation.ValidationException becomes Result.Invalid (→ 400), not a 500.
+        // 3. Performance — traces slow requests
+        // 4. Validation — rejects invalid requests before starting a transaction
+        // 5. Transaction — wraps handler + domain events in a DB transaction (commands only)
         services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.LoggingBehavior<,>));
+        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.DomainExceptionBehavior<,>));
         services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.PerformanceBehavior<,>));
         services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.ValidationBehavior<,>));
         services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.TransactionBehavior<,>));
-        services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.DomainExceptionBehavior<,>));
     }
 
     /// <summary>

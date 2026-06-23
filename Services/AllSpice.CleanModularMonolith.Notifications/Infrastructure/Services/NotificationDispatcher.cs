@@ -5,10 +5,13 @@ using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Services.Channels;
 using AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
+using AllSpice.CleanModularMonolith.Notifications.Domain.Enums;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Specifications;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Wolverine;
+using Microsoft.Extensions.Options;
+using Wolverine.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 
@@ -22,7 +25,8 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     private readonly IEnumerable<INotificationChannel> _channels;
     private readonly INotificationPreferenceRepository _preferenceRepository;
     private readonly INotificationContentBuilder _contentBuilder;
-    private readonly IMessageBus _messageBus;
+    private readonly IDbContextOutbox _outbox;
+    private readonly NotificationDispatcherOptions _options;
     private readonly ILogger<NotificationDispatcher> _logger;
 
     /// <summary>
@@ -40,7 +44,8 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         IEnumerable<INotificationChannel> channels,
         INotificationPreferenceRepository preferenceRepository,
         INotificationContentBuilder contentBuilder,
-        IMessageBus messageBus,
+        IDbContextOutbox outbox,
+        IOptions<NotificationDispatcherOptions> options,
         ILogger<NotificationDispatcher> logger)
     {
         _notificationRepository = notificationRepository;
@@ -48,7 +53,8 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         _channels = channels;
         _preferenceRepository = preferenceRepository;
         _contentBuilder = contentBuilder;
-        _messageBus = messageBus;
+        _outbox = outbox;
+        _options = options.Value;
         _logger = logger;
     }
 
@@ -79,7 +85,8 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTimeOffset.UtcNow;
-        var specification = new DueNotificationsSpecification(utcNow);
+        var reclaimBefore = utcNow.AddSeconds(-_options.ReclaimAfterSeconds);
+        var specification = new DueNotificationsSpecification(utcNow, reclaimBefore);
         var pendingNotifications = await _notificationRepository.ListAsync(specification, cancellationToken);
 
         if (pendingNotifications.Count == 0)
@@ -92,6 +99,20 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         foreach (var notification in pendingNotifications)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            // Reclaimed row (Status == Dispatched) that has already exhausted its attempt budget: do NOT
+            // re-send (that attempt was already counted before the crash). Terminalize it to Failed so it
+            // doesn't sit in Dispatched forever. NOTE (at-least-once): a row stranded AFTER a successful
+            // send but before MarkDelivered committed will, if still within budget, be re-sent on reclaim —
+            // i.e. reclaim can duplicate a real delivery. Channel-level idempotency is the true mitigation.
+            if (notification.Status == NotificationStatus.Dispatched &&
+                notification.AttemptCount >= Notification.MaxDeliveryAttempts)
+            {
+                notification.HandleFailure("Stranded in Dispatched after exhausting delivery attempts.");
+                await PersistAsync(notification, cancellationToken);
+                _logger.LogWarning("Notification {NotificationId} terminalized: stranded in Dispatched at max attempts.", notification.Id);
+                continue;
+            }
 
             // Preferences are keyed by local user UUID. Recipient.UserId has three cases:
             //   - empty/whitespace  -> a userless transactional/system notification (e.g. an invitation
@@ -156,10 +177,6 @@ public sealed class NotificationDispatcher : INotificationDispatcher
 
                 if (sendResult.IsSuccess)
                 {
-                    notification.MarkDelivered();
-                    await PersistAsync(notification, cancellationToken);
-                    processed++;
-
                     var deliveryEvent = new NotificationDeliveredIntegrationEvent(
                         Guid.NewGuid(),
                         notification.Id,
@@ -169,7 +186,21 @@ public sealed class NotificationDispatcher : INotificationDispatcher
                         notification.AttemptCount,
                         DateTimeOffset.UtcNow);
 
-                    await _messageBus.PublishAsync(deliveryEvent);
+                    // Atomic: the Delivered status and the integration-event envelope commit in ONE
+                    // transaction via the module's co-located outbox — no fire-and-forget. A crash can't
+                    // deliver the event without persisting Delivered, or persist Delivered without the event.
+                    await using var deliveredTx = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+                    notification.MarkDelivered();
+                    await _notificationRepository.UpdateAsync(notification, cancellationToken);
+                    _outbox.Enroll(_dbContext);
+                    await _outbox.PublishAsync(deliveryEvent);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    await deliveredTx.CommitAsync(cancellationToken);
+
+                    // Deliver promptly rather than waiting for Wolverine's recovery sweep, and reset the
+                    // outbox's in-memory outstanding list so it doesn't accumulate across the batch.
+                    await _outbox.FlushOutgoingMessagesAsync();
+                    processed++;
 
                     _logger.LogInformation("Notification {NotificationId} delivered via {Channel}", notification.Id, notification.Channel.Name);
                 }

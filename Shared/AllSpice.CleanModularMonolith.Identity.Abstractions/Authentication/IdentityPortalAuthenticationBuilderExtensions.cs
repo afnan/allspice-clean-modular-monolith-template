@@ -35,6 +35,7 @@ public static class IdentityPortalAuthenticationBuilderExtensions
             options.Audience = portalOptions.ErpAudience;
             options.MapInboundClaims = false;
             options.TokenValidationParameters = CreateDefaultParameters();
+            options.Events = CreateHubBearerEvents();
         });
 
         if (!string.IsNullOrWhiteSpace(portalOptions.PublicAuthority) &&
@@ -46,6 +47,7 @@ public static class IdentityPortalAuthenticationBuilderExtensions
                 options.Audience = portalOptions.PublicAudience;
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = CreateDefaultParameters();
+                options.Events = CreateHubBearerEvents();
             });
         }
 
@@ -59,6 +61,30 @@ public static class IdentityPortalAuthenticationBuilderExtensions
 
         return builder;
     }
+
+    /// <summary>Hub path prefix whose connections may carry the JWT as a query-string token.</summary>
+    private const string HubsPathPrefix = "/hubs";
+
+    /// <summary>
+    /// Reads the JWT from the <c>access_token</c> query parameter for SignalR hub paths. Browsers cannot
+    /// set the <c>Authorization</c> header on WebSocket/SSE connections, so SignalR sends the token in the
+    /// query string; without this, every authenticated hub connection is rejected with 401.
+    /// </summary>
+    private static JwtBearerEvents CreateHubBearerEvents() =>
+        new()
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    context.Request.Path.StartsWithSegments(HubsPathPrefix))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
 
     /// <summary>
     /// Creates the default token validation parameters applied to each portal scheme.
