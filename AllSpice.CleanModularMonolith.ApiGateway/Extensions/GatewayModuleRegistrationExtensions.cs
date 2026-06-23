@@ -1,6 +1,9 @@
+using AllSpice.CleanModularMonolith.ApiGateway.Identity;
 using AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.Messaging;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consumers;
 using AllSpice.CleanModularMonolith.SharedKernel.Events;
+using AllSpice.CleanModularMonolith.SharedKernel.Identity;
+using AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
 using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
 using Wolverine;
 using Wolverine.EntityFrameworkCore;
@@ -24,6 +27,13 @@ public static class GatewayModuleRegistrationExtensions
         var logger = loggerFactory.CreateLogger("Program");
 
         builder.Services.AddScoped<IDomainEventDispatcher, MediatorDomainEventDispatcher>();
+
+        // Current-user provider for audit stamping + cross-cutting EF Core save interceptors
+        // (concurrency diagnostics, audit-user stamping). EF Core discovers the IInterceptor
+        // singletons from this container, so every module DbContext picks them up.
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddSingleton<ICurrentUserProvider, HttpContextCurrentUserProvider>();
+        builder.Services.AddSharedKernelInterceptors();
 
         builder.AddNotificationsModuleServices(logger);
         builder.AddIdentityModuleServices(logger);

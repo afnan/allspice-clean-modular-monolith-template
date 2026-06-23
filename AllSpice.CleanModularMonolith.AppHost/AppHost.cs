@@ -74,7 +74,13 @@ if (builder.Environment.IsDevelopment())
 var storage = builder.AddAzureStorage("Storage");
 if (builder.Environment.IsDevelopment())
 {
-  storage.RunAsEmulator();
+  // Fixed ports + a data volume so locally-stored blob URLs (http://127.0.0.1:27000/...)
+  // keep resolving across restarts during development.
+  storage.RunAsEmulator(azurite => azurite
+    .WithBlobPort(27000)
+    .WithQueuePort(27001)
+    .WithTablePort(27002)
+    .WithDataVolume());
 }
 var blobs = storage.AddBlobs("BlobConnection");
 #endregion
@@ -235,6 +241,7 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
     .WithEnvironment("Identity__Keycloak__ClientSecret", builder.Configuration["Identity:Keycloak:ClientSecret"] ?? "")
     .WithEnvironment("Notifications__Smtp__Host", "localhost")
     .WithEnvironment("Notifications__Smtp__Port", "25")
+    .WithReference(blobs)
     .WaitFor(postgres);
 #endregion
 

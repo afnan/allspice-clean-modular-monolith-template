@@ -39,3 +39,32 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   (never re-selected, never sent). Consider a `Claimed`/`Dispatching` intermediate state with a
   reclaim timeout, or `FOR UPDATE SKIP LOCKED` claim → deliver → mark `Delivered`. (One reviewer
   considered the single-replica path acceptable; confirm desired delivery semantics first.)
+
+## Template scaffolding
+
+- [ ] **`{{ProjectName}}` / `{{ProjectNameLower}}` tokens are not wired (pre-existing).**
+  `template.json` defines only `sourceName`; there are no `symbols` for these tokens, yet they appear in
+  `*/appsettings.json`, `GatewayServiceCollectionExtensions.cs`, email templates, and `README.md`. A
+  scaffolded project ships the literal `{{...}}` strings. Add `symbols` (with `replaces`) or convert to
+  `sourceName`-derived values, then verify with the `dotnet new` smoke test in CLAUDE.md.
+
+## Cross-cutting utilities (PR #4 — merged, follow-ups)
+
+- [ ] **Audit columns store the Keycloak `sub`, not the canonical local UUID (P2).**
+  `AuditableEntityInterceptor` stamps `CreatedBy`/`LastModifiedBy` from
+  `HttpContextCurrentUserProvider.UserId`, which returns the JWT `NameIdentifier`/`sub` (Keycloak external
+  ID). Per the project's identity convention the local UUID is canonical and the external ID is reserved for
+  Keycloak/JWT boundaries. Resolve the local user GUID before stamping (or document that audit columns hold
+  external IDs). Note: resolving adds a lookup per save — decide the trade-off.
+
+- [ ] **`AddDbContextPool` bypasses Aspire's Npgsql enrichment (P2).**
+  `IdentityModuleExtensions`/`NotificationsModuleExtensions` hand-roll `AddDbContextPool(UseNpgsql(...))` +
+  `EnrichNpgsqlDbContext(DisableHealthChecks)`. Prefer the `AddNpgsqlDbContext<T>(name, configureDbContextOptions:
+  o => o.AddInterceptors(...))` overload so Aspire's keyed connection, resilience, and telemetry wiring stays
+  intact while interceptors still attach.
+
+- [ ] **`AzureBlobStorageService`: no SAS/URL generation; cold-start container race (P3).**
+  `UploadAsync` returns a raw blob name and there is no SAS/expiry story, so any "download by URL" flow against
+  `PublicAccessType.None` will 403. `EnsureContainerExistsAsync` uses an unsynchronized `volatile bool` so
+  concurrent first-uploads each call `CreateIfNotExistsAsync` (benign/idempotent). Add a SAS-URI generation
+  method when a download-by-URL flow is needed.

@@ -28,7 +28,14 @@ public static class IdentityModuleExtensions
         this IHostApplicationBuilder builder,
         ILogger logger)
     {
-        builder.AddNpgsqlDbContext<IdentityDbContext>(DatabaseResourceName);
+        // Register the pooled context with the (serviceProvider, options) overload so the cross-cutting
+        // EF Core save interceptors (registered via AddSharedKernelInterceptors) are attached — EF Core
+        // does NOT auto-discover IInterceptor services from DI. EnrichNpgsqlDbContext layers on Aspire's
+        // retries/telemetry; its own DB health check is disabled in favor of the explicit one below.
+        builder.Services.AddDbContextPool<IdentityDbContext>((sp, options) => options
+            .UseNpgsql(builder.Configuration[$"ConnectionStrings:{DatabaseResourceName}"])
+            .AddInterceptors(sp.GetServices<Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor>()));
+        builder.EnrichNpgsqlDbContext<IdentityDbContext>(settings => settings.DisableHealthChecks = true);
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
         builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -76,7 +83,8 @@ public static class IdentityModuleExtensions
         builder.Services.AddHealthChecks()
             .AddCheck<KeycloakHealthCheck>("keycloak")
             .AddCheck<IdentitySyncHealthCheck>("identity-sync")
-            .AddCheck<IdentityOrphanHealthCheck>("identity-orphans");
+            .AddCheck<IdentityOrphanHealthCheck>("identity-orphans")
+            .AddCheck<SharedKernel.HealthChecks.DbContextHealthCheck<IdentityDbContext>>("identity-db");
 
         RegisterKeycloakSync(builder);
 
