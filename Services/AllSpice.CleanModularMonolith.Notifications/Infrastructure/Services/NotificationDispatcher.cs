@@ -77,11 +77,26 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Preferences are keyed by local user UUID. Recipient.UserId MUST be a local Guid
-            // (see InAppNotificationChannel xmldoc). If it isn't, we cannot evaluate opt-out
-            // preferences, so fail closed: mark the notification failed rather than sending and
-            // risking delivery to a user who opted out (a privacy/compliance hazard).
-            if (!Guid.TryParse(notification.Recipient.UserId, out var localUserId))
+            // Preferences are keyed by local user UUID. Recipient.UserId has three cases:
+            //   - empty/whitespace  -> a userless transactional/system notification (e.g. an invitation
+            //     email to someone with no account yet). No opt-out preferences apply, so send it.
+            //   - a valid local Guid -> evaluate the user/channel opt-out preference.
+            //   - non-empty but not a Guid -> malformed. Fail closed: don't risk delivering to a user
+            //     whose opt-out we can't evaluate (a privacy/compliance hazard).
+            if (string.IsNullOrWhiteSpace(notification.Recipient.UserId))
+            {
+                // Userless recipient — nothing to check; fall through to dispatch.
+            }
+            else if (Guid.TryParse(notification.Recipient.UserId, out var localUserId))
+            {
+                var preference = await _preferenceRepository.GetByUserAndChannelAsync(localUserId, notification.Channel, cancellationToken);
+                if (preference is not null && !preference.IsEnabled)
+                {
+                    _logger.LogInformation("Notification {NotificationId} skipped due to user/channel preference.", notification.Id);
+                    continue;
+                }
+            }
+            else
             {
                 _logger.LogWarning(
                     "Notification {NotificationId} has non-Guid Recipient.UserId '{UserId}'; cannot evaluate preferences — failing closed.",
@@ -89,13 +104,6 @@ public sealed class NotificationDispatcher : INotificationDispatcher
                     notification.Recipient.UserId);
                 notification.HandleFailure("Invalid Recipient.UserId format; cannot evaluate notification preferences.");
                 await _notificationRepository.UpdateAsync(notification, cancellationToken);
-                continue;
-            }
-
-            var preference = await _preferenceRepository.GetByUserAndChannelAsync(localUserId, notification.Channel, cancellationToken);
-            if (preference is not null && !preference.IsEnabled)
-            {
-                _logger.LogInformation("Notification {NotificationId} skipped due to user/channel preference.", notification.Id);
                 continue;
             }
 
