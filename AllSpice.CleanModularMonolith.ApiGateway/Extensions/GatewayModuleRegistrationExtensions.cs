@@ -29,6 +29,12 @@ public static class GatewayModuleRegistrationExtensions
         builder.AddIdentityModuleServices(logger);
 
         var messagingConnectionString = builder.Configuration.GetConnectionString("messagingdb");
+        if (string.IsNullOrWhiteSpace(messagingConnectionString))
+        {
+            throw new InvalidOperationException(
+                "Connection string 'messagingdb' is required. Wolverine is configured for durable PostgreSQL persistence " +
+                "and refuses to start in-memory. Ensure the AppHost references the messagingdb resource on the gateway project.");
+        }
 
         builder.Host.UseWolverine(opts =>
         {
@@ -37,26 +43,37 @@ public static class GatewayModuleRegistrationExtensions
             // EF Core transaction middleware: Wolverine wraps handlers in EF Core transactions
             opts.UseEntityFrameworkCoreTransactions();
 
-            // Durable outbox: store message envelopes in PostgreSQL
-            if (!string.IsNullOrEmpty(messagingConnectionString))
-            {
-                opts.PersistMessagesWithPostgresql(messagingConnectionString, "wolverine");
-                opts.Policies.UseDurableLocalQueues();
-            }
+            // Durable outbox/inbox: store message envelopes in PostgreSQL ("wolverine" schema).
+            // AutoBuildMessageStorageOnStartup defaults to CreateOrUpdate, so the schema is
+            // provisioned automatically on first run — no manual migration required.
+            opts.PersistMessagesWithPostgresql(messagingConnectionString, "wolverine");
 
-            // Retry only transient failures; non-transient errors go straight to error queue
+            // Make every transport durable by default.
+            opts.Policies.UseDurableLocalQueues();
+            opts.Policies.UseDurableInboxOnAllListeners();
+            opts.Policies.UseDurableOutboxOnAllSendingEndpoints();
+
+            // Retry only TYPED transient failures; programming errors and unknown
+            // exceptions go straight to the error queue / dead-letter via Wolverine's
+            // default policy. Previous code retried InvalidOperationException broadly,
+            // which trapped genuine bugs in an infinite refire loop.
+            opts.OnException<TransientMessagingException>().RetryWithCooldown(
+                TimeSpan.FromMilliseconds(500),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(30))
+                .Then.MoveToErrorQueue();
+
             opts.OnException<TimeoutException>().RetryWithCooldown(
                 TimeSpan.FromMilliseconds(500),
                 TimeSpan.FromSeconds(5),
-                TimeSpan.FromSeconds(30));
+                TimeSpan.FromSeconds(30))
+                .Then.MoveToErrorQueue();
+
             opts.OnException<HttpRequestException>().RetryWithCooldown(
                 TimeSpan.FromMilliseconds(500),
                 TimeSpan.FromSeconds(5),
-                TimeSpan.FromSeconds(30));
-            opts.OnException<InvalidOperationException>().RetryWithCooldown(
-                TimeSpan.FromMilliseconds(500),
-                TimeSpan.FromSeconds(5),
-                TimeSpan.FromSeconds(30));
+                TimeSpan.FromSeconds(30))
+                .Then.MoveToErrorQueue();
         });
 
         builder.Services.AddScoped<IIntegrationEventPublisher, WolverineIntegrationEventPublisher>();

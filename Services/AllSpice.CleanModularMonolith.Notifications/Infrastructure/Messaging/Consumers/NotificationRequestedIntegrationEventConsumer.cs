@@ -1,5 +1,7 @@
+using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Commands.QueueNotification;
 using AllSpice.CleanModularMonolith.Notifications.Contracts.Messaging;
+using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
 using Mediator;
 using Microsoft.Extensions.Logging;
 using DomainChannel = AllSpice.CleanModularMonolith.Notifications.Domain.Enums.NotificationChannel;
@@ -34,9 +36,23 @@ public static class NotificationRequestedIntegrationEventConsumer
         var result = await mediator.Send(command, cancellationToken);
         if (!result.IsSuccess)
         {
-            // Throw so Wolverine's retry policies kick in for transient failures.
-            // The durable outbox will preserve the message for retry.
-            throw new InvalidOperationException(
+            // Permanent failures (validation, not-found, authorization) will fail identically on
+            // every retry, so retrying only wastes the budget before dead-lettering. Log and drop.
+            if (result.Status is ResultStatus.Invalid or ResultStatus.NotFound
+                or ResultStatus.Forbidden or ResultStatus.Unauthorized)
+            {
+                var errors = result.Status == ResultStatus.Invalid
+                    ? string.Join("; ", result.ValidationErrors.Select(e => e.ErrorMessage))
+                    : string.Join("; ", result.Errors);
+                logger.LogError(
+                    "Dropping notification request for {Recipient}: permanent failure ({Status}): {Errors}",
+                    message.RecipientEmail, result.Status, errors);
+                return;
+            }
+
+            // Transient failures (e.g. database unavailable) — surface a typed transient exception so
+            // the gateway's Wolverine retry policy retries, rather than dead-lettering immediately.
+            throw new TransientMessagingException(
                 $"Failed to queue notification for {message.RecipientEmail}: {string.Join("; ", result.Errors)}");
         }
     }

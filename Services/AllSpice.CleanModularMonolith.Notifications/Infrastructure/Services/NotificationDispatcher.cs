@@ -48,6 +48,18 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// KNOWN LIMITATION (multi-replica): the SELECT (Pending notifications) and the
+    /// subsequent UPDATE (mark Dispatched) are not atomic, so two replicas of the
+    /// gateway can both grab the same batch and double-send. The "mark Dispatched
+    /// before SendAsync" pattern below shrinks the window but does not close it.
+    ///
+    /// The proper fix when scaling beyond a single replica is an atomic claim via
+    /// `UPDATE notifications SET status='Dispatched' ... WHERE id IN (SELECT ...
+    /// FOR UPDATE SKIP LOCKED) RETURNING *` — implementable as raw SQL on the
+    /// repository or by adding a `ClaimedByDispatcherId` column. Document then
+    /// implement when multi-replica deployment is on the roadmap.
+    /// </remarks>
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default)
     {
         var utcNow = DateTimeOffset.UtcNow;
@@ -65,10 +77,33 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var preference = await _preferenceRepository.GetByUserAndChannelAsync(notification.Recipient.UserId, notification.Channel, cancellationToken);
-            if (preference is not null && !preference.IsEnabled)
+            // Preferences are keyed by local user UUID. Recipient.UserId has three cases:
+            //   - empty/whitespace  -> a userless transactional/system notification (e.g. an invitation
+            //     email to someone with no account yet). No opt-out preferences apply, so send it.
+            //   - a valid local Guid -> evaluate the user/channel opt-out preference.
+            //   - non-empty but not a Guid -> malformed. Fail closed: don't risk delivering to a user
+            //     whose opt-out we can't evaluate (a privacy/compliance hazard).
+            if (string.IsNullOrWhiteSpace(notification.Recipient.UserId))
             {
-                _logger.LogInformation("Notification {NotificationId} skipped due to user/channel preference.", notification.Id);
+                // Userless recipient — nothing to check; fall through to dispatch.
+            }
+            else if (Guid.TryParse(notification.Recipient.UserId, out var localUserId))
+            {
+                var preference = await _preferenceRepository.GetByUserAndChannelAsync(localUserId, notification.Channel, cancellationToken);
+                if (preference is not null && !preference.IsEnabled)
+                {
+                    _logger.LogInformation("Notification {NotificationId} skipped due to user/channel preference.", notification.Id);
+                    continue;
+                }
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Notification {NotificationId} has non-Guid Recipient.UserId '{UserId}'; cannot evaluate preferences — failing closed.",
+                    notification.Id,
+                    notification.Recipient.UserId);
+                notification.HandleFailure("Invalid Recipient.UserId format; cannot evaluate notification preferences.");
+                await _notificationRepository.UpdateAsync(notification, cancellationToken);
                 continue;
             }
 

@@ -348,7 +348,10 @@ public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
 
     public async Task DeleteUserAsync(string userId, CancellationToken cancellationToken = default)
     {
-        var url = $"/admin/realms/{_options.Realm}/users/{Uri.EscapeDataString(userId)}";
+        // Honor UserLookupTemplate from KeycloakOptions so a custom realm path applies
+        // to lookup AND delete consistently. Previously hardcoded — silent breakage when
+        // an operator overrode the lookup template for a non-default Keycloak deployment.
+        var url = BuildUserLookupUrl(userId);
         var response = await _httpClient.DeleteAsync(url, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound)
         {

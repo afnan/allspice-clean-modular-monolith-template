@@ -17,8 +17,6 @@ public sealed class NotificationPreferenceRepository : RepositoryBase<Notificati
         _dbContext = dbContext;
     }
 
-    public Task<NotificationPreference?> GetByUserAndChannelAsync(string userId, NotificationChannel channel, CancellationToken cancellationToken = default) =>
+    public Task<NotificationPreference?> GetByUserAndChannelAsync(Guid userId, NotificationChannel channel, CancellationToken cancellationToken = default) =>
         _dbContext.NotificationPreferences.FirstOrDefaultAsync(pref => pref.UserId == userId && pref.Channel == channel, cancellationToken);
 }
-
-

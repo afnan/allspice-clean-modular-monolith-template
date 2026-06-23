@@ -37,6 +37,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.ApiContracts\AllSpice.CleanModularMonolith.ApiContracts.csproj" />
     <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.Identity.Abstractions\AllSpice.CleanModularMonolith.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.Notifications.Contracts\AllSpice.CleanModularMonolith.Notifications.Contracts.csproj" />
     <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.SharedKernel\AllSpice.CleanModularMonolith.SharedKernel.csproj" />

@@ -1,4 +1,6 @@
+using Ardalis.Specification.EntityFrameworkCore;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
+using AllSpice.CleanModularMonolith.SharedKernel.Common;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Invitation;
 using AllSpice.CleanModularMonolith.Identity.Domain.Enums;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
@@ -6,43 +8,30 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Repositories;
 
-public sealed class InvitationRepository : IInvitationRepository
+public sealed class InvitationRepository : RepositoryBase<Invitation>, IInvitationRepository
 {
     private readonly IdentityDbContext _dbContext;
 
     public InvitationRepository(IdentityDbContext dbContext)
+        : base(dbContext)
     {
         _dbContext = dbContext;
     }
-
-    public Task<Invitation?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-        _dbContext.Invitations
-            .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
 
     public Task<Invitation?> GetByTokenAsync(Guid token, CancellationToken cancellationToken = default) =>
         _dbContext.Invitations
             .FirstOrDefaultAsync(i => i.Token == token, cancellationToken);
 
-    public Task<Invitation?> GetPendingByEmailAsync(string email, CancellationToken cancellationToken = default) =>
-        _dbContext.Invitations
-            .FirstOrDefaultAsync(i => i.Email == email.ToLowerInvariant() && i.Status == InvitationStatus.Pending, cancellationToken);
+    public Task<Invitation?> GetPendingByEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        // Escape LIKE wildcards so emails containing '_' or '%' match literally (ILIKE treats them as wildcards).
+        var pattern = email.EscapeLikePattern();
+        return _dbContext.Invitations
+            .FirstOrDefaultAsync(i => EF.Functions.ILike(i.Email, pattern, "\\") && i.Status == InvitationStatus.Pending, cancellationToken);
+    }
 
-    public async Task<List<Invitation>> ListAllAsync(CancellationToken cancellationToken = default) =>
+    public async Task<IReadOnlyList<Invitation>> ListAllAsync(CancellationToken cancellationToken = default) =>
         await _dbContext.Invitations
             .OrderByDescending(i => i.CreatedOnUtc)
             .ToListAsync(cancellationToken);
-
-    public async Task AddAsync(Invitation invitation, CancellationToken cancellationToken = default)
-    {
-        await _dbContext.Invitations.AddAsync(invitation, cancellationToken);
-    }
-
-    public Task UpdateAsync(Invitation invitation, CancellationToken cancellationToken = default)
-    {
-        _dbContext.Invitations.Update(invitation);
-        return Task.CompletedTask;
-    }
-
-    public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
-        _dbContext.SaveChangesAsync(cancellationToken);
 }

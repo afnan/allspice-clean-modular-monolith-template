@@ -1,6 +1,7 @@
 using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Application.DTOs;
+using AllSpice.CleanModularMonolith.Notifications.Application.Mappers;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Specifications;
 using Mediator;
 
@@ -21,19 +22,7 @@ public sealed class GetUserNotificationsQueryHandler : IRequestHandler<GetUserNo
         var notifications = await _notificationRepository.ListAsync(specification, cancellationToken);
 
         var dtoList = notifications
-            .Select(notification => new NotificationDto(
-                notification.Id,
-                notification.Channel.Name,
-                notification.Subject,
-                notification.Body,
-                notification.Recipient.UserId,
-                notification.Recipient.Email,
-                notification.Recipient.PhoneNumber,
-                notification.CreatedUtc,
-                notification.ScheduledSendUtc,
-                notification.LastUpdatedUtc,
-                notification.CorrelationId,
-                notification.Status.Name))
+            .Select(NotificationMapper.ToDto)
             .ToList();
 
         return Result.Success<IReadOnlyCollection<NotificationDto>>(dtoList);

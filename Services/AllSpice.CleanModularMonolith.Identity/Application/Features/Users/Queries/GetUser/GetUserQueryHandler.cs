@@ -1,5 +1,6 @@
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Application.DTOs;
+using AllSpice.CleanModularMonolith.Identity.Application.Mappers;
 using Ardalis.Result;
 using Mediator;
 
@@ -23,6 +24,6 @@ public sealed class GetUserQueryHandler : IRequestHandler<GetUserQuery, Result<U
             return Result<UserDto>.NotFound($"User with external ID '{request.ExternalId}' not found.");
         }
 
-        return Result<UserDto>.Success(UserDto.From(user));
+        return Result<UserDto>.Success(UserMapper.ToDto(user));
     }
 }

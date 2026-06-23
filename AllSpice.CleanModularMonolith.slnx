@@ -9,6 +9,7 @@
     <Project Path="Services/AllSpice.CleanModularMonolith.Identity/AllSpice.CleanModularMonolith.Identity.csproj" />
   </Folder>
   <Folder Name="/Shared/">
+    <Project Path="Shared/AllSpice.CleanModularMonolith.ApiContracts/AllSpice.CleanModularMonolith.ApiContracts.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.Notifications.Contracts/AllSpice.CleanModularMonolith.Notifications.Contracts.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.Pdf/AllSpice.CleanModularMonolith.Pdf.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.RealTime/AllSpice.CleanModularMonolith.RealTime.csproj" />

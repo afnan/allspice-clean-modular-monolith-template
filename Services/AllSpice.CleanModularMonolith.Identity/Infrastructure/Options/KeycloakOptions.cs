@@ -52,5 +52,13 @@ public sealed class KeycloakOptions
     /// When true, TLS certificate validation is skipped. Use only for local development.
     /// </summary>
     public bool AllowUntrustedCertificates { get; set; }
+
+    /// <summary>
+    /// HttpClient timeout for Keycloak admin API calls in seconds. Default 30.
+    /// Values ≤ 0 are treated as the default. Long enough for slow realm operations,
+    /// short enough that a hung Keycloak doesn't freeze invitation flows.
+    /// </summary>
+    [Range(0, 600)]
+    public int RequestTimeoutSeconds { get; set; } = 30;
 }
 

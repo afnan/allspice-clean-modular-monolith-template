@@ -221,6 +221,18 @@ public static class GatewayServiceCollectionExtensions
 
         builder.Services.AddCors(options =>
         {
+            // Default policy used by `app.UseCors()` (no policy name). Allows both
+            // configured portal origins so any front-end can call the gateway.
+            // Endpoints can override per-route via [EnableCors("WebClient")] or
+            // [EnableCors("MobileClient")] when they want stricter origin matching.
+            options.AddDefaultPolicy(policy =>
+            {
+                policy.WithOrigins(webOrigin, mobileOrigin)
+                    .AllowAnyMethod()
+                    .AllowAnyHeader()
+                    .AllowCredentials();
+            });
+
             options.AddPolicy("WebClient", policy =>
             {
                 policy.WithOrigins(webOrigin)

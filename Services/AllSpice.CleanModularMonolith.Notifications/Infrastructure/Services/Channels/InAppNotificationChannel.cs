@@ -12,8 +12,24 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Ch
 
 /// <summary>
 /// Notification channel that pushes messages to connected clients via SignalR.
-/// Resolves local user IDs to Keycloak external IDs for SignalR group matching.
 /// </summary>
+/// <remarks>
+/// <para>Identity contract:
+/// <list type="bullet">
+/// <item><see cref="NotificationRecipient.UserId"/> MUST be the local user UUID
+/// (the value of <c>User.Id</c>). The local UUID is the canonical user identity
+/// used everywhere in the application.</item>
+/// <item>The Keycloak external ID is reserved for Keycloak-specific operations
+/// (admin API calls, JWT inspection). It also happens to be the SignalR group
+/// key today because <see cref="AppHub"/> reads it from the JWT <c>sub</c>
+/// claim — this channel resolves local UUID → external ID at the boundary.</item>
+/// </list></para>
+/// <para>This channel previously accepted either format and tried to
+/// <see cref="Guid.TryParse"/> the input to decide whether to resolve. Keycloak
+/// user IDs are themselves Guid-formatted, so the heuristic was unreliable —
+/// callers passing an external Guid would mis-route. Contract is now strict:
+/// always local UUID in, always resolve out.</para>
+/// </remarks>
 public sealed class InAppNotificationChannel : INotificationChannel
 {
     private readonly IRealtimePublisher _realtimePublisher;
@@ -39,20 +55,23 @@ public sealed class InAppNotificationChannel : INotificationChannel
         Guard.Against.Null(notification);
         Guard.Against.Null(notification.Recipient, nameof(notification.Recipient));
 
-        // Resolve local user ID to Keycloak external ID for SignalR group matching
-        var targetUserId = notification.Recipient.UserId;
-
-        if (Guid.TryParse(targetUserId, out var localUserId))
+        if (!Guid.TryParse(notification.Recipient.UserId, out var localUserId))
         {
-            var externalId = await _userExternalIdResolver.GetExternalIdByLocalIdAsync(localUserId, cancellationToken);
+            _logger.LogWarning(
+                "In-app notification {NotificationId} has non-Guid Recipient.UserId '{UserId}'; expected local user UUID.",
+                notification.Id,
+                notification.Recipient.UserId);
+            return Result.Error("Recipient.UserId must be the local user UUID for in-app notifications.");
+        }
 
-            if (string.IsNullOrEmpty(externalId))
-            {
-                _logger.LogWarning("Could not resolve external ID for user {UserId}", targetUserId);
-                return Result.Error("Could not resolve external user ID for in-app notification.");
-            }
-
-            targetUserId = externalId;
+        var externalId = await _userExternalIdResolver.GetExternalIdByLocalIdAsync(localUserId, cancellationToken);
+        if (string.IsNullOrEmpty(externalId))
+        {
+            _logger.LogWarning(
+                "In-app notification {NotificationId}: could not resolve external ID for local user {LocalUserId}.",
+                notification.Id,
+                localUserId);
+            return Result.Error("Could not resolve external user ID for in-app notification.");
         }
 
         var metadata = notification.GetMetadata();
@@ -65,12 +84,13 @@ public sealed class InAppNotificationChannel : INotificationChannel
             notification.CorrelationId,
             metadata);
 
-        await _realtimePublisher.PublishNotificationAsync(targetUserId, dto, cancellationToken);
+        await _realtimePublisher.PublishNotificationAsync(externalId, dto, cancellationToken);
 
         _logger.LogInformation(
-            "In-app notification {NotificationId} delivered to user {UserId}.",
+            "In-app notification {NotificationId} delivered to local user {LocalUserId} (external {ExternalId}).",
             notification.Id,
-            targetUserId);
+            localUserId,
+            externalId);
 
         return Result.Success();
     }

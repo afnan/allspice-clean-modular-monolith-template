@@ -125,8 +125,11 @@ FastEndpoints uses explicit assembly discovery (auto-discovery disabled) in `Gat
 
 Each module has its own DbContext and Aspire database resource (e.g., `notificationsdb`, `identitydb`). Schema changes use **EF Core migrations** — `MigrateAsync` runs at startup with retry logic. Design-time factories (`IDesignTimeDbContextFactory`) exist in each module for CLI migration generation without running infrastructure. Wolverine uses a dedicated `messagingdb` for durable outbox envelope storage.
 
+The design-time factories read DB credentials from environment variables (no hardcoded password). Before generating a migration, provide either a full connection string (`EF_DESIGN_<MODULE>_CONNECTION` or `EF_DESIGN_CONNECTION`) or at minimum `EF_DESIGN_DB_PASSWORD` (with optional `EF_DESIGN_DB_HOST` / `EF_DESIGN_DB_USER`, defaulting to `localhost` / `postgres`). The factory throws if no password/connection is supplied.
+
 To generate a new migration:
 ```bash
+EF_DESIGN_DB_PASSWORD=<your-local-pg-password> \
 dotnet ef migrations add <MigrationName> \
   --project Services/AllSpice.CleanModularMonolith.<Module>/AllSpice.CleanModularMonolith.<Module>.csproj \
   --startup-project AllSpice.CleanModularMonolith.ApiGateway/AllSpice.CleanModularMonolith.ApiGateway.csproj \

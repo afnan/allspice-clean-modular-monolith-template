@@ -1,12 +1,9 @@
 using System.Net.Http;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Services;
-using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleDefinition;
-using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.ModuleRoleTemplate;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
-using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Quartz;
@@ -34,18 +31,6 @@ public static class IdentityModuleExtensions
         builder.AddNpgsqlDbContext<IdentityDbContext>(DatabaseResourceName);
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
-        // Existing repositories
-        builder.Services.AddScoped<IModuleDefinitionRepository, ModuleDefinitionRepository>();
-        builder.Services.AddScoped<IModuleRoleAssignmentRepository, ModuleRoleAssignmentRepository>();
-        builder.Services.AddScoped<IRepository<ModuleRoleTemplate>>(sp =>
-        {
-            var context = sp.GetRequiredService<IdentityDbContext>();
-            return new EfRepository<IdentityDbContext, ModuleRoleTemplate>(context);
-        });
-        builder.Services.AddScoped<IReadRepository<ModuleRoleTemplate>>(sp =>
-            (IReadRepository<ModuleRoleTemplate>)sp.GetRequiredService<IRepository<ModuleRoleTemplate>>());
-
-        // New repositories
         builder.Services.AddScoped<IUserRepository, UserRepository>();
         builder.Services.AddScoped<IInvitationRepository, InvitationRepository>();
 
@@ -133,6 +118,12 @@ public static class IdentityModuleExtensions
 
         client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        // Cap admin-API calls so a hung Keycloak doesn't block invitation flows forever.
+        // The Wolverine retry policy + Quartz refire handle the rest.
+        client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds <= 0
+            ? 30
+            : options.RequestTimeoutSeconds);
     }
 
     private static HttpMessageHandler CreateKeycloakHandler(IServiceProvider serviceProvider)
@@ -150,46 +141,18 @@ public static class IdentityModuleExtensions
     }
 
     /// <summary>
-    /// Ensures the identity database exists and seeds default module definitions when empty.
+    /// Ensures the identity database exists and migrations are applied. Runs the
+    /// shared <see cref="MigrationRunner.RunWithRetryAsync"/> with linear backoff so
+    /// startup tolerates a slow-to-come-up Postgres container.
     /// </summary>
     /// <param name="app">The web application instance.</param>
     /// <returns>The application instance to continue fluent configuration.</returns>
     public static async Task<WebApplication> EnsureIdentityModuleDatabaseAsync(this WebApplication app)
     {
-        using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
-        var logger = loggerFactory.CreateLogger("IdentityDatabase");
-
-        const int maxAttempts = 5;
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                await using var scope = app.Services.CreateAsyncScope();
-                var context = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-                await context.Database.MigrateAsync(app.Lifetime.ApplicationStopping);
-
-                if (!await context.ModuleDefinitions.AnyAsync())
-                {
-                    var identityModule = DomainModuleDefinition.Create("Identity", "Identity", "Identity and access management");
-                    identityModule.AddRole("Admin", "Identity Administrator", "Full access to identity management");
-                    identityModule.AddRole("Viewer", "Identity Viewer", "Read-only identity access");
-
-                    var notificationsModule = DomainModuleDefinition.Create("Notifications", "Notifications", "Notification delivery and management");
-                    notificationsModule.AddRole("Admin", "Notifications Administrator", "Full notifications access");
-                    notificationsModule.AddRole("Viewer", "Notifications Viewer", "View-only notifications access");
-
-                    await context.ModuleDefinitions.AddRangeAsync(identityModule, notificationsModule);
-                    await context.SaveChangesAsync();
-                }
-
-                break;
-            }
-            catch (Exception ex) when (attempt < maxAttempts)
-            {
-                logger.LogWarning(ex, "Identity database setup attempt {Attempt}/{Max} failed. Retrying...", attempt, maxAttempts);
-                await Task.Delay(TimeSpan.FromSeconds(attempt * 2), app.Lifetime.ApplicationStopping);
-            }
-        }
+        await MigrationRunner.RunForModuleAsync<IdentityDbContext>(
+            app.Services,
+            app.Lifetime,
+            loggerCategory: "IdentityDatabase");
 
         return app;
     }

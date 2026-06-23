@@ -7,16 +7,18 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Integration
 
 public class NotificationPreferenceRepositoryIntegrationTests
 {
+    private static readonly Guid SampleUserId = new("33333333-3333-3333-3333-333333333333");
+
     [Fact]
     public async Task GetByUserAndChannelAsync_ReturnsStoredPreference()
     {
         await using var database = await TestSqliteDatabase.CreateAsync();
         var repository = new NotificationPreferenceRepository(database.Context);
 
-        var preference = NotificationPreference.Create("user-123", NotificationChannel.InApp, isEnabled: true);
+        var preference = NotificationPreference.Create(SampleUserId, NotificationChannel.InApp, isEnabled: true);
         await repository.AddAsync(preference, CancellationToken.None);
 
-        var retrieved = await repository.GetByUserAndChannelAsync("user-123", NotificationChannel.InApp, CancellationToken.None);
+        var retrieved = await repository.GetByUserAndChannelAsync(SampleUserId, NotificationChannel.InApp, CancellationToken.None);
 
         Assert.NotNull(retrieved);
         Assert.Equal(preference.Id, retrieved!.Id);
@@ -29,10 +31,8 @@ public class NotificationPreferenceRepositoryIntegrationTests
         await using var database = await TestSqliteDatabase.CreateAsync();
         var repository = new NotificationPreferenceRepository(database.Context);
 
-        var result = await repository.GetByUserAndChannelAsync("user-123", NotificationChannel.Email, CancellationToken.None);
+        var result = await repository.GetByUserAndChannelAsync(SampleUserId, NotificationChannel.Email, CancellationToken.None);
 
         Assert.Null(result);
     }
 }
-
-

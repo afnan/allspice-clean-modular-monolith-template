@@ -8,6 +8,8 @@ namespace AllSpice.CleanModularMonolith.Notifications.Application.UnitTests.Pref
 
 public class UpsertNotificationPreferenceCommandHandlerTests
 {
+    private static readonly Guid SampleUserId = new("22222222-2222-2222-2222-222222222222");
+
     private readonly Mock<INotificationPreferenceRepository> _repositoryMock = new();
     private readonly UpsertNotificationPreferenceCommandHandler _handler;
 
@@ -18,7 +20,7 @@ public class UpsertNotificationPreferenceCommandHandlerTests
             .ReturnsAsync((NotificationPreference preference, CancellationToken _) => preference);
         _repositoryMock
             .Setup(repository => repository.UpdateAsync(It.IsAny<NotificationPreference>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(0);
+            .Returns(Task.FromResult(1));
 
         _handler = new UpsertNotificationPreferenceCommandHandler(_repositoryMock.Object);
     }
@@ -27,10 +29,10 @@ public class UpsertNotificationPreferenceCommandHandlerTests
     public async Task Handle_AddsPreference_WhenNoneExists()
     {
         _repositoryMock
-            .Setup(repository => repository.GetByUserAndChannelAsync(It.IsAny<string>(), It.IsAny<NotificationChannel>(), It.IsAny<CancellationToken>()))
+            .Setup(repository => repository.GetByUserAndChannelAsync(It.IsAny<Guid>(), It.IsAny<NotificationChannel>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((NotificationPreference?)null);
 
-        var command = new UpsertNotificationPreferenceCommand("user-123", NotificationChannel.Email, true);
+        var command = new UpsertNotificationPreferenceCommand(SampleUserId, NotificationChannel.Email, true);
 
         var result = await _handler.Handle(command, CancellationToken.None);
 
@@ -51,7 +53,7 @@ public class UpsertNotificationPreferenceCommandHandlerTests
     [Fact]
     public async Task Handle_UpdatesPreference_WhenExisting()
     {
-        var existing = NotificationPreference.Create("user-123", NotificationChannel.Email, true);
+        var existing = NotificationPreference.Create(SampleUserId, NotificationChannel.Email, true);
         _repositoryMock
             .Setup(repository => repository.GetByUserAndChannelAsync(existing.UserId, existing.Channel, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existing);
@@ -74,10 +76,10 @@ public class UpsertNotificationPreferenceCommandHandlerTests
     public async Task Handle_ReturnsError_WhenRepositoryThrows()
     {
         _repositoryMock
-            .Setup(repository => repository.GetByUserAndChannelAsync(It.IsAny<string>(), It.IsAny<NotificationChannel>(), It.IsAny<CancellationToken>()))
+            .Setup(repository => repository.GetByUserAndChannelAsync(It.IsAny<Guid>(), It.IsAny<NotificationChannel>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("database down"));
 
-        var command = new UpsertNotificationPreferenceCommand("user-123", NotificationChannel.Email, true);
+        var command = new UpsertNotificationPreferenceCommand(SampleUserId, NotificationChannel.Email, true);
 
         var result = await _handler.Handle(command, CancellationToken.None);
 
@@ -85,5 +87,3 @@ public class UpsertNotificationPreferenceCommandHandlerTests
         Assert.Contains("database down", result.Errors.Single());
     }
 }
-
-
