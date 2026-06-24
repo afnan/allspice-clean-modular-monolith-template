@@ -9,7 +9,9 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Em
 /// <summary>
 /// Dispatches emails through a provider fallback chain with error recovery.
 /// Development: always MailKit (Papercut SMTP).
-/// Production: Resend -> SendGrid -> MailKit (each catches errors and falls through).
+/// Production: Resend -> SendGrid. MailKit is a <em>development-only</em> sender (local/Papercut SMTP), so it
+/// is never used as a silent production fallback — that would quietly drop mail to a non-existent local server.
+/// In production the dispatcher fails fast when no provider is configured, or when every configured provider fails.
 /// </summary>
 public sealed class EmailSenderDispatcher : IEmailSender
 {
@@ -49,8 +51,19 @@ public sealed class EmailSenderDispatcher : IEmailSender
             return;
         }
 
-        // Production fallback chain: Resend -> SendGrid -> MailKit
-        if (IsResendConfigured())
+        // Production: real providers only (Resend -> SendGrid). Fail fast rather than silently using MailKit.
+        var resendConfigured = IsResendConfigured();
+        var sendGridConfigured = IsSendGridConfigured();
+
+        if (!resendConfigured && !sendGridConfigured)
+        {
+            throw new InvalidOperationException(
+                "No production email provider is configured. Configure Resend (Notifications:Resend) or " +
+                "SendGrid (Notifications:SendGrid) with an API key and from-address, or run in the Development " +
+                "environment to use the local SMTP (MailKit/Papercut) sender.");
+        }
+
+        if (resendConfigured)
         {
             try
             {
@@ -64,7 +77,7 @@ public sealed class EmailSenderDispatcher : IEmailSender
             }
         }
 
-        if (IsSendGridConfigured())
+        if (sendGridConfigured)
         {
             try
             {
@@ -74,12 +87,13 @@ public sealed class EmailSenderDispatcher : IEmailSender
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "SendGrid failed for {Recipient}, falling back to MailKit", message.To);
+                _logger.LogWarning(ex, "SendGrid failed for {Recipient}", message.To);
             }
         }
 
-        _logger.LogDebug("Sending email via MailKit to {Recipient}", message.To);
-        await _mailKitSender.SendEmailAsync(message, cancellationToken);
+        // A provider was configured but every attempt failed. Do NOT fall back to MailKit/localhost in production.
+        throw new InvalidOperationException(
+            "All configured production email providers (Resend/SendGrid) failed to deliver the message.");
     }
 
     private bool IsResendConfigured() =>

@@ -24,23 +24,24 @@ public sealed class ResendEmailSender : Application.Contracts.Services.IEmailSen
 
     public async Task SendEmailAsync(AppEmailMessage message, CancellationToken cancellationToken = default)
     {
-        var fromAddress = message.From ?? _options.FromAddress;
-        var from = !string.IsNullOrWhiteSpace(_options.FromName)
-            ? $"{_options.FromName} <{fromAddress}>"
-            : fromAddress;
+        var envelope = EmailEnvelope.From(message, _options.FromAddress, _options.FromName, _options.ReplyToAddress);
+
+        var from = !string.IsNullOrWhiteSpace(envelope.FromName)
+            ? $"{envelope.FromName} <{envelope.FromAddress}>"
+            : envelope.FromAddress;
 
         var resendMessage = new Resend.EmailMessage
         {
             From = from,
             To = message.To,
             Subject = message.Subject,
-            HtmlBody = message.IsHtml ? message.Body : null,
-            TextBody = message.IsHtml ? null : message.Body
+            HtmlBody = envelope.HtmlBody,
+            TextBody = envelope.TextBody
         };
 
-        if (!string.IsNullOrWhiteSpace(_options.ReplyToAddress))
+        if (!string.IsNullOrWhiteSpace(envelope.ReplyToAddress))
         {
-            resendMessage.ReplyTo = _options.ReplyToAddress;
+            resendMessage.ReplyTo = envelope.ReplyToAddress;
         }
 
         await _resend.EmailSendAsync(resendMessage, cancellationToken);

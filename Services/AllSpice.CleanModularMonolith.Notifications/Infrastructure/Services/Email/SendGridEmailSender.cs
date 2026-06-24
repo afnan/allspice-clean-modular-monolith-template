@@ -24,17 +24,17 @@ public sealed class SendGridEmailSender : IEmailSender
     {
         var client = new SendGridClient(_options.ApiKey);
 
-        var fromAddress = message.From ?? _options.FromAddress;
-        var from = new EmailAddress(fromAddress, _options.FromName);
+        var envelope = EmailEnvelope.From(message, _options.FromAddress, _options.FromName, _options.ReplyToAddress);
+
+        var from = new EmailAddress(envelope.FromAddress, envelope.FromName);
         var to = new EmailAddress(message.To);
 
-        var msg = message.IsHtml
-            ? MailHelper.CreateSingleEmail(from, to, message.Subject, plainTextContent: null, htmlContent: message.Body)
-            : MailHelper.CreateSingleEmail(from, to, message.Subject, plainTextContent: message.Body, htmlContent: null);
+        var msg = MailHelper.CreateSingleEmail(
+            from, to, message.Subject, plainTextContent: envelope.TextBody, htmlContent: envelope.HtmlBody);
 
-        if (!string.IsNullOrWhiteSpace(_options.ReplyToAddress))
+        if (!string.IsNullOrWhiteSpace(envelope.ReplyToAddress))
         {
-            msg.ReplyTo = new EmailAddress(_options.ReplyToAddress);
+            msg.ReplyTo = new EmailAddress(envelope.ReplyToAddress);
         }
 
         var response = await client.SendEmailAsync(msg, cancellationToken);

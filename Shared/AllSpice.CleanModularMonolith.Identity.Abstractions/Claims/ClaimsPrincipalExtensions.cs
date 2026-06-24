@@ -56,6 +56,21 @@ public static class ClaimsPrincipalExtensions
     }
 
     /// <summary>
+    /// Resolves the external identity-provider subject for the principal, trying the common claim names in
+    /// order: <see cref="ClaimTypes.NameIdentifier"/>, then <c>sub</c>, <c>oid</c>, and <c>client_id</c>.
+    /// Returns <c>null</c> when none are present. This is the external (Keycloak) id — appropriate at JWT /
+    /// SignalR boundaries; resolve it to the canonical local UUID before persisting or audit-stamping.
+    /// </summary>
+    public static string? GetSubjectId(this ClaimsPrincipal principal)
+    {
+        Guard.Against.Null(principal);
+        return principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? principal.FindFirst("sub")?.Value
+            ?? principal.FindFirst("oid")?.Value
+            ?? principal.FindFirst("client_id")?.Value;
+    }
+
+    /// <summary>
     /// Returns the token issuer (typically the Keycloak application URL).
     /// </summary>
     public static string? GetIssuer(this ClaimsPrincipal principal)

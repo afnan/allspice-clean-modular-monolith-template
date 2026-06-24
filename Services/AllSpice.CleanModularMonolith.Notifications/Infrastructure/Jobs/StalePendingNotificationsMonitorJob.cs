@@ -7,14 +7,21 @@ using Quartz;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Jobs;
 
-public sealed class NotificationDailyDigestJob : IJob
+/// <summary>
+/// Scheduled job that <em>monitors</em> notification delivery health: it counts notifications still
+/// <see cref="NotificationStatus.Pending"/> after a cutoff (default 1 day) and logs the backlog so a
+/// growing count surfaces a stuck dispatcher. It does NOT send a digest email — despite the original
+/// "daily digest" name. Building a real recipient-facing digest is a feature, deliberately out of scope
+/// for the template; this job is the lightweight observability stand-in.
+/// </summary>
+public sealed class StalePendingNotificationsMonitorJob : IJob
 {
     private readonly INotificationRepository _notificationRepository;
-    private readonly ILogger<NotificationDailyDigestJob> _logger;
+    private readonly ILogger<StalePendingNotificationsMonitorJob> _logger;
 
-    public NotificationDailyDigestJob(
+    public StalePendingNotificationsMonitorJob(
         INotificationRepository notificationRepository,
-        ILogger<NotificationDailyDigestJob> logger)
+        ILogger<StalePendingNotificationsMonitorJob> logger)
     {
         _notificationRepository = notificationRepository;
         _logger = logger;
@@ -29,7 +36,7 @@ public sealed class NotificationDailyDigestJob : IJob
         var pendingCount = await _notificationRepository.CountAsync(pendingSpec, cancellationToken);
 
         _logger.LogInformation(
-            "Notification daily digest: {PendingCount} pending notifications older than {Cutoff}.",
+            "Stale-pending notifications monitor: {PendingCount} notifications still pending older than {Cutoff}.",
             pendingCount,
             cutoff);
     }
@@ -44,5 +51,3 @@ public sealed class NotificationDailyDigestJob : IJob
         }
     }
 }
-
-

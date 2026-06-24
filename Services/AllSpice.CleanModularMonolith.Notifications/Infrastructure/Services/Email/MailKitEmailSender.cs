@@ -27,19 +27,20 @@ public sealed class MailKitEmailSender : IEmailSender
 
         var options = _optionsMonitor.CurrentValue;
 
+        var envelope = EmailEnvelope.From(message, options.FromAddress, options.FromName, replyToAddress: null);
+
         var mimeMessage = new MimeMessage
         {
             Subject = message.Subject,
         };
 
-        var fromAddress = message.From ?? options.FromAddress;
-        mimeMessage.From.Add(new MailboxAddress(options.FromName, fromAddress));
+        mimeMessage.From.Add(new MailboxAddress(envelope.FromName, envelope.FromAddress));
         mimeMessage.To.Add(MailboxAddress.Parse(message.To));
 
         var bodyBuilder = new BodyBuilder
         {
-            HtmlBody = message.IsHtml ? message.Body : null,
-            TextBody = message.IsHtml ? null : message.Body
+            HtmlBody = envelope.HtmlBody,
+            TextBody = envelope.TextBody
         };
 
         mimeMessage.Body = bodyBuilder.ToMessageBody();

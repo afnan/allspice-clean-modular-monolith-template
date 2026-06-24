@@ -69,9 +69,11 @@ public static class GatewayServiceCollectionExtensions
         // 1. Logging — logs request/response and elapsed time
         // 2. DomainException — maps domain/validation exceptions to Result types. MUST wrap Validation
         //    so a FluentValidation.ValidationException becomes Result.Invalid (→ 400), not a 500.
-        // 3. Performance — traces slow requests
+        // 3. Performance — logs a warning when a request exceeds the slow-request threshold, else trace
         // 4. Validation — rejects invalid requests before starting a transaction
         // 5. Transaction — wraps handler + domain events in a DB transaction (commands only)
+        services.AddOptions<AllSpice.CleanModularMonolith.SharedKernel.Behaviors.PerformanceBehaviorOptions>()
+            .BindConfiguration("Performance");
         services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.LoggingBehavior<,>));
         services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.DomainExceptionBehavior<,>));
         services.AddScoped(typeof(Mediator.IPipelineBehavior<,>), typeof(AllSpice.CleanModularMonolith.SharedKernel.Behaviors.PerformanceBehavior<,>));

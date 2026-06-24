@@ -7,14 +7,6 @@ namespace AllSpice.CleanModularMonolith.Web;
 
 public static class ClaimsPrincipalExtensions
 {
-    public static string? GetUserObjectId(this ClaimsPrincipal principal)
-    {
-        return principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? principal.FindFirst("sub")?.Value
-            ?? principal.FindFirst("oid")?.Value
-            ?? principal.FindFirst("client_id")?.Value;
-    }
-
     public static ProblemHttpResult ToUnauthorizedProblem(this ClaimsPrincipal principal, string? detail = null)
     {
         var problem = new ProblemDetails
