@@ -17,6 +17,7 @@ public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
     private readonly HttpClient _httpClient;
     private readonly KeycloakOptions _options;
     private readonly ILogger<KeycloakDirectoryClient> _logger;
+    private readonly KeycloakRoleClient _roleClient;
 
     public KeycloakDirectoryClient(
         HttpClient httpClient,
@@ -29,6 +30,7 @@ public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
         _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
+        _roleClient = new KeycloakRoleClient(httpClient, logger);
     }
 
     /// <inheritdoc />
@@ -61,8 +63,7 @@ public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
 
         response.EnsureSuccessStatusCode();
 
-        await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: cancellationToken);
+        using var document = await response.ReadJsonAsync(cancellationToken);
         var root = document.RootElement;
 
         if (root.TryGetProperty("firstName", out var firstNameElement) && root.TryGetProperty("lastName", out var lastNameElement))
@@ -142,45 +143,12 @@ public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
     }
 
     /// <inheritdoc />
-    public async Task AssignRealmRoleAsync(string userId, string roleName, CancellationToken cancellationToken = default)
-    {
-        Guard.Against.NullOrWhiteSpace(userId);
-        Guard.Against.NullOrWhiteSpace(roleName);
-
-        var role = await GetOrCreateRealmRoleAsync(roleName, cancellationToken);
-
-        var payload = new[] { role };
-        var response = await _httpClient.PostAsJsonAsync(
-            $"users/{Uri.EscapeDataString(userId)}/role-mappings/realm", payload, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        _logger.LogInformation("Assigned realm role {Role} to user {UserId}", roleName, userId);
-    }
+    public Task AssignRealmRoleAsync(string userId, string roleName, CancellationToken cancellationToken = default) =>
+        _roleClient.AssignRealmRoleAsync(userId, roleName, cancellationToken);
 
     /// <inheritdoc />
-    public async Task RevokeRealmRoleAsync(string userId, string roleName, CancellationToken cancellationToken = default)
-    {
-        Guard.Against.NullOrWhiteSpace(userId);
-        Guard.Against.NullOrWhiteSpace(roleName);
-
-        var role = await GetRealmRoleByNameAsync(roleName, cancellationToken);
-        if (role is null)
-        {
-            _logger.LogWarning("Cannot revoke role {Role} from user {UserId}: role not found", roleName, userId);
-            return;
-        }
-
-        var request = new HttpRequestMessage(HttpMethod.Delete,
-            $"users/{Uri.EscapeDataString(userId)}/role-mappings/realm")
-        {
-            Content = JsonContent.Create(new[] { role })
-        };
-
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        _logger.LogInformation("Revoked realm role {Role} from user {UserId}", roleName, userId);
-    }
+    public Task RevokeRealmRoleAsync(string userId, string roleName, CancellationToken cancellationToken = default) =>
+        _roleClient.RevokeRealmRoleAsync(userId, roleName, cancellationToken);
 
     /// <inheritdoc />
     public async Task ResetTemporaryPasswordAsync(string userId, string tempPassword, CancellationToken cancellationToken = default)
@@ -222,8 +190,7 @@ public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
         var response = await _httpClient.GetAsync($"users?first={first}&max={max}", cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        using var doc = await response.ReadJsonAsync(cancellationToken);
 
         var users = new List<ExternalUser>();
         foreach (var element in doc.RootElement.EnumerateArray())
@@ -241,63 +208,8 @@ public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
     }
 
     /// <inheritdoc />
-    public async Task<List<string>> GetUserRealmRolesAsync(string userId, CancellationToken cancellationToken = default)
-    {
-        Guard.Against.NullOrWhiteSpace(userId);
-
-        var response = await _httpClient.GetAsync(
-            $"users/{Uri.EscapeDataString(userId)}/role-mappings/realm", cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-
-        return doc.RootElement.EnumerateArray()
-            .Select(r => r.GetProperty("name").GetString() ?? string.Empty)
-            .Where(name => !string.IsNullOrEmpty(name))
-            .ToList();
-    }
-
-    private async Task<object> GetOrCreateRealmRoleAsync(string roleName, CancellationToken cancellationToken)
-    {
-        var existing = await GetRealmRoleByNameAsync(roleName, cancellationToken);
-        if (existing is not null)
-        {
-            return existing;
-        }
-
-        var createPayload = new { name = roleName };
-        var createResponse = await _httpClient.PostAsJsonAsync("roles", createPayload, cancellationToken);
-        createResponse.EnsureSuccessStatusCode();
-
-        _logger.LogInformation("Created realm role {Role}", roleName);
-
-        return await GetRealmRoleByNameAsync(roleName, cancellationToken)
-            ?? throw new InvalidOperationException($"Failed to retrieve realm role '{roleName}' after creation.");
-    }
-
-    private async Task<object?> GetRealmRoleByNameAsync(string roleName, CancellationToken cancellationToken)
-    {
-        var response = await _httpClient.GetAsync(
-            $"roles/{Uri.EscapeDataString(roleName)}", cancellationToken);
-
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-
-        response.EnsureSuccessStatusCode();
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-        var root = doc.RootElement;
-
-        return new
-        {
-            id = root.GetProperty("id").GetString(),
-            name = root.GetProperty("name").GetString()
-        };
-    }
+    public Task<List<string>> GetUserRealmRolesAsync(string userId, CancellationToken cancellationToken = default) =>
+        _roleClient.GetUserRealmRolesAsync(userId, cancellationToken);
 
     private static string ExtractUserIdFromLocationHeader(HttpResponseMessage response)
     {
