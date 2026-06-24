@@ -32,8 +32,9 @@ public static class GatewayModuleRegistrationExtensions
         builder.Services.AddScoped<IDomainEventDispatcher, MediatorDomainEventDispatcher>();
 
         // Current-user provider for audit stamping + cross-cutting EF Core save interceptors
-        // (concurrency diagnostics, audit-user stamping). EF Core discovers the IInterceptor
-        // singletons from this container, so every module DbContext picks them up.
+        // (concurrency diagnostics, audit-user stamping). AddSharedKernelInterceptors registers them
+        // explicitly as IInterceptor singletons; EF Core then resolves those services from this
+        // container and applies them to every module DbContext (it does not scan for interceptors).
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton<ICurrentUserProvider, HttpContextCurrentUserProvider>();
         // Per-request cache for the resolved canonical local user id; populated once per request by
