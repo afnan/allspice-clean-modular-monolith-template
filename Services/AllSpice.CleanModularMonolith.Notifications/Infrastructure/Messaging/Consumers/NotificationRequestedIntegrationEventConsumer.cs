@@ -26,6 +26,15 @@ public static class NotificationRequestedIntegrationEventConsumer
         CancellationToken cancellationToken)
     {
         var channel = MapChannel(message.Channel);
+        if (channel is null)
+        {
+            // Unknown channel is permanent bad data — log and drop rather than throwing (which would
+            // retry then dead-letter), consistent with the permanent-failure handling below.
+            logger.LogError(
+                "Dropping notification request for {Recipient}: unknown channel '{Channel}' (permanent).",
+                message.RecipientEmail, message.Channel);
+            return;
+        }
 
         var command = new QueueNotificationCommand(
             message.RecipientUserId,
@@ -63,12 +72,12 @@ public static class NotificationRequestedIntegrationEventConsumer
         }
     }
 
-    private static DomainChannel MapChannel(NotificationChannel channel)
+    private static DomainChannel? MapChannel(NotificationChannel channel)
         => channel switch
         {
             NotificationChannel.Email => DomainChannel.Email,
             NotificationChannel.Sms => DomainChannel.Sms,
             NotificationChannel.InApp => DomainChannel.InApp,
-            _ => throw new ArgumentOutOfRangeException(nameof(channel), channel, $"Unknown notification channel: {channel}")
+            _ => null
         };
 }

@@ -25,7 +25,16 @@ public sealed class QueueNotificationEndpoint(IMediator mediator)
     /// <inheritdoc />
     public override async Task HandleAsync(QueueNotificationRequest req, CancellationToken ct)
     {
-        var channel = NotificationChannel.FromName(req.Channel, ignoreCase: true);
+        // QueueNotificationRequestValidator already rejects an unknown channel with a 400; this is the
+        // defensive fallback so an unrecognized channel never reaches FromName (which would throw → 500).
+        if (!NotificationChannel.TryFromName(req.Channel, ignoreCase: true, out var channel))
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await HttpContext.Response.WriteAsJsonAsync(
+                new QueueNotificationErrorResponse([$"Unknown notification channel '{req.Channel}'."]),
+                cancellationToken: ct);
+            return;
+        }
 
         var command = new QueueNotificationCommand(
             req.RecipientUserId,
