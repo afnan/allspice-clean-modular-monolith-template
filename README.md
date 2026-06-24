@@ -6,11 +6,11 @@ A production-ready .NET 10 modular monolith template (`dotnet new allspice-modul
 
 - **API Gateway with YARP** for routing, Redis output caching, and JWT validation
 - **Identity module** with Keycloak Admin API integration — user sync/mirroring, role management, client credentials token caching (auth-agnostic: the IdP provisions users via direct admin or SSO/SAML)
-- **Notifications module** with Resend/SendGrid/MailKit fallback chain, HTML email templates (embedded resources), SignalR in-app delivery, Quartz daily digest
+- **Notifications module** with Resend/SendGrid providers (MailKit/Papercut for local dev), HTML email templates (embedded resources), SignalR in-app delivery, Quartz stale-pending monitor
 - **PuppeteerSharp PDF library** — headless Chromium, A4 output, reusable theme CSS, header/footer page-frame
 - **Realtime hub** sharing SignalR infrastructure across modules with automatic user groups
 - **Wolverine messaging** with PostgreSQL durable outbox for reliable event-driven cross-module communication
-- **Quartz.NET scheduling** with per-module jobs (Keycloak user sync, notification digest)
+- **Quartz.NET scheduling** with per-module jobs (Keycloak user sync, stale-pending notifications monitor)
 - **Aspire AppHost** to spin up PostgreSQL, Redis, Keycloak, and Papercut SMTP in one command
 - **Central package management** with .NET 10, Clean Architecture patterns powered by Ardalis libraries
 - **FastEndpoints** with explicit assembly discovery (not controllers)
@@ -64,7 +64,7 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 | Module | Highlights |
 | --- | --- |
 | **Identity** | User aggregate, `KeycloakTokenProvider` (client credentials flow), `KeycloakDirectoryClient` (Admin REST API), `KeycloakUserSyncJob` (mirrors IdP users locally), module role assignments/templates, health checks |
-| **Notifications** | Email (Resend/SendGrid/MailKit), InApp (SignalR), HTML templates (embedded resources + DB seeding), `NotificationContentBuilder` with `{{token}}` replacement, Quartz daily digest, Wolverine consumer |
+| **Notifications** | Email (Resend/SendGrid; MailKit dev-only), InApp (SignalR), HTML templates (embedded resources + DB seeding), `NotificationContentBuilder` with `{{token}}` replacement, Quartz stale-pending monitor, Wolverine consumer |
 | **ApiGateway** | FastEndpoints (explicit assembly discovery), YARP reverse proxy, SignalR hub mapping, Redis output caching, centralized Wolverine durable outbox registration |
 | **AppHost** | Aspire orchestrator: PostgreSQL, Redis, Keycloak (dev + prod modes), Papercut SMTP |
 
@@ -79,9 +79,11 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 
 ## Email Delivery
 
-Provider fallback chain via `EmailSenderDispatcher`:
+Provider selection via `EmailSenderDispatcher`:
 - **Development:** Always MailKit (Papercut SMTP container via Aspire)
-- **Production:** Resend -> SendGrid -> MailKit
+- **Production:** Resend -> SendGrid. MailKit is dev-only and is **never** a silent production fallback;
+  if no provider is configured (or every configured provider fails), the dispatcher fails fast rather than
+  dropping mail to a non-existent local SMTP server.
 
 HTML email templates stored as embedded resources, loaded by `EmailTemplateLoader`, merged with `_Layout.html` layout, and seeded/synced to database on startup. Templates: `registration-welcome`, `role-assigned`, `role-revoked`, `password-reset`, `profile-updated`.
 
