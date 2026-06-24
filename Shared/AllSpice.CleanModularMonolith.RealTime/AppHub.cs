@@ -1,4 +1,4 @@
-using System.Security.Claims;
+using AllSpice.CleanModularMonolith.Identity.Abstractions.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
@@ -83,12 +83,10 @@ public sealed class AppHub : Hub<IAppHubClient>
     }
 
     /// <summary>
-    /// Resolves the user identifier from known claim types.
+    /// Resolves the external subject id from the connection's claims (the SignalR/JWT boundary, where the
+    /// external id is the correct identity). Delegates to the shared <see cref="ClaimsPrincipalExtensions.GetSubjectId"/>.
     /// </summary>
-    private string? GetUserId()
-        => Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
-           ?? Context.User?.FindFirst("sub")?.Value
-           ?? Context.User?.FindFirst("oid")?.Value;
+    private string? GetUserId() => Context.User?.GetSubjectId();
 
     /// <summary>
     /// Builds the normalized user group name for a given user.
