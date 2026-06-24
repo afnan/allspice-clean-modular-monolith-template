@@ -41,11 +41,11 @@ public sealed class ListUsersEndpoint : EndpointWithoutRequest<Results<Ok<PagedR
         return result.Status switch
         {
             ResultStatus.Ok => TypedResults.Ok(new PagedResponse<UserResponse>(
-                result.Value.Select(UserMapper.ToResponse).ToList(),
-                (int)result.PagedInfo.PageNumber,
-                (int)result.PagedInfo.PageSize,
-                (int)result.PagedInfo.TotalRecords,
-                (int)result.PagedInfo.TotalPages)),
+                result.Value.Items.Select(UserMapper.ToResponse).ToList(),
+                result.Value.Page,
+                result.Value.PageSize,
+                result.Value.TotalCount,
+                result.Value.TotalPages)),
             _ => result.ToProblem()
         };
     }

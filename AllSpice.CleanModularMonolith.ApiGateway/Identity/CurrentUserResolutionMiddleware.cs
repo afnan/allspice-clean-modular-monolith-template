@@ -9,6 +9,12 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Identity;
 /// records the local id (per the local-UUID-is-canonical convention) instead of the Keycloak subject.
 /// Runs after authentication so <see cref="HttpContext.User"/> is populated; anonymous requests are a
 /// no-op. Costs one directory lookup per authenticated request (the user is fixed for the request).
+/// <para>
+/// Trade-off: this sits in the shared pipeline, so authenticated <em>proxied</em> requests also pay the
+/// lookup even though the gateway never stamps audit rows for them. Acceptable for the template's scale;
+/// if the proxy path gets hot, scope this to local endpoints (e.g. a FastEndpoints pre-processor) or
+/// resolve lazily on first audit stamp. See TODOS.md.
+/// </para>
 /// </summary>
 public sealed class CurrentUserResolutionMiddleware
 {

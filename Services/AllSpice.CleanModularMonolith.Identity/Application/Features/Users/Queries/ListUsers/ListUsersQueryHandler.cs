@@ -6,7 +6,7 @@ using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Identity.Application.Features.Users.Queries.ListUsers;
 
-public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, PagedResult<IReadOnlyCollection<UserDto>>>
+public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, Result<PagedList<UserDto>>>
 {
     private readonly IUserRepository _userRepository;
 
@@ -15,7 +15,7 @@ public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, Page
         _userRepository = userRepository;
     }
 
-    public async ValueTask<PagedResult<IReadOnlyCollection<UserDto>>> Handle(ListUsersQuery request, CancellationToken cancellationToken)
+    public async ValueTask<Result<PagedList<UserDto>>> Handle(ListUsersQuery request, CancellationToken cancellationToken)
     {
         var (users, totalCount) = await _userRepository.ListActivePagedAsync(request.Page, request.PageSize, cancellationToken);
 
@@ -27,8 +27,7 @@ public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, Page
             ? 0
             : (int)Math.Ceiling(totalCount / (double)request.PageSize);
 
-        var pagedInfo = new PagedInfo(request.Page, request.PageSize, totalPages, totalCount);
-
-        return new PagedResult<IReadOnlyCollection<UserDto>>(pagedInfo, dtos);
+        return Result<PagedList<UserDto>>.Success(
+            new PagedList<UserDto>(dtos, request.Page, request.PageSize, totalCount, totalPages));
     }
 }

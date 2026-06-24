@@ -21,9 +21,10 @@ public sealed class ListUsersQueryHandlerTests
         var result = await handler.Handle(new ListUsersQuery(2, 20), CancellationToken.None);
 
         Assert.Equal(ResultStatus.Ok, result.Status);
-        Assert.Equal(2, result.PagedInfo.PageNumber);
-        Assert.Equal(20, result.PagedInfo.PageSize);
-        Assert.Equal(137, result.PagedInfo.TotalRecords);
-        Assert.Equal(7, result.PagedInfo.TotalPages); // ceil(137 / 20)
+        Assert.Equal(2, result.Value.Page);
+        Assert.Equal(20, result.Value.PageSize);
+        Assert.Equal(137, result.Value.TotalCount);
+        Assert.Equal(7, result.Value.TotalPages); // ceil(137 / 20)
+        Assert.Empty(result.Value.Items);
     }
 }

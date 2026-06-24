@@ -35,9 +35,12 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
 - [x] **F-https — RESOLVED (2026-06-24).** `IdentityPortalOptions.RequireHttpsMetadata` (default `true`) is threaded
   onto every portal bearer scheme; the gateway sets it to `false` only in Development (`!IsDevelopment()`), so dev
   auth works against HTTP Keycloak while production still requires HTTPS metadata. Covered by `RequireHttpsMetadataTests`.
-- [x] **F-paging — RESOLVED (2026-06-24).** `ListUsers` no longer discards `TotalCount`. The handler returns an
-  Ardalis `PagedResult<…>` (page/size/total/total-pages) and the endpoint emits a `PagedResponse<UserResponse>`
-  envelope. Covered by `ListUsersQueryHandlerTests`; new `Identity.Application.UnitTests` project hosts it.
+- [x] **F-paging — RESOLVED (2026-06-24).** `ListUsers` no longer discards `TotalCount`. The handler returns
+  `Result<PagedList<UserDto>>` (page/size/total/total-pages) and the endpoint emits a `PagedResponse<UserResponse>`
+  envelope. Note: Ardalis `PagedResult<T>` is deliberately **not** used as the mediator response type — it derives
+  from `Result<T>` but can't be built in an error state, so `DomainExceptionResultMapper` can't map validation
+  failures onto it (would turn 400s into 500s). A `DomainExceptionResultMapperTests` guard pins this. Covered by
+  `ListUsersQueryHandlerTests`; new `Identity.Application.UnitTests` project hosts it.
 
 - [ ] **Unknown notification channel 500s before the pipeline (pre-existing).** `QueueNotificationEndpoint`
   calls `NotificationChannel.FromName(req.Channel, ignoreCase: true)` before the mediator pipeline; SmartEnum
@@ -117,6 +120,10 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   UUID (never the external `sub`), and the audit interceptor stamps it. Unauthenticated/unsynced users yield
   unattributed stamps (null) rather than an external id. Cost: one directory lookup per authenticated request
   (the user is fixed for the request). Future optimisation: a short-TTL `sub → Guid` cache across requests.
+- [ ] **`CurrentUserResolutionMiddleware` also resolves on proxied requests (P3, perf).** It sits in the shared
+  pipeline, so authenticated YARP-proxied requests pay the `sub → local Guid` lookup even though the gateway never
+  stamps audit rows for them. Acceptable at template scale; if the proxy path gets hot, scope resolution to local
+  endpoints (FastEndpoints global pre-processor) or resolve lazily on first audit stamp.
 
 - [ ] **`AddDbContextPool` bypasses Aspire's Npgsql enrichment (P2).**
   `IdentityModuleExtensions`/`NotificationsModuleExtensions` hand-roll `AddDbContextPool(UseNpgsql(...))` +
