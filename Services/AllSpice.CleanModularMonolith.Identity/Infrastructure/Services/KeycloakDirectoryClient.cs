@@ -84,32 +84,6 @@ public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
     }
 
     /// <inheritdoc />
-    public async Task InviteUserAsync(string email, string displayName, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(_options.InvitationEndpoint))
-        {
-            return;
-        }
-
-        Guard.Against.NullOrWhiteSpace(email);
-        Guard.Against.NullOrWhiteSpace(displayName);
-
-        var nameParts = displayName.Split(' ', 2);
-        var payload = new
-        {
-            username = email,
-            email = email,
-            firstName = nameParts.Length > 0 ? nameParts[0] : string.Empty,
-            lastName = nameParts.Length > 1 ? nameParts[1] : string.Empty,
-            enabled = true,
-            emailVerified = false
-        };
-
-        var response = await _httpClient.PostAsJsonAsync(_options.InvitationEndpoint, payload, cancellationToken);
-        response.EnsureSuccessStatusCode();
-    }
-
-    /// <inheritdoc />
     public async Task<string> CreateUserAsync(
         string email, string firstName, string lastName, string username,
         CancellationToken cancellationToken = default)

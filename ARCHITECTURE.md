@@ -107,15 +107,16 @@ and same-module only.
 ## Identity module
 
 Keycloak integration with the client-credentials flow:
-- **Aggregates:** `User`, `Invitation`. Authorization is **JWT-claim-based** via `ModuleRoleAuthorizationHandler`
+- **Aggregates:** `User`. Authorization is **JWT-claim-based** via `ModuleRoleAuthorizationHandler`
   (no role-assignment aggregates in the database).
 - **Keycloak:** `KeycloakTokenProvider` (singleton, `SemaphoreSlim`-cached) + `KeycloakTokenHandler`
   (auto Bearer injection); `KeycloakDirectoryClient` for the Admin REST API.
 - **Sync:** `KeycloakUserSyncJob` (Quartz) reconciles Keycloak users against the local `Users` table; an
   orphan is a Keycloak user with no local row.
-- **Invitation compensation:** `InviteUserCommandHandler` creates the Keycloak user first, then local records;
-  if local persistence fails it deletes the Keycloak user to avoid orphans.
-- **Endpoints:** `GET /api/identity/users/{externalId}`, `GET /api/identity/users`, `POST /api/identity/invitations`.
+- **User provisioning is the IdP's responsibility.** This template is auth-mechanism-agnostic: users are
+  provisioned in Keycloak (directly, or via SSO/SAML federation), then mirrored locally by the sync job. The
+  app does not create users or manage passwords — there is intentionally no in-app "invite user" flow.
+- **Endpoints:** `GET /api/identity/users/{externalId}`, `GET /api/identity/users`.
 
 ## Notifications module
 

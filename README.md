@@ -5,7 +5,7 @@ A production-ready .NET 10 modular monolith template (`dotnet new allspice-modul
 ## Features
 
 - **API Gateway with YARP** for routing, Redis output caching, and JWT validation
-- **Identity module** with full Keycloak Admin API integration — user provisioning, role management, invitation flow, client credentials token caching
+- **Identity module** with Keycloak Admin API integration — user sync/mirroring, role management, client credentials token caching (auth-agnostic: the IdP provisions users via direct admin or SSO/SAML)
 - **Notifications module** with Resend/SendGrid/MailKit fallback chain, HTML email templates (embedded resources), SignalR in-app delivery, Quartz daily digest
 - **PuppeteerSharp PDF library** — headless Chromium, A4 output, reusable theme CSS, header/footer page-frame
 - **Realtime hub** sharing SignalR infrastructure across modules with automatic user groups
@@ -48,7 +48,7 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 |- {{ProjectName}}.ApiGateway/           -- Sole runnable host, YARP, FastEndpoints, SignalR
 |- {{ProjectName}}.AppHost/              -- Aspire orchestrator (Postgres, Redis, Keycloak, Papercut)
 |- {{ProjectName}}.ServiceDefaults/      -- OpenTelemetry, resilience, service discovery, Quartz hosting
-|- Services/{{ProjectName}}.Identity/    -- User/Invitation aggregates, Keycloak sync, RBAC
+|- Services/{{ProjectName}}.Identity/    -- User aggregate, Keycloak sync, RBAC
 |- Services/{{ProjectName}}.Notifications/ -- Multi-channel delivery, templates, preferences
 |- Shared/{{ProjectName}}.SharedKernel/  -- Base entities, domain events, EfRepository, pipeline behaviors
 |- Shared/{{ProjectName}}.Pdf/           -- PuppeteerSharp PDF generation, theme CSS, footer builder
@@ -63,7 +63,7 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 
 | Module | Highlights |
 | --- | --- |
-| **Identity** | User + Invitation aggregates, `KeycloakTokenProvider` (client credentials flow), `KeycloakDirectoryClient` (full Admin REST API), `KeycloakUserSyncJob`, module role assignments/templates, health checks |
+| **Identity** | User aggregate, `KeycloakTokenProvider` (client credentials flow), `KeycloakDirectoryClient` (Admin REST API), `KeycloakUserSyncJob` (mirrors IdP users locally), module role assignments/templates, health checks |
 | **Notifications** | Email (Resend/SendGrid/MailKit), InApp (SignalR), HTML templates (embedded resources + DB seeding), `NotificationContentBuilder` with `{{token}}` replacement, Quartz daily digest, Wolverine consumer |
 | **ApiGateway** | FastEndpoints (explicit assembly discovery), YARP reverse proxy, SignalR hub mapping, Redis output caching, centralized Wolverine durable outbox registration |
 | **AppHost** | Aspire orchestrator: PostgreSQL, Redis, Keycloak (dev + prod modes), Papercut SMTP |
@@ -75,7 +75,7 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 - `KeycloakTokenHandler` (DelegatingHandler) auto-injects Bearer tokens into HTTP clients
 - `KeycloakDirectoryClient` provides full Admin REST API: create users, manage roles, reset passwords, paginated user listing
 - `KeycloakUserSyncJob` (Quartz) periodically syncs Keycloak users to local User table
-- Invitation flow: creates Keycloak user with temp password (with compensating delete on local failure), local User + Invitation records, fires domain event that publishes notification integration event via durable outbox
+- **Auth-agnostic by design:** users are provisioned in the IdP (Keycloak directly, or federated via SSO/SAML) and mirrored locally by the sync job. The template intentionally ships no in-app "invite user" / password-creation flow, so it works unchanged whether you use Keycloak-local accounts or external SSO/SAML.
 
 ## Email Delivery
 
@@ -83,7 +83,7 @@ Provider fallback chain via `EmailSenderDispatcher`:
 - **Development:** Always MailKit (Papercut SMTP container via Aspire)
 - **Production:** Resend -> SendGrid -> MailKit
 
-HTML email templates stored as embedded resources, loaded by `EmailTemplateLoader`, merged with `_Layout.html` layout, and seeded/synced to database on startup. Templates: `invitation-created`, `registration-welcome`, `role-assigned`, `role-revoked`, `password-reset`, `profile-updated`.
+HTML email templates stored as embedded resources, loaded by `EmailTemplateLoader`, merged with `_Layout.html` layout, and seeded/synced to database on startup. Templates: `registration-welcome`, `role-assigned`, `role-revoked`, `password-reset`, `profile-updated`.
 
 ## Configuration
 

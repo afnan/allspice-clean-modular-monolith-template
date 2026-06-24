@@ -66,31 +66,6 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Invitations",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Email = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    FirstName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    LastName = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    Role = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    Token = table.Column<Guid>(type: "uuid", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    ExpiresAtUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    CreatedByUserId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
-                    KeycloakUserId = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    LocalUserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedOnUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "text", nullable: true),
-                    LastModifiedOnUtc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    LastModifiedBy = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Invitations", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
                 {
@@ -124,17 +99,6 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Migrations
                 columns: new[] { "IssueType", "ResolvedUtc" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Invitations_Email",
-                table: "Invitations",
-                column: "Email");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Invitations_Token",
-                table: "Invitations",
-                column: "Token",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Users_Email",
                 table: "Users",
                 column: "Email");
@@ -157,9 +121,6 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "IdentitySyncIssues");
-
-            migrationBuilder.DropTable(
-                name: "Invitations");
 
             migrationBuilder.DropTable(
                 name: "Users");

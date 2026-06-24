@@ -23,13 +23,11 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
 
 ## Phase 2 notes
 
-- [ ] **F6 — temp password in the invitation pipeline (NEEDS DECISION).** The chosen "minimal" fix (keep the
-  temp password but keep it out of the outbox) is **not cleanly achievable**: invitations flow through the
-  async notification pipeline, so the password is necessarily persisted somewhere on the path (the integration
-  event envelope AND the `Notification.Body` row in notificationsdb). Removing it from only the envelope leaves
-  it in notificationsdb — marginal security gain. The clean fix is the **ideal**: create the Keycloak user with
-  an `UPDATE_PASSWORD` required action and email a set-password link (no credential transported/persisted at
-  all). Recommend adopting the ideal flow; revisit with the user.
+- [x] **F6 — temp password in the invitation pipeline — RESOLVED by removing the feature (2026-06-24).**
+  The invite-user flow created a Keycloak user with an app-generated temp password — the wrong default for an
+  auth-agnostic template (under SSO/SAML the IdP provisions users). The entire invite-user feature was removed
+  (aggregate, command/endpoint/handler, temp-password generator, invitation-created template), so no credential
+  is generated, transported, or persisted. Users are provisioned in the IdP and mirrored by the sync job.
 - [x] **F-idemp — addressed by durable messaging (2026-06-24).** Envelope-level redelivery (the realistic
   duplicate) is deduped by Wolverine's durable inbox / durable local queues (Phase 0). Documented in
   `NotificationRequestedIntegrationEventConsumer`. Explicit cross-envelope dedup (processed-event store keyed on
@@ -67,14 +65,10 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
 
 ## Phase 0 review follow-ups (deferred, not bugs in shipped behavior)
 
-- [ ] **InviteUser Keycloak compensation no longer fires on commit-time failure (HIGH, → Phase 2 saga).**
-  The UoW change means repositories stage and `TransactionBehavior` commits *after* the handler returns, so
-  the handler's `try/catch` (which deletes the Keycloak user when local persistence fails) can no longer
-  observe a commit-time DB failure — a failed commit orphans the Keycloak user. The window is narrow (the
-  pending-invite pre-check + absence of a unique email constraint mean duplicates don't fail at commit; only
-  infra faults do), but the documented compensation invariant is weaker than before. Proper fix is the
-  deferred `F-compensate` saga (outbox-driven or post-commit compensation) in Phase 2; do not bolt a
-  half-measure onto the clean UoW model. Tracks with the spec's open F-compensate item.
+- [x] **InviteUser Keycloak compensation — MOOT, feature removed (2026-06-24).** F-compensate only existed to
+  roll back the Keycloak user that `InviteUserCommandHandler` created. The invite-user feature was removed
+  entirely (the app no longer creates Keycloak users), so there is no external side-effect to compensate. No
+  saga needed.
 
 - [ ] **Outbox tests don't drive the real publisher/pipeline end-to-end (test coverage).** `OutboxAtomicity`
   and `HybridOutboxTopology` hand-roll the publish/commit sequence; they don't exercise

@@ -14,7 +14,7 @@ public static class EmailTemplateLoader
     /// <summary>
     /// Loads a named template and wraps it in the _Layout.html layout.
     /// </summary>
-    /// <param name="templateName">Template name without extension (e.g. "invitation-created").</param>
+    /// <param name="templateName">Template name without extension (e.g. "registration-welcome").</param>
     /// <returns>The fully rendered HTML with the template content merged into the layout.</returns>
     public static string LoadTemplate(string templateName)
     {

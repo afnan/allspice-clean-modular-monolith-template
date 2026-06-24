@@ -120,7 +120,6 @@ public static class NotificationsModuleExtensions
 
         var seedTemplates = new (string Key, string Subject)[]
         {
-            ("invitation-created", "You've been invited to {{ProjectName}}!"),
             ("registration-welcome", "Welcome to {{ProjectName}}, {{FirstName}}!"),
             ("role-assigned", "New role assigned: {{RoleName}}"),
             ("role-revoked", "Role revoked: {{RoleName}}"),
