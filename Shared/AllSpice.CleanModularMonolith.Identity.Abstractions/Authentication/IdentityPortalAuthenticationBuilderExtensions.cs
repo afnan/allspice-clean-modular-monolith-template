@@ -101,7 +101,8 @@ public static class IdentityPortalAuthenticationBuilderExtensions
 
     /// <summary>
     /// Adds a <see cref="ClaimTypes.Role"/> claim for each Keycloak realm role found in the principal's
-    /// <c>realm_access</c> claim (JSON <c>{ "roles": [ … ] }</c>). Malformed claims are ignored.
+    /// <c>realm_access</c> claim (JSON <c>{ "roles": [ … ] }</c>). Malformed JSON and non-string role
+    /// entries are skipped, so a misconfigured protocol mapper can never fault token validation.
     /// </summary>
     private static void MapRealmRolesToRoleClaims(ClaimsPrincipal? principal)
     {
@@ -126,6 +127,12 @@ public static class IdentityPortalAuthenticationBuilderExtensions
 
             foreach (var role in roles.EnumerateArray())
             {
+                // Skip non-string entries: GetString() throws InvalidOperationException on numbers/objects/etc.
+                if (role.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
                 var roleName = role.GetString();
                 if (!string.IsNullOrWhiteSpace(roleName) && !identity.HasClaim(ClaimTypes.Role, roleName))
                 {

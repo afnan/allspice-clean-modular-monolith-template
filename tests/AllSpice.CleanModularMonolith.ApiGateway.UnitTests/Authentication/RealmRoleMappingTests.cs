@@ -61,4 +61,14 @@ public class RealmRoleMappingTests
 
         Assert.Empty(principal.FindAll(ClaimTypes.Role));
     }
+
+    [Fact]
+    public async Task Skips_non_string_role_entries_without_faulting()
+    {
+        // A misconfigured protocol mapper can emit non-string entries; GetString() would otherwise throw.
+        var principal = await RunTokenValidated("{\"roles\":[123,\"admin\",{}]}");
+
+        Assert.True(principal.IsInRole("admin"));
+        Assert.Single(principal.FindAll(ClaimTypes.Role));
+    }
 }
