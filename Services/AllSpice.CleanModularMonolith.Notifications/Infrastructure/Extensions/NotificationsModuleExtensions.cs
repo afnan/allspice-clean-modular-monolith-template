@@ -78,11 +78,11 @@ public static class NotificationsModuleExtensions
 
         builder.Services.AddQuartz(configurator =>
         {
-            var jobKey = new JobKey("NotificationDailyDigestJob");
-            configurator.AddJob<NotificationDailyDigestJob>(options => options.WithIdentity(jobKey));
+            var jobKey = new JobKey("StalePendingNotificationsMonitorJob");
+            configurator.AddJob<StalePendingNotificationsMonitorJob>(options => options.WithIdentity(jobKey));
             configurator.AddTrigger(options => options
                 .ForJob(jobKey)
-                .WithIdentity("NotificationDailyDigestTrigger")
+                .WithIdentity("StalePendingNotificationsMonitorTrigger")
                 .WithCronSchedule("0 0 9 * * ?", cron => cron.InTimeZone(TimeZoneInfo.Utc)));
         });
 
