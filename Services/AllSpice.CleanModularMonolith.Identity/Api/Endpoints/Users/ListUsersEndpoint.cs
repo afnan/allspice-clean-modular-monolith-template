@@ -1,3 +1,4 @@
+using AllSpice.CleanModularMonolith.ApiContracts.Common;
 using AllSpice.CleanModularMonolith.ApiContracts.Identity.Responses;
 using AllSpice.CleanModularMonolith.Identity.Application.Features.Users.Queries.ListUsers;
 using AllSpice.CleanModularMonolith.Identity.Application.Mappers;
@@ -10,7 +11,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace AllSpice.CleanModularMonolith.Identity.Api.Endpoints.Users;
 
-public sealed class ListUsersEndpoint : EndpointWithoutRequest<Results<Ok<IReadOnlyCollection<UserResponse>>, ProblemHttpResult>>
+public sealed class ListUsersEndpoint : EndpointWithoutRequest<Results<Ok<PagedResponse<UserResponse>>, ProblemHttpResult>>
 {
     private readonly IMediator _mediator;
 
@@ -30,7 +31,7 @@ public sealed class ListUsersEndpoint : EndpointWithoutRequest<Results<Ok<IReadO
         });
     }
 
-    public override async Task<Results<Ok<IReadOnlyCollection<UserResponse>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    public override async Task<Results<Ok<PagedResponse<UserResponse>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
     {
         var page = Query<int?>("page") ?? 1;
         var pageSize = Query<int?>("pageSize") ?? 20;
@@ -39,8 +40,12 @@ public sealed class ListUsersEndpoint : EndpointWithoutRequest<Results<Ok<IReadO
 
         return result.Status switch
         {
-            ResultStatus.Ok => TypedResults.Ok<IReadOnlyCollection<UserResponse>>(
-                result.Value.Select(UserMapper.ToResponse).ToList()),
+            ResultStatus.Ok => TypedResults.Ok(new PagedResponse<UserResponse>(
+                result.Value.Select(UserMapper.ToResponse).ToList(),
+                (int)result.PagedInfo.PageNumber,
+                (int)result.PagedInfo.PageSize,
+                (int)result.PagedInfo.TotalRecords,
+                (int)result.PagedInfo.TotalPages)),
             _ => result.ToProblem()
         };
     }
