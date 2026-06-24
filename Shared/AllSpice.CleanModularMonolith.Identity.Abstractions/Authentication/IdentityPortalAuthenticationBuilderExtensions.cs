@@ -33,6 +33,7 @@ public static class IdentityPortalAuthenticationBuilderExtensions
         {
             options.Authority = portalOptions.ErpAuthority;
             options.Audience = portalOptions.ErpAudience;
+            options.RequireHttpsMetadata = portalOptions.RequireHttpsMetadata;
             options.MapInboundClaims = false;
             options.TokenValidationParameters = CreateDefaultParameters();
             options.Events = CreateHubBearerEvents();
@@ -45,6 +46,7 @@ public static class IdentityPortalAuthenticationBuilderExtensions
             {
                 options.Authority = portalOptions.PublicAuthority;
                 options.Audience = portalOptions.PublicAudience;
+                options.RequireHttpsMetadata = portalOptions.RequireHttpsMetadata;
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = CreateDefaultParameters();
                 options.Events = CreateHubBearerEvents();

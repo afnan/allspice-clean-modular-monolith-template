@@ -56,6 +56,14 @@ public sealed class IdentityPortalOptions
     /// When true, adds the public scheme as the default challenge (useful for public SPAs).
     /// </summary>
     public bool UsePublicAsDefaultChallenge { get; set; }
+
+    /// <summary>
+    /// Whether portal schemes require HTTPS when retrieving OpenID metadata from the authority.
+    /// Defaults to <c>true</c> (the secure production default). The host should set this to
+    /// <c>false</c> only in Development, where Keycloak is typically served over plain HTTP — otherwise
+    /// metadata retrieval fails and every authenticated request is rejected.
+    /// </summary>
+    public bool RequireHttpsMetadata { get; set; } = true;
 }
 
 

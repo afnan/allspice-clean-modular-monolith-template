@@ -49,6 +49,11 @@ public static class GatewayApplicationExtensions
         }
 
         app.UseAuthorization();
+
+        // Resolve the authenticated subject to the canonical local user id (once per request) so audit
+        // stamping records the local UUID. Must run after authentication populates HttpContext.User.
+        app.UseMiddleware<CurrentUserResolutionMiddleware>();
+
         app.UseFastEndpoints();
     }
 

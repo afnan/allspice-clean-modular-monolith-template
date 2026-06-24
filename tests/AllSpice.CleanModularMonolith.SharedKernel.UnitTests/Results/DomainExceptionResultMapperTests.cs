@@ -33,4 +33,17 @@ public class DomainExceptionResultMapperTests
         Assert.Equal(ResultStatus.Invalid, result.Status);
         Assert.Contains(result.ValidationErrors, e => e.Identifier == "Id");
     }
+
+    [Fact]
+    public void MapToResult_rejects_PagedResult_as_an_unsupported_response_type()
+    {
+        // Ardalis PagedResult<T> derives from Result<T> but is NOT the Result<> generic definition,
+        // and the library exposes no way to build one in an error state. So it must never be used as a
+        // mediator response type — doing so turns validation/domain failures into 500s. Paged queries
+        // wrap their page in a plain Result<T> instead (e.g. ListUsersQuery -> Result<PagedList<UserDto>>).
+        var exception = new ValidationException([new ValidationFailure("PageSize", "out of range")]);
+
+        Assert.Throws<InvalidOperationException>(
+            () => DomainExceptionResultMapper.MapToResult<PagedResult<int>>(exception));
+    }
 }

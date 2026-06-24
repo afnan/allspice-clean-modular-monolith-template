@@ -4,6 +4,7 @@ global using System.Net;
 global using System.Text.Json;
 global using System.Threading.RateLimiting;
 global using AllSpice.CleanModularMonolith.ApiGateway.Extensions;
+global using AllSpice.CleanModularMonolith.ApiGateway.Identity;
 global using AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 global using AllSpice.CleanModularMonolith.ApiGateway.RealTime;
 global using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions;
