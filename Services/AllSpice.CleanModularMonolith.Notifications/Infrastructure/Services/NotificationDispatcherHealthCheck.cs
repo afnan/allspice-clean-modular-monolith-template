@@ -8,20 +8,14 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 /// Unhealthy when the service hasn't completed an iteration recently — catches
 /// a silently-dead loop that wouldn't otherwise show up in logs or metrics.
 /// </summary>
-public sealed class NotificationDispatcherHealthCheck : IHealthCheck
+public sealed class NotificationDispatcherHealthCheck(
+    NotificationDispatcherHealthState state,
+    IOptions<NotificationDispatcherOptions> options) : IHealthCheck
 {
     private const int StaleMultiplier = 3;
 
-    private readonly NotificationDispatcherHealthState _state;
-    private readonly IOptions<NotificationDispatcherOptions> _options;
-
-    public NotificationDispatcherHealthCheck(
-        NotificationDispatcherHealthState state,
-        IOptions<NotificationDispatcherOptions> options)
-    {
-        _state = state;
-        _options = options;
-    }
+    private readonly NotificationDispatcherHealthState _state = state;
+    private readonly IOptions<NotificationDispatcherOptions> _options = options;
 
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {

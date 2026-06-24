@@ -30,21 +30,14 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Ch
 /// callers passing an external Guid would mis-route. Contract is now strict:
 /// always local UUID in, always resolve out.</para>
 /// </remarks>
-public sealed class InAppNotificationChannel : INotificationChannel
+public sealed class InAppNotificationChannel(
+    IRealtimePublisher realtimePublisher,
+    IUserExternalIdResolver userExternalIdResolver,
+    ILogger<InAppNotificationChannel> logger) : INotificationChannel
 {
-    private readonly IRealtimePublisher _realtimePublisher;
-    private readonly IUserExternalIdResolver _userExternalIdResolver;
-    private readonly ILogger<InAppNotificationChannel> _logger;
-
-    public InAppNotificationChannel(
-        IRealtimePublisher realtimePublisher,
-        IUserExternalIdResolver userExternalIdResolver,
-        ILogger<InAppNotificationChannel> logger)
-    {
-        _realtimePublisher = realtimePublisher;
-        _userExternalIdResolver = userExternalIdResolver;
-        _logger = logger;
-    }
+    private readonly IRealtimePublisher _realtimePublisher = realtimePublisher;
+    private readonly IUserExternalIdResolver _userExternalIdResolver = userExternalIdResolver;
+    private readonly ILogger<InAppNotificationChannel> _logger = logger;
 
     /// <inheritdoc />
     public NotificationChannel Channel => NotificationChannel.InApp;

@@ -8,16 +8,10 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// Resolves user information by local or external identifiers.
 /// Also implements <see cref="IUserExternalIdResolver"/> for cross-module use.
 /// </summary>
-public sealed class UserLookupService : IUserLookupService, IUserExternalIdResolver
+public sealed class UserLookupService(IUserRepository userRepository, IExternalDirectoryClient directoryClient) : IUserLookupService, IUserExternalIdResolver
 {
-    private readonly IUserRepository _userRepository;
-    private readonly IExternalDirectoryClient _directoryClient;
-
-    public UserLookupService(IUserRepository userRepository, IExternalDirectoryClient directoryClient)
-    {
-        _userRepository = userRepository;
-        _directoryClient = directoryClient;
-    }
+    private readonly IUserRepository _userRepository = userRepository;
+    private readonly IExternalDirectoryClient _directoryClient = directoryClient;
 
     public async Task<string?> GetExternalIdByLocalIdAsync(Guid localUserId, CancellationToken cancellationToken = default)
     {

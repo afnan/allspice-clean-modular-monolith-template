@@ -12,15 +12,10 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.HealthChecks;
 /// <c>AddHealthChecks().AddCheck&lt;DbContextHealthCheck&lt;TContext&gt;&gt;("name")</c>.
 /// </summary>
 /// <typeparam name="TContext">The module DbContext type.</typeparam>
-public sealed class DbContextHealthCheck<TContext> : IHealthCheck
+public sealed class DbContextHealthCheck<TContext>(IServiceScopeFactory scopeFactory) : IHealthCheck
     where TContext : DbContext
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-
-    public DbContextHealthCheck(IServiceScopeFactory scopeFactory)
-    {
-        _scopeFactory = scopeFactory;
-    }
+    private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {

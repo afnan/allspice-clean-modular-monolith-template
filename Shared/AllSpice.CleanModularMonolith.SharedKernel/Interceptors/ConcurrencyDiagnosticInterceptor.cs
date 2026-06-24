@@ -10,14 +10,9 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
 /// original-vs-current values) so the conflicting entity and operation are easy to pinpoint.
 /// Registered as a singleton and discovered by EF Core from the application service provider.
 /// </summary>
-public sealed class ConcurrencyDiagnosticInterceptor : SaveChangesInterceptor
+public sealed class ConcurrencyDiagnosticInterceptor(ILogger<ConcurrencyDiagnosticInterceptor> logger) : SaveChangesInterceptor
 {
-    private readonly ILogger<ConcurrencyDiagnosticInterceptor> _logger;
-
-    public ConcurrencyDiagnosticInterceptor(ILogger<ConcurrencyDiagnosticInterceptor> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<ConcurrencyDiagnosticInterceptor> _logger = logger;
 
     public override void SaveChangesFailed(DbContextErrorEventData eventData)
     {

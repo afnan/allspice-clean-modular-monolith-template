@@ -6,21 +6,14 @@ using AppEmailMessage = AllSpice.CleanModularMonolith.Notifications.Application.
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Email;
 
-public sealed class ResendEmailSender : Application.Contracts.Services.IEmailSender
+public sealed class ResendEmailSender(
+    IResend resend,
+    IOptions<ResendOptions> options,
+    ILogger<ResendEmailSender> logger) : Application.Contracts.Services.IEmailSender
 {
-    private readonly IResend _resend;
-    private readonly ResendOptions _options;
-    private readonly ILogger<ResendEmailSender> _logger;
-
-    public ResendEmailSender(
-        IResend resend,
-        IOptions<ResendOptions> options,
-        ILogger<ResendEmailSender> logger)
-    {
-        _resend = resend;
-        _options = options.Value;
-        _logger = logger;
-    }
+    private readonly IResend _resend = resend;
+    private readonly ResendOptions _options = options.Value;
+    private readonly ILogger<ResendEmailSender> _logger = logger;
 
     public async Task SendEmailAsync(AppEmailMessage message, CancellationToken cancellationToken = default)
     {

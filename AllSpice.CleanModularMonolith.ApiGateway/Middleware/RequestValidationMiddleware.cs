@@ -3,22 +3,11 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 /// <summary>
 /// Middleware that performs basic validation checks on incoming requests.
 /// </summary>
-public class RequestValidationMiddleware
+public class RequestValidationMiddleware(RequestDelegate next, ILogger<RequestValidationMiddleware> logger)
 {
-    private readonly RequestDelegate _next;
-    private readonly ILogger<RequestValidationMiddleware> _logger;
+    private readonly RequestDelegate _next = next;
+    private readonly ILogger<RequestValidationMiddleware> _logger = logger;
     private const long MaxRequestSizeBytes = 10 * 1024 * 1024; // 10 MB
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RequestValidationMiddleware"/> class.
-    /// </summary>
-    /// <param name="next">The next middleware in the pipeline.</param>
-    /// <param name="logger">Logger used to record validation failures.</param>
-    public RequestValidationMiddleware(RequestDelegate next, ILogger<RequestValidationMiddleware> logger)
-    {
-        _next = next;
-        _logger = logger;
-    }
 
     /// <summary>
     /// Validates request metadata (e.g. payload size) before passing control downstream.

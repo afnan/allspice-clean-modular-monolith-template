@@ -10,15 +10,10 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 /// Pipeline behavior that catches domain and validation exceptions and maps them to Ardalis Result types.
 /// This allows handlers to throw typed domain exceptions instead of returning Result.Error manually.
 /// </summary>
-public sealed class DomainExceptionBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class DomainExceptionBehavior<TRequest, TResponse>(ILogger<DomainExceptionBehavior<TRequest, TResponse>> logger) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : class, IMessage
 {
-    private readonly ILogger<DomainExceptionBehavior<TRequest, TResponse>> _logger;
-
-    public DomainExceptionBehavior(ILogger<DomainExceptionBehavior<TRequest, TResponse>> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<DomainExceptionBehavior<TRequest, TResponse>> _logger = logger;
 
     public async ValueTask<TResponse> Handle(TRequest request, MessageHandlerDelegate<TRequest, TResponse> next, CancellationToken cancellationToken)
     {

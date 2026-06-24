@@ -7,14 +7,10 @@ using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Queries.GetUserNotifications;
 
-public sealed class GetUserNotificationsQueryHandler : IRequestHandler<GetUserNotificationsQuery, Result<IReadOnlyCollection<NotificationDto>>>
+public sealed class GetUserNotificationsQueryHandler(INotificationRepository notificationRepository)
+    : IRequestHandler<GetUserNotificationsQuery, Result<IReadOnlyCollection<NotificationDto>>>
 {
-    private readonly INotificationRepository _notificationRepository;
-
-    public GetUserNotificationsQueryHandler(INotificationRepository notificationRepository)
-    {
-        _notificationRepository = notificationRepository;
-    }
+    private readonly INotificationRepository _notificationRepository = notificationRepository;
 
     public async ValueTask<Result<IReadOnlyCollection<NotificationDto>>> Handle(GetUserNotificationsQuery request, CancellationToken cancellationToken)
     {

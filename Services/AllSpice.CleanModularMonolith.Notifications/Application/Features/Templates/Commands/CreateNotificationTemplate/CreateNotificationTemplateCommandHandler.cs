@@ -5,14 +5,10 @@ using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Templates.Commands.CreateNotificationTemplate;
 
-public sealed class CreateNotificationTemplateCommandHandler : IRequestHandler<CreateNotificationTemplateCommand, Result<Guid>>
+public sealed class CreateNotificationTemplateCommandHandler(INotificationTemplateRepository templateRepository)
+    : IRequestHandler<CreateNotificationTemplateCommand, Result<Guid>>
 {
-    private readonly INotificationTemplateRepository _templateRepository;
-
-    public CreateNotificationTemplateCommandHandler(INotificationTemplateRepository templateRepository)
-    {
-        _templateRepository = templateRepository;
-    }
+    private readonly INotificationTemplateRepository _templateRepository = templateRepository;
 
     public async ValueTask<Result<Guid>> Handle(CreateNotificationTemplateCommand request, CancellationToken cancellationToken)
     {

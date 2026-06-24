@@ -11,24 +11,16 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 /// Reports its liveness through <see cref="NotificationDispatcherHealthState"/> so
 /// <see cref="NotificationDispatcherHealthCheck"/> can surface a stuck loop.
 /// </summary>
-public sealed class NotificationDispatcherHostedService : BackgroundService
+public sealed class NotificationDispatcherHostedService(
+    IServiceProvider serviceProvider,
+    IOptions<NotificationDispatcherOptions> options,
+    NotificationDispatcherHealthState health,
+    ILogger<NotificationDispatcherHostedService> logger) : BackgroundService
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<NotificationDispatcherHostedService> _logger;
-    private readonly NotificationDispatcherOptions _options;
-    private readonly NotificationDispatcherHealthState _health;
-
-    public NotificationDispatcherHostedService(
-        IServiceProvider serviceProvider,
-        IOptions<NotificationDispatcherOptions> options,
-        NotificationDispatcherHealthState health,
-        ILogger<NotificationDispatcherHostedService> logger)
-    {
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-        _options = options.Value;
-        _health = health;
-    }
+    private readonly IServiceProvider _serviceProvider = serviceProvider;
+    private readonly ILogger<NotificationDispatcherHostedService> _logger = logger;
+    private readonly NotificationDispatcherOptions _options = options.Value;
+    private readonly NotificationDispatcherHealthState _health = health;
 
     /// <summary>
     /// Executes the dispatch loop until the host is shutting down.

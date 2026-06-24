@@ -8,18 +8,12 @@ using MimeKit;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Email;
 
-public sealed class MailKitEmailSender : IEmailSender
+public sealed class MailKitEmailSender(
+    IOptionsMonitor<MailKitSmtpOptions> optionsMonitor,
+    ILogger<MailKitEmailSender> logger) : IEmailSender
 {
-    private readonly IOptionsMonitor<MailKitSmtpOptions> _optionsMonitor;
-    private readonly ILogger<MailKitEmailSender> _logger;
-
-    public MailKitEmailSender(
-        IOptionsMonitor<MailKitSmtpOptions> optionsMonitor,
-        ILogger<MailKitEmailSender> logger)
-    {
-        _optionsMonitor = optionsMonitor;
-        _logger = logger;
-    }
+    private readonly IOptionsMonitor<MailKitSmtpOptions> _optionsMonitor = optionsMonitor;
+    private readonly ILogger<MailKitEmailSender> _logger = logger;
 
     public async Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {

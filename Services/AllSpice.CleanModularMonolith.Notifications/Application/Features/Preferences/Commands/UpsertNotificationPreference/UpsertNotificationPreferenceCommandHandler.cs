@@ -5,14 +5,10 @@ using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Preferences.Commands.UpsertNotificationPreference;
 
-public sealed class UpsertNotificationPreferenceCommandHandler : IRequestHandler<UpsertNotificationPreferenceCommand, Result>
+public sealed class UpsertNotificationPreferenceCommandHandler(INotificationPreferenceRepository preferenceRepository)
+    : IRequestHandler<UpsertNotificationPreferenceCommand, Result>
 {
-    private readonly INotificationPreferenceRepository _preferenceRepository;
-
-    public UpsertNotificationPreferenceCommandHandler(INotificationPreferenceRepository preferenceRepository)
-    {
-        _preferenceRepository = preferenceRepository;
-    }
+    private readonly INotificationPreferenceRepository _preferenceRepository = preferenceRepository;
 
     public async ValueTask<Result> Handle(UpsertNotificationPreferenceCommand request, CancellationToken cancellationToken)
     {

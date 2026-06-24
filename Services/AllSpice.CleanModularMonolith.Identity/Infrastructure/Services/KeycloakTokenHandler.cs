@@ -4,14 +4,9 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// DelegatingHandler that injects a Bearer token from <see cref="KeycloakTokenProvider"/>
 /// into outgoing HTTP requests to the Keycloak Admin API.
 /// </summary>
-public sealed class KeycloakTokenHandler : DelegatingHandler
+public sealed class KeycloakTokenHandler(KeycloakTokenProvider tokenProvider) : DelegatingHandler
 {
-    private readonly KeycloakTokenProvider _tokenProvider;
-
-    public KeycloakTokenHandler(KeycloakTokenProvider tokenProvider)
-    {
-        _tokenProvider = tokenProvider;
-    }
+    private readonly KeycloakTokenProvider _tokenProvider = tokenProvider;
 
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,

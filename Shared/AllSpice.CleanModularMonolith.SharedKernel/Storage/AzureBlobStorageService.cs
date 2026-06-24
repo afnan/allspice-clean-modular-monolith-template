@@ -4,15 +4,10 @@ using Azure.Storage.Blobs.Models;
 namespace AllSpice.CleanModularMonolith.SharedKernel.Storage;
 
 /// <summary>Implements <see cref="IFileStorageService"/> over an Azure Blob Storage container.</summary>
-public sealed class AzureBlobStorageService : IFileStorageService
+public sealed class AzureBlobStorageService(BlobServiceClient blobServiceClient, string containerName) : IFileStorageService
 {
-    private readonly BlobContainerClient _containerClient;
+    private readonly BlobContainerClient _containerClient = blobServiceClient.GetBlobContainerClient(containerName);
     private volatile bool _containerEnsured;
-
-    public AzureBlobStorageService(BlobServiceClient blobServiceClient, string containerName)
-    {
-        _containerClient = blobServiceClient.GetBlobContainerClient(containerName);
-    }
 
     public async Task<string> UploadAsync(Guid scopeId, string fileName, Stream content, CancellationToken cancellationToken = default)
     {

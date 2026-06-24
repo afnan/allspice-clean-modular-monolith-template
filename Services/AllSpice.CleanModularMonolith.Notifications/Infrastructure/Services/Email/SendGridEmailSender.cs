@@ -7,18 +7,12 @@ using SendGrid.Helpers.Mail;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Email;
 
-public sealed class SendGridEmailSender : IEmailSender
+public sealed class SendGridEmailSender(
+    IOptions<SendGridOptions> options,
+    ILogger<SendGridEmailSender> logger) : IEmailSender
 {
-    private readonly SendGridOptions _options;
-    private readonly ILogger<SendGridEmailSender> _logger;
-
-    public SendGridEmailSender(
-        IOptions<SendGridOptions> options,
-        ILogger<SendGridEmailSender> logger)
-    {
-        _options = options.Value;
-        _logger = logger;
-    }
+    private readonly SendGridOptions _options = options.Value;
+    private readonly ILogger<SendGridEmailSender> _logger = logger;
 
     public async Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {

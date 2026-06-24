@@ -10,23 +10,14 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// <summary>
 /// Health check that verifies connectivity to the backing Keycloak instance.
 /// </summary>
-public sealed class KeycloakHealthCheck : IHealthCheck
+public sealed class KeycloakHealthCheck(
+    IHttpClientFactory httpClientFactory,
+    ILogger<KeycloakHealthCheck> logger) : IHealthCheck
 {
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<KeycloakHealthCheck> _logger;
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly ILogger<KeycloakHealthCheck> _logger = logger;
 
     private static readonly Uri HealthEndpoint = new("/users?max=1", UriKind.Relative);
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="KeycloakHealthCheck"/> class.
-    /// </summary>
-    public KeycloakHealthCheck(
-        IHttpClientFactory httpClientFactory,
-        ILogger<KeycloakHealthCheck> logger)
-    {
-        _httpClientFactory = httpClientFactory;
-        _logger = logger;
-    }
 
     /// <inheritdoc />
     public async Task<HealthCheckResult> CheckHealthAsync(

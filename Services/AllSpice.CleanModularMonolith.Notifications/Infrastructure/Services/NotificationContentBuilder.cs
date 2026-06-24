@@ -14,7 +14,9 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 /// HTML-encodes token values in HTML templates to prevent XSS.
 /// Wraps plain-text emails in a branded HTML layout when no template is specified.
 /// </summary>
-public sealed class NotificationContentBuilder : INotificationContentBuilder
+public sealed class NotificationContentBuilder(
+    INotificationTemplateRepository templateRepository,
+    ILogger<NotificationContentBuilder> logger) : INotificationContentBuilder
 {
     private static readonly Regex TokenRegex = new(@"{{(?<key>[^}]+)}}", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
@@ -22,16 +24,8 @@ public sealed class NotificationContentBuilder : INotificationContentBuilder
     // CR, LF, NEL (0x85), and the Unicode line/paragraph separators (0x2028/0x2029).
     private static readonly char[] LineBreakChars = ['\r', '\n', (char)0x0085, (char)0x2028, (char)0x2029];
 
-    private readonly INotificationTemplateRepository _templateRepository;
-    private readonly ILogger<NotificationContentBuilder> _logger;
-
-    public NotificationContentBuilder(
-        INotificationTemplateRepository templateRepository,
-        ILogger<NotificationContentBuilder> logger)
-    {
-        _templateRepository = templateRepository;
-        _logger = logger;
-    }
+    private readonly INotificationTemplateRepository _templateRepository = templateRepository;
+    private readonly ILogger<NotificationContentBuilder> _logger = logger;
 
     /// <inheritdoc />
     public async Task<Result<NotificationContent>> BuildAsync(Notification notification, CancellationToken cancellationToken = default)

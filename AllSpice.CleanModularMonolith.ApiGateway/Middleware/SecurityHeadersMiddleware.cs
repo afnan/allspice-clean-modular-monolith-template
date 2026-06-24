@@ -3,18 +3,9 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 /// <summary>
 /// Middleware that appends baseline security headers to outgoing responses.
 /// </summary>
-public class SecurityHeadersMiddleware
+public class SecurityHeadersMiddleware(RequestDelegate next)
 {
-    private readonly RequestDelegate _next;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SecurityHeadersMiddleware"/> class.
-    /// </summary>
-    /// <param name="next">The next middleware in the pipeline.</param>
-    public SecurityHeadersMiddleware(RequestDelegate next)
-    {
-        _next = next;
-    }
+    private readonly RequestDelegate _next = next;
 
     /// <summary>
     /// Appends security-related HTTP response headers and continues request processing.

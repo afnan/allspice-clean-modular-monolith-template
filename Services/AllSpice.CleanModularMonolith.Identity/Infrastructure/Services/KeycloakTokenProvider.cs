@@ -9,27 +9,20 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// Falls back to a static ApiToken when ClientId/ClientSecret are not configured.
 /// Includes explicit timeout handling and custom exception types for production robustness.
 /// </summary>
-public sealed class KeycloakTokenProvider : IDisposable
+public sealed class KeycloakTokenProvider(
+    IOptions<KeycloakOptions> options,
+    IHttpClientFactory httpClientFactory,
+    ILogger<KeycloakTokenProvider> logger) : IDisposable
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
-    private readonly IOptions<KeycloakOptions> _options;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<KeycloakTokenProvider> _logger;
+    private readonly IOptions<KeycloakOptions> _options = options;
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly ILogger<KeycloakTokenProvider> _logger = logger;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     private string? _cachedToken;
     private DateTimeOffset _tokenExpiry = DateTimeOffset.MinValue;
-
-    public KeycloakTokenProvider(
-        IOptions<KeycloakOptions> options,
-        IHttpClientFactory httpClientFactory,
-        ILogger<KeycloakTokenProvider> logger)
-    {
-        _options = options;
-        _httpClientFactory = httpClientFactory;
-        _logger = logger;
-    }
 
     /// <summary>
     /// Gets a valid access token, refreshing if necessary.
