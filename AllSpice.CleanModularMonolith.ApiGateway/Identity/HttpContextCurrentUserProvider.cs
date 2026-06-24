@@ -1,13 +1,16 @@
-using System.Security.Claims;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AllSpice.CleanModularMonolith.ApiGateway.Identity;
 
 /// <summary>
-/// <see cref="ICurrentUserProvider"/> backed by the authenticated <see cref="ClaimsPrincipal"/> on the
-/// current request. Registered as a singleton; <see cref="IHttpContextAccessor"/> supplies the per-request
-/// context at call time, so it is safe for the (singleton, pooled-DbContext) audit interceptor to consume.
-/// Returns <c>null</c> outside an HTTP request (e.g. background jobs), which yields unattributed audit stamps.
+/// <see cref="ICurrentUserProvider"/> backed by the current request. Returns the <em>canonical local
+/// user UUID</em> (resolved once per request into <see cref="ICurrentUserContext"/> by
+/// <see cref="CurrentUserResolutionMiddleware"/>), never the external IdP subject — so audit columns hold
+/// the local identity. Registered as a singleton; <see cref="IHttpContextAccessor"/> supplies the per-request
+/// context (and request-scoped services) at call time, so it is safe for the (singleton, pooled-DbContext)
+/// audit interceptor to consume. Returns <c>null</c> outside an HTTP request (e.g. background jobs), or when
+/// the authenticated subject has not yet been mirrored locally — both yield unattributed audit stamps.
 /// </summary>
 public sealed class HttpContextCurrentUserProvider : ICurrentUserProvider
 {
@@ -22,13 +25,14 @@ public sealed class HttpContextCurrentUserProvider : ICurrentUserProvider
     {
         get
         {
-            var user = _httpContextAccessor.HttpContext?.User;
-            if (user?.Identity?.IsAuthenticated != true)
+            var context = _httpContextAccessor.HttpContext;
+            if (context?.User.Identity?.IsAuthenticated != true)
             {
                 return null;
             }
 
-            return user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+            var localUserId = context.RequestServices.GetService<ICurrentUserContext>()?.LocalUserId;
+            return localUserId?.ToString();
         }
     }
 }

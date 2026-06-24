@@ -36,6 +36,9 @@ public static class GatewayModuleRegistrationExtensions
         // singletons from this container, so every module DbContext picks them up.
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton<ICurrentUserProvider, HttpContextCurrentUserProvider>();
+        // Per-request cache for the resolved canonical local user id; populated once per request by
+        // CurrentUserResolutionMiddleware so audit stamping records the local UUID, not the IdP subject.
+        builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         builder.Services.AddSharedKernelInterceptors();
 
         builder.AddNotificationsModuleServices(logger);
