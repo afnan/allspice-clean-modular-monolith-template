@@ -175,31 +175,25 @@ public static class GatewayServiceCollectionExtensions
                     });
             });
 
-            options.AddFixedWindowLimiter("api", limiterOptions =>
-            {
-                limiterOptions.PermitLimit = 200;
-                limiterOptions.Window = TimeSpan.FromMinutes(1);
-                limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-                limiterOptions.QueueLimit = 10;
-            });
-
             options.OnRejected = async (context, token) =>
             {
-                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                context.HttpContext.Response.Headers["Retry-After"] = "60";
+                var response = context.HttpContext.Response;
+                response.StatusCode = StatusCodes.Status429TooManyRequests;
 
-                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                var retryAfterSeconds = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter)
+                    ? (int)retryAfter.TotalSeconds
+                    : 60;
+                response.Headers.RetryAfter = retryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+                // Match the gateway's RFC7807 error contract instead of the previous plain-text body.
+                var problem = new
                 {
-                    await context.HttpContext.Response.WriteAsync(
-                        $"Rate limit exceeded. Please try again after {retryAfter.TotalSeconds} seconds.",
-                        cancellationToken: token);
-                }
-                else
-                {
-                    await context.HttpContext.Response.WriteAsync(
-                        "Rate limit exceeded. Please try again later.",
-                        cancellationToken: token);
-                }
+                    type = "https://tools.ietf.org/html/rfc6585#section-4",
+                    title = "Too Many Requests",
+                    status = StatusCodes.Status429TooManyRequests,
+                    detail = $"Rate limit exceeded. Please try again after {retryAfterSeconds} seconds."
+                };
+                await response.WriteAsJsonAsync(problem, options: null, contentType: "application/problem+json", cancellationToken: token);
             };
         });
 
