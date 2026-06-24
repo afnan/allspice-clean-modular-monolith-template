@@ -298,6 +298,8 @@ public static class GatewayServiceCollectionExtensions
                 options.PublicAuthority = mainWebsiteAuthority;
                 options.PublicAudience = mainWebsiteClientId;
                 options.UsePublicAsDefaultChallenge = !string.IsNullOrWhiteSpace(mainWebsiteAuthority) && !string.IsNullOrWhiteSpace(mainWebsiteClientId);
+                // Keycloak is served over plain HTTP in local dev; require HTTPS metadata everywhere else.
+                options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
             });
 
         return true;
