@@ -165,8 +165,8 @@ if (builder.Environment.IsDevelopment())
       .WithEnvironment("KC_HTTPS_ENABLED", "false")
       .WithEnvironment("KC_HEALTH_ENABLED", "true")
       .WithEnvironment("KC_METRICS_ENABLED", "true")
-      .WithEnvironment("KEYCLOAK_ADMIN", keycloakAdminUser ?? "admin")
-      .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword ?? "admin");
+      .WithEnvironment("KEYCLOAK_ADMIN", keycloakAdminUser)
+      .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword);
 }
 else
 {
@@ -205,8 +205,8 @@ else
       .WithEnvironment("KC_HEALTH_ENABLED", "true")
       .WithEnvironment("KC_METRICS_ENABLED", "true")
       .WithEnvironment("KC_PROXY", proxyMode)
-      .WithEnvironment("KEYCLOAK_ADMIN", keycloakAdminUser ?? "admin")
-      .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword ?? "admin");
+      .WithEnvironment("KEYCLOAK_ADMIN", keycloakAdminUser)
+      .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword);
 
   if (!string.IsNullOrWhiteSpace(keycloakHostname))
   {
