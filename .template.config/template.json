@@ -17,6 +17,30 @@
     "type": "solution"
   },
   "preferNameDirectory": true,
+  "symbols": {
+    "projectName": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "identityForm",
+      "replaces": "{{ProjectName}}",
+      "description": "The project name, replacing the {{ProjectName}} token in config, email templates and the README."
+    },
+    "projectNameLower": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "lowerCaseForm",
+      "replaces": "{{ProjectNameLower}}",
+      "description": "Lower-cased project name used for the Keycloak realm, Redis instance name and cache-key prefix."
+    }
+  },
+  "forms": {
+    "identityForm": {
+      "identifier": "identity"
+    },
+    "lowerCaseForm": {
+      "identifier": "lowerCase"
+    }
+  },
   "sources": [
     {
       "modifiers": [
@@ -28,7 +52,9 @@
             ".template.config/**",
             "**/bin/**",
             "**/obj/**",
-            "CLAUDE.md"
+            "CLAUDE.md",
+            "TODOS.md",
+            "docs/superpowers/**"
           ]
         }
       ]

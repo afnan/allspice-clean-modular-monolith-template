@@ -23,14 +23,17 @@ avoid duplicating them here.
 
 - **Config:** `.template.config/template.json`. `sourceName` drives the rename; the `sources.modifiers.exclude`
   list controls what is left out of generated projects.
-- **Placeholder tokens:** several shipping files (`*/appsettings.json`, `GatewayServiceCollectionExtensions.cs`,
-  email templates, `README.md`) contain `{{ProjectName}}` / `{{ProjectNameLower}}` tokens. ⚠️ These are NOT
-  `sourceName` and are **not currently wired** — `template.json` has no `symbols` for them, so a scaffolded
-  project ships the literal `{{...}}` strings. Either add `symbols` (with `replaces`) for them or convert them
-  to `sourceName`-derived values, and cover it in the smoke test below. See `TODOS.md`.
+- **Placeholder tokens (wired):** several shipping files (`*/appsettings.json`, `GatewayServiceCollectionExtensions.cs`,
+  email templates, `README.md`) contain `{{ProjectName}}` / `{{ProjectNameLower}}` tokens. These are NOT
+  `sourceName`; they are wired via `symbols` in `template.json` — a `derived` symbol off `name` (identity form)
+  for `{{ProjectName}}` and a lower-cased form for `{{ProjectNameLower}}` (Keycloak realm, Redis instance name,
+  cache-key prefix). Do **not** redefine the intrinsic `name` symbol to carry a `replaces` — that breaks
+  `sourceName` renaming (directories come out as `{{ProjectName}}.*`); always derive new symbols from `name`.
+  The `dotnet new` smoke test below asserts no literal `{{...}}` remains.
 - **Excluded from generated projects:** `.git/**`, `.serena/**`, `.mcp.json`, `.template.config/**`,
-  `**/bin/**`, `**/obj/**`, and **`CLAUDE.md`** (this file). Everything else ships — including `AGENTS.md`,
-  `ARCHITECTURE.md`, `README.md`, `GETTING_STARTED.md`, and `.github/`.
+  `**/bin/**`, `**/obj/**`, **`CLAUDE.md`** (this file), **`TODOS.md`**, and **`docs/superpowers/**`** (maintainer
+  planning artifacts). Everything else ships — including `AGENTS.md`, `ARCHITECTURE.md`, `README.md`,
+  `GETTING_STARTED.md`, and `.github/`.
 - **When you add a maintainer-only or machine-local file**, decide whether it should reach generated projects
   and update the exclude list accordingly. When you add agent rules or architecture that *should* reach users,
   put them in `AGENTS.md` / `ARCHITECTURE.md` (not here).

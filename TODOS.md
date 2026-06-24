@@ -32,6 +32,12 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   duplicate) is deduped by Wolverine's durable inbox / durable local queues (Phase 0). Documented in
   `NotificationRequestedIntegrationEventConsumer`. Explicit cross-envelope dedup (processed-event store keyed on
   EventId) remains available as future hardening if needed.
+- [x] **F-https — RESOLVED (2026-06-24).** `IdentityPortalOptions.RequireHttpsMetadata` (default `true`) is threaded
+  onto every portal bearer scheme; the gateway sets it to `false` only in Development (`!IsDevelopment()`), so dev
+  auth works against HTTP Keycloak while production still requires HTTPS metadata. Covered by `RequireHttpsMetadataTests`.
+- [x] **F-paging — RESOLVED (2026-06-24).** `ListUsers` no longer discards `TotalCount`. The handler returns an
+  Ardalis `PagedResult<…>` (page/size/total/total-pages) and the endpoint emits a `PagedResponse<UserResponse>`
+  envelope. Covered by `ListUsersQueryHandlerTests`; new `Identity.Application.UnitTests` project hosts it.
 
 - [ ] **Unknown notification channel 500s before the pipeline (pre-existing).** `QueueNotificationEndpoint`
   calls `NotificationChannel.FromName(req.Channel, ignoreCase: true)` before the mediator pipeline; SmartEnum
@@ -96,20 +102,21 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
 
 ## Template scaffolding
 
-- [ ] **`{{ProjectName}}` / `{{ProjectNameLower}}` tokens are not wired (pre-existing).**
-  `template.json` defines only `sourceName`; there are no `symbols` for these tokens, yet they appear in
-  `*/appsettings.json`, `GatewayServiceCollectionExtensions.cs`, email templates, and `README.md`. A
-  scaffolded project ships the literal `{{...}}` strings. Add `symbols` (with `replaces`) or convert to
-  `sourceName`-derived values, then verify with the `dotnet new` smoke test in CLAUDE.md.
+- [x] **`{{ProjectName}}` / `{{ProjectNameLower}}` tokens wired — RESOLVED (2026-06-24, F-tokens).**
+  `template.json` now declares `symbols`: a `derived` symbol off `name` (identity form) replaces `{{ProjectName}}`,
+  and a lower-cased form replaces `{{ProjectNameLower}}` (Keycloak realm, Redis instance name, cache-key prefix).
+  The `dotnet new` smoke test confirms a scaffolded project (`Acme.Demo`) ships no literal `{{...}}` and builds clean.
+  `TODOS.md` and `docs/superpowers/**` are now excluded from generated projects (maintainer planning artifacts).
 
 ## Cross-cutting utilities (PR #4 — merged, follow-ups)
 
-- [ ] **Audit columns store the Keycloak `sub`, not the canonical local UUID (P2).**
-  `AuditableEntityInterceptor` stamps `CreatedBy`/`LastModifiedBy` from
-  `HttpContextCurrentUserProvider.UserId`, which returns the JWT `NameIdentifier`/`sub` (Keycloak external
-  ID). Per the project's identity convention the local UUID is canonical and the external ID is reserved for
-  Keycloak/JWT boundaries. Resolve the local user GUID before stamping (or document that audit columns hold
-  external IDs). Note: resolving adds a lookup per save — decide the trade-off.
+- [x] **Audit columns now store the canonical local UUID — RESOLVED (2026-06-24, F-identity).**
+  `IUserExternalIdResolver` gained `GetLocalIdByExternalIdAsync` (the cross-module `sub → local Guid` seam).
+  `CurrentUserResolutionMiddleware` resolves the subject to the local UUID **once per authenticated request**
+  and caches it in the scoped `ICurrentUserContext`; `HttpContextCurrentUserProvider.UserId` returns that local
+  UUID (never the external `sub`), and the audit interceptor stamps it. Unauthenticated/unsynced users yield
+  unattributed stamps (null) rather than an external id. Cost: one directory lookup per authenticated request
+  (the user is fixed for the request). Future optimisation: a short-TTL `sub → Guid` cache across requests.
 
 - [ ] **`AddDbContextPool` bypasses Aspire's Npgsql enrichment (P2).**
   `IdentityModuleExtensions`/`NotificationsModuleExtensions` hand-roll `AddDbContextPool(UseNpgsql(...))` +
