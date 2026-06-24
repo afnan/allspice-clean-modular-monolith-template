@@ -42,12 +42,12 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   failures onto it (would turn 400s into 500s). A `DomainExceptionResultMapperTests` guard pins this. Covered by
   `ListUsersQueryHandlerTests`; new `Identity.Application.UnitTests` project hosts it.
 
-- [ ] **Unknown notification channel 500s before the pipeline (pre-existing).** `QueueNotificationEndpoint`
-  calls `NotificationChannel.FromName(req.Channel, ignoreCase: true)` before the mediator pipeline; SmartEnum
-  throws `SmartEnumNotFoundException` (→ 500) for an unrecognized channel, and there's no request validator on
-  `QueueNotificationRequest`. Add an endpoint validator (or `TryFromName`) returning 400. Also `MapChannel` in
-  the consumer throws plain `ArgumentOutOfRangeException` for an unknown channel — inconsistent with that file's
-  transient/permanent split (would dead-letter). Not a regression; surfaced during Phase 2a review.
+- [x] **Unknown notification channel returns 400, not 500 — RESOLVED (2026-06-24).** Added
+  `QueueNotificationRequestValidator` (FastEndpoints `Validator<QueueNotificationRequest>`) that rejects an
+  unknown channel with a 400 before the endpoint resolves the SmartEnum; `QueueNotificationEndpoint` also uses
+  `TryFromName` defensively. The consumer's `MapChannel` now returns `null` for an unknown channel and the handler
+  logs-and-drops it as a permanent failure (consistent with its transient/permanent split) instead of throwing.
+  Covered by `QueueNotificationRequestValidatorTests`.
 
 ## Phase 1 review follow-ups (deferred)
 
@@ -56,9 +56,10 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   envelope + `Delivered` status commit/rollback together. The mechanism is proven by `HybridOutboxTopologyTests`
   and the dispatcher mirrors it, but a Testcontainers test driving `DispatchPendingAsync` end-to-end (commit →
   both present; rollback → neither) would lock the dispatcher's own atomicity.
-- [ ] **Two ProblemDetails shapes for validation 400s.** The Mediator pipeline path returns Ardalis
-  `Result.Invalid` (root `errors` via FastEndpoints); the `ErrorHandlingMiddleware` fallback nests under
-  `extensions.errors` (non-RFC7807 root). Unify if a single client-facing error contract is desired.
+- [x] **ProblemDetails validation 400 shape unified — RESOLVED (2026-06-24).** `ErrorHandlingMiddleware` now
+  emits its members (incl. `correlationId` and `errors`) at the **root** of the problem+json object (RFC7807),
+  matching the root-`errors` shape of the mediator/FastEndpoints path, instead of nesting them under an
+  `extensions` object. `ErrorHandlingMiddlewareTests` asserts the root shape.
 - [ ] **Mapper 500s for `DomainException`/`ValidationException` on non-`Result` response types.**
   `DomainExceptionResultMapper` only maps to `Result`/`Result<T>`; a handler whose response isn't an Ardalis
   Result that throws a domain/validation exception yields `InvalidOperationException` → 500. Pre-existing; the F2

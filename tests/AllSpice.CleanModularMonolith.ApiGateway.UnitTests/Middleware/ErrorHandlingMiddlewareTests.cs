@@ -50,9 +50,11 @@ public class ErrorHandlingMiddlewareTests
 
         using var doc = JsonDocument.Parse(body);
         Assert.Equal(400, doc.RootElement.GetProperty("status").GetInt32());
-        var extensions = doc.RootElement.GetProperty("extensions");
-        Assert.True(extensions.TryGetProperty("errors", out var errors), "validation errors should be surfaced");
+        // RFC7807: errors live at the ROOT, not nested under an "extensions" object.
+        Assert.True(doc.RootElement.TryGetProperty("errors", out var errors), "validation errors should be surfaced at the root");
         Assert.True(errors.TryGetProperty("Email", out _), "the offending field should be present");
+        Assert.True(doc.RootElement.TryGetProperty("correlationId", out _), "correlationId should be a root member");
+        Assert.False(doc.RootElement.TryGetProperty("extensions", out _), "no nested extensions object");
     }
 
     [Fact]
