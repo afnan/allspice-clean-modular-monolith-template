@@ -44,11 +44,6 @@ public sealed class KeycloakOptions
     public string UserLookupTemplate { get; set; } = "/admin/realms/{realm}/users/{0}";
 
     /// <summary>
-    /// Endpoint used to invite new users. Optional.
-    /// </summary>
-    public string? InvitationEndpoint { get; set; }
-
-    /// <summary>
     /// When true, TLS certificate validation is skipped. Use only for local development.
     /// </summary>
     public bool AllowUntrustedCertificates { get; set; }

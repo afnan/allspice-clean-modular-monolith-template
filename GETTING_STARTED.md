@@ -184,7 +184,7 @@ ApiGateway (sole host)
 └── Modules register services via extension methods
 
 Identity Module
-├── Keycloak integration (user sync, roles, invitations)
+├── Keycloak integration (user sync/mirroring, roles)
 ├── Client credentials token caching
 └── Module role authorization
 

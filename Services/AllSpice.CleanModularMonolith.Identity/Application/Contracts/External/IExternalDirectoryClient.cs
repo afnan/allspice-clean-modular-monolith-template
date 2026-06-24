@@ -7,7 +7,6 @@ public interface IExternalDirectoryClient
 {
     Task<bool> UserExistsAsync(string userId, CancellationToken cancellationToken = default);
     Task<string?> GetUserDisplayNameAsync(string userId, CancellationToken cancellationToken = default);
-    Task InviteUserAsync(string email, string displayName, CancellationToken cancellationToken = default);
     Task<string> CreateUserAsync(string email, string firstName, string lastName, string username, CancellationToken cancellationToken = default);
     Task<string> CreateUserWithTempPasswordAsync(string email, string firstName, string lastName, string username, string tempPassword, CancellationToken cancellationToken = default);
     Task AssignRealmRoleAsync(string userId, string roleName, CancellationToken cancellationToken = default);

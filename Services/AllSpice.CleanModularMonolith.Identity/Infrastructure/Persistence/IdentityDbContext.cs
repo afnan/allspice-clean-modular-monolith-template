@@ -1,4 +1,3 @@
-using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Invitation;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Entities;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
@@ -23,8 +22,6 @@ public sealed class IdentityDbContext : DbContext, IModuleDbContext
     DbContext IModuleDbContext.Instance => this;
 
     public DbSet<User> Users => Set<User>();
-
-    public DbSet<Invitation> Invitations => Set<Invitation>();
 
     public DbSet<IdentitySyncHistory> IdentitySyncHistories => Set<IdentitySyncHistory>();
 

@@ -238,7 +238,6 @@ var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGa
     .WithEnvironment("Identity__Keycloak__Realm", keycloakRealm)
     .WithEnvironment("Identity__Keycloak__ApiToken", keycloakApiToken)
     .WithEnvironment("Identity__Keycloak__UserLookupTemplate", builder.Configuration["Identity:Keycloak:UserLookupTemplate"] ?? "/admin/realms/{realm}/users/{0}")
-    .WithEnvironment("Identity__Keycloak__InvitationEndpoint", builder.Configuration["Identity:Keycloak:InvitationEndpoint"] ?? "")
     .WithEnvironment("Identity__Keycloak__AllowUntrustedCertificates", builder.Configuration["Identity:Keycloak:AllowUntrustedCertificates"] ?? "false")
     .WithEnvironment("Identity__Keycloak__ClientId", builder.Configuration["Identity:Keycloak:ClientId"] ?? "")
     .WithEnvironment("Identity__Keycloak__ClientSecret", builder.Configuration["Identity:Keycloak:ClientSecret"] ?? "")

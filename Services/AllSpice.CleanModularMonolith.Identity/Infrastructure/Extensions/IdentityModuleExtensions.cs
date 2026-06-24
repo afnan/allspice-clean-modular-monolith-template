@@ -44,7 +44,6 @@ public static class IdentityModuleExtensions
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
         builder.Services.AddScoped<IUserRepository, UserRepository>();
-        builder.Services.AddScoped<IInvitationRepository, InvitationRepository>();
 
         // New services
         builder.Services.AddScoped<IUserLookupService, UserLookupService>();
