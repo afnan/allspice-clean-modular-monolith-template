@@ -12,26 +12,15 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// <summary>
 /// Concrete <see cref="IExternalDirectoryClient"/> implementation backed by Keycloak's Admin REST API.
 /// </summary>
-public sealed class KeycloakDirectoryClient : IExternalDirectoryClient
+public sealed class KeycloakDirectoryClient(
+    HttpClient httpClient,
+    IOptions<KeycloakOptions> options,
+    ILogger<KeycloakDirectoryClient> logger) : IExternalDirectoryClient
 {
-    private readonly HttpClient _httpClient;
-    private readonly KeycloakOptions _options;
-    private readonly ILogger<KeycloakDirectoryClient> _logger;
-    private readonly KeycloakRoleClient _roleClient;
-
-    public KeycloakDirectoryClient(
-        HttpClient httpClient,
-        IOptions<KeycloakOptions> options,
-        ILogger<KeycloakDirectoryClient> logger)
-    {
-        Guard.Against.Null(httpClient);
-        Guard.Against.Null(options);
-
-        _httpClient = httpClient;
-        _options = options.Value;
-        _logger = logger;
-        _roleClient = new KeycloakRoleClient(httpClient, logger);
-    }
+    private readonly HttpClient _httpClient = Guard.Against.Null(httpClient);
+    private readonly KeycloakOptions _options = Guard.Against.Null(options).Value;
+    private readonly ILogger<KeycloakDirectoryClient> _logger = logger;
+    private readonly KeycloakRoleClient _roleClient = new(httpClient, logger);
 
     /// <inheritdoc />
     public async Task<bool> UserExistsAsync(string userId, CancellationToken cancellationToken = default)

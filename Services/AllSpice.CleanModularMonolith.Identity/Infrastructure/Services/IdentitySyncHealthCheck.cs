@@ -11,21 +11,14 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// <summary>
 /// Health check that ensures the Keycloak synchronization job has succeeded recently.
 /// </summary>
-public sealed class IdentitySyncHealthCheck : IHealthCheck
+public sealed class IdentitySyncHealthCheck(
+    IdentityDbContext dbContext,
+    IOptions<IdentitySyncOptions> options,
+    ILogger<IdentitySyncHealthCheck> logger) : IHealthCheck
 {
-    private readonly IdentityDbContext _dbContext;
-    private readonly IOptions<IdentitySyncOptions> _options;
-    private readonly ILogger<IdentitySyncHealthCheck> _logger;
-
-    public IdentitySyncHealthCheck(
-        IdentityDbContext dbContext,
-        IOptions<IdentitySyncOptions> options,
-        ILogger<IdentitySyncHealthCheck> logger)
-    {
-        _dbContext = dbContext;
-        _options = options;
-        _logger = logger;
-    }
+    private readonly IdentityDbContext _dbContext = dbContext;
+    private readonly IOptions<IdentitySyncOptions> _options = options;
+    private readonly ILogger<IdentitySyncHealthCheck> _logger = logger;
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {

@@ -170,6 +170,20 @@ deliberately **not** wired (it would double-dispatch with `TransactionBehavior`)
 ## 7. Conventions
 
 - File-scoped namespaces; private fields `_camelCase`; constants `PascalCase`.
+- **Primary constructors** for dependency-injected services, handlers, middleware, behaviors, repositories,
+  senders, jobs, and health checks. Keep `private readonly` fields and initialize them from the primary-ctor
+  parameter so method bodies read from the field, not the captured parameter:
+  ```csharp
+  public sealed class Foo(IBar bar, IOptions<FooOptions> options) : IFoo
+  {
+      private readonly IBar _bar = bar;
+      private readonly FooOptions _options = options.Value;        // .Value unwrap in the initializer
+  }
+  // repositories: class UserRepository(IdentityDbContext db) : EfRepository<IdentityDbContext, User>(db)
+  ```
+  Keep a **classic constructor** only when the body does more than field initialization (FluentValidation
+  `RuleFor` setup, loops, conditionals, side effects). Domain aggregates/value objects keep their
+  invariant-encoding constructors.
 - Central package versioning (`Directory.Packages.props`); `TreatWarningsAsErrors=true`.
 - Tests: xUnit + Moq + coverlet, named `{Module}.{Layer}.UnitTests` / `IntegrationTests`.
 

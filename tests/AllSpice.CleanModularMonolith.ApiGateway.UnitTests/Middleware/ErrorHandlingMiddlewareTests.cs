@@ -3,8 +3,10 @@ using AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 using AllSpice.CleanModularMonolith.SharedKernel.Exceptions;
 using FluentValidation;
 using FluentValidation.Results;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -65,5 +67,29 @@ public class ErrorHandlingMiddlewareTests
     {
         var (status, _, _) = await InvokeWithAsync(new InvalidOperationException("boom"));
         Assert.Equal(500, status);
+    }
+
+    [Fact]
+    public async Task Outermost_handler_renders_problem_json_for_a_downstream_middleware_throw()
+    {
+        // C3: ErrorHandlingMiddleware sits outermost in the gateway pipeline, so a throw in a downstream
+        // middleware (e.g. SecurityHeaders/CorrelationId) is still rendered as application/problem+json.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IWebHostEnvironment>(new FakeWebHostEnvironment());
+        var provider = services.BuildServiceProvider();
+
+        var appBuilder = new ApplicationBuilder(provider);
+        appBuilder.UseMiddleware<ErrorHandlingMiddleware>();
+        appBuilder.Run(_ => throw new InvalidOperationException("boom from a downstream middleware"));
+        var pipeline = appBuilder.Build();
+
+        var context = new DefaultHttpContext { RequestServices = provider };
+        context.Response.Body = new MemoryStream();
+
+        await pipeline(context);
+
+        Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+        Assert.Equal("application/problem+json", context.Response.ContentType);
     }
 }

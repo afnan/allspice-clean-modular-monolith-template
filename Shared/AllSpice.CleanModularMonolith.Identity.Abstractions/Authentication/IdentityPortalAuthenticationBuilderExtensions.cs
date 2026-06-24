@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Ardalis.GuardClauses;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -36,7 +37,7 @@ public static class IdentityPortalAuthenticationBuilderExtensions
             options.RequireHttpsMetadata = portalOptions.RequireHttpsMetadata;
             options.MapInboundClaims = false;
             options.TokenValidationParameters = CreateDefaultParameters();
-            options.Events = CreateHubBearerEvents();
+            options.Events = CreateBearerEvents();
         });
 
         if (!string.IsNullOrWhiteSpace(portalOptions.PublicAuthority) &&
@@ -49,7 +50,7 @@ public static class IdentityPortalAuthenticationBuilderExtensions
                 options.RequireHttpsMetadata = portalOptions.RequireHttpsMetadata;
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = CreateDefaultParameters();
-                options.Events = CreateHubBearerEvents();
+                options.Events = CreateBearerEvents();
             });
         }
 
@@ -68,11 +69,16 @@ public static class IdentityPortalAuthenticationBuilderExtensions
     private const string HubsPathPrefix = "/hubs";
 
     /// <summary>
-    /// Reads the JWT from the <c>access_token</c> query parameter for SignalR hub paths. Browsers cannot
-    /// set the <c>Authorization</c> header on WebSocket/SSE connections, so SignalR sends the token in the
-    /// query string; without this, every authenticated hub connection is rejected with 401.
+    /// Builds the shared <see cref="JwtBearerEvents"/> for each portal scheme:
+    /// <list type="bullet">
+    /// <item><c>OnMessageReceived</c> reads the JWT from the <c>access_token</c> query parameter for SignalR
+    /// hub paths — browsers cannot set the <c>Authorization</c> header on WebSocket/SSE, so without this every
+    /// authenticated hub connection is rejected with 401.</item>
+    /// <item><c>OnTokenValidated</c> flattens Keycloak realm roles (<c>realm_access.roles</c>) into standard
+    /// <see cref="ClaimTypes.Role"/> claims so <c>[Authorize(Roles = …)]</c> works.</item>
+    /// </list>
     /// </summary>
-    private static JwtBearerEvents CreateHubBearerEvents() =>
+    private static JwtBearerEvents CreateBearerEvents() =>
         new()
         {
             OnMessageReceived = context =>
@@ -85,8 +91,60 @@ public static class IdentityPortalAuthenticationBuilderExtensions
                 }
 
                 return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                MapRealmRolesToRoleClaims(context.Principal);
+                return Task.CompletedTask;
             }
         };
+
+    /// <summary>
+    /// Adds a <see cref="ClaimTypes.Role"/> claim for each Keycloak realm role found in the principal's
+    /// <c>realm_access</c> claim (JSON <c>{ "roles": [ … ] }</c>). Malformed JSON and non-string role
+    /// entries are skipped, so a misconfigured protocol mapper can never fault token validation.
+    /// </summary>
+    private static void MapRealmRolesToRoleClaims(ClaimsPrincipal? principal)
+    {
+        if (principal?.Identity is not ClaimsIdentity identity)
+        {
+            return;
+        }
+
+        var realmAccess = principal.FindFirst("realm_access")?.Value;
+        if (string.IsNullOrWhiteSpace(realmAccess))
+        {
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(realmAccess);
+            if (!document.RootElement.TryGetProperty("roles", out var roles) || roles.ValueKind != JsonValueKind.Array)
+            {
+                return;
+            }
+
+            foreach (var role in roles.EnumerateArray())
+            {
+                // Skip non-string entries: GetString() throws InvalidOperationException on numbers/objects/etc.
+                if (role.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                var roleName = role.GetString();
+                if (!string.IsNullOrWhiteSpace(roleName) && !identity.HasClaim(ClaimTypes.Role, roleName))
+                {
+                    identity.AddClaim(new Claim(ClaimTypes.Role, roleName));
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Malformed realm_access — leave role claims untouched.
+        }
+    }
 
     /// <summary>
     /// Creates the default token validation parameters applied to each portal scheme.
@@ -99,7 +157,9 @@ public static class IdentityPortalAuthenticationBuilderExtensions
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            NameClaimType = ClaimTypes.Name,
+            // Keycloak emits the human username as `preferred_username` (with MapInboundClaims = false the
+            // claim keeps that name), so User.Identity.Name resolves to the username rather than the GUID sub.
+            NameClaimType = "preferred_username",
             RoleClaimType = ClaimTypes.Role
         };
 }

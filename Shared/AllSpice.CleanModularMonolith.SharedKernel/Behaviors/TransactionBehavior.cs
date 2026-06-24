@@ -21,22 +21,15 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 /// which silently targeted the wrong database for any module that was not registered first.
 /// </para>
 /// </summary>
-public sealed class TransactionBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class TransactionBehavior<TRequest, TResponse>(
+    IEnumerable<IModuleDbContext> dbContexts,
+    IDomainEventDispatcher dispatcher,
+    ILogger<TransactionBehavior<TRequest, TResponse>> logger) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : class, IMessage, ITransactional
 {
-    private readonly IEnumerable<IModuleDbContext> _dbContexts;
-    private readonly IDomainEventDispatcher _dispatcher;
-    private readonly ILogger<TransactionBehavior<TRequest, TResponse>> _logger;
-
-    public TransactionBehavior(
-        IEnumerable<IModuleDbContext> dbContexts,
-        IDomainEventDispatcher dispatcher,
-        ILogger<TransactionBehavior<TRequest, TResponse>> logger)
-    {
-        _dbContexts = dbContexts;
-        _dispatcher = dispatcher;
-        _logger = logger;
-    }
+    private readonly IEnumerable<IModuleDbContext> _dbContexts = dbContexts;
+    private readonly IDomainEventDispatcher _dispatcher = dispatcher;
+    private readonly ILogger<TransactionBehavior<TRequest, TResponse>> _logger = logger;
 
     public async ValueTask<TResponse> Handle(
         TRequest request,

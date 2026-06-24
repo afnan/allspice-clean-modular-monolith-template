@@ -8,19 +8,14 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 /// pattern so a hostile header can't inject CRLF or other control characters into the
 /// response stream.
 /// </summary>
-public class CorrelationIdMiddleware
+public class CorrelationIdMiddleware(RequestDelegate next)
 {
-    private readonly RequestDelegate _next;
+    private readonly RequestDelegate _next = next;
     private const int MaxCorrelationIdLength = 64;
 
     private static readonly Regex AllowedPattern = new(
         @"^[A-Za-z0-9_\-]{1,64}$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-    public CorrelationIdMiddleware(RequestDelegate next)
-    {
-        _next = next;
-    }
 
     /// <summary>
     /// Assigns or propagates a correlation identifier for the current HTTP request.

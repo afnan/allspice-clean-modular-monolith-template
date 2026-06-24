@@ -11,14 +11,9 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
 /// singleton and discovered by EF Core from the application service provider, so it works with pooled
 /// DbContexts. Timestamps are set by the entity itself; this fills in the user identifier.
 /// </summary>
-public sealed class AuditableEntityInterceptor : SaveChangesInterceptor
+public sealed class AuditableEntityInterceptor(ICurrentUserProvider currentUserProvider) : SaveChangesInterceptor
 {
-    private readonly ICurrentUserProvider _currentUserProvider;
-
-    public AuditableEntityInterceptor(ICurrentUserProvider currentUserProvider)
-    {
-        _currentUserProvider = currentUserProvider;
-    }
+    private readonly ICurrentUserProvider _currentUserProvider = currentUserProvider;
 
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
     {

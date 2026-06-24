@@ -7,15 +7,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Repositories;
 
-public sealed class NotificationPreferenceRepository : EfRepository<NotificationsDbContext, NotificationPreference>, INotificationPreferenceRepository
+public sealed class NotificationPreferenceRepository(NotificationsDbContext dbContext)
+    : EfRepository<NotificationsDbContext, NotificationPreference>(dbContext), INotificationPreferenceRepository
 {
-    private readonly NotificationsDbContext _dbContext;
-
-    public NotificationPreferenceRepository(NotificationsDbContext dbContext)
-        : base(dbContext)
-    {
-        _dbContext = dbContext;
-    }
+    private readonly NotificationsDbContext _dbContext = dbContext;
 
     public Task<NotificationPreference?> GetByUserAndChannelAsync(Guid userId, NotificationChannel channel, CancellationToken cancellationToken = default) =>
         _dbContext.NotificationPreferences.FirstOrDefaultAsync(pref => pref.UserId == userId && pref.Channel == channel, cancellationToken);

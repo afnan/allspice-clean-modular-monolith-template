@@ -10,14 +10,9 @@ using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace AllSpice.CleanModularMonolith.Identity.Api.Endpoints.Users;
 
-public sealed class GetUserEndpoint : EndpointWithoutRequest<Results<Ok<UserResponse>, NotFound<IdentityErrorResponse>, ProblemHttpResult>>
+public sealed class GetUserEndpoint(IMediator mediator) : EndpointWithoutRequest<Results<Ok<UserResponse>, NotFound<IdentityErrorResponse>, ProblemHttpResult>>
 {
-    private readonly IMediator _mediator;
-
-    public GetUserEndpoint(IMediator mediator)
-    {
-        _mediator = mediator;
-    }
+    private readonly IMediator _mediator = mediator;
 
     public override void Configure()
     {

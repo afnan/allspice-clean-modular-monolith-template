@@ -6,15 +6,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Repositories;
 
-public sealed class NotificationTemplateRepository : EfRepository<NotificationsDbContext, NotificationTemplate>, INotificationTemplateRepository
+public sealed class NotificationTemplateRepository(NotificationsDbContext dbContext)
+    : EfRepository<NotificationsDbContext, NotificationTemplate>(dbContext), INotificationTemplateRepository
 {
-    private readonly NotificationsDbContext _dbContext;
-
-    public NotificationTemplateRepository(NotificationsDbContext dbContext)
-        : base(dbContext)
-    {
-        _dbContext = dbContext;
-    }
+    private readonly NotificationsDbContext _dbContext = dbContext;
 
     public Task<NotificationTemplate?> GetByKeyAsync(string key, CancellationToken cancellationToken = default) =>
         _dbContext.NotificationTemplates.FirstOrDefaultAsync(template => template.Key == key, cancellationToken);

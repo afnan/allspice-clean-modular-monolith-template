@@ -3,16 +3,10 @@ using Microsoft.Extensions.Logging;
 
 namespace AllSpice.CleanModularMonolith.SharedKernel.Events;
 
-public sealed class MediatorDomainEventDispatcher : IDomainEventDispatcher
+public sealed class MediatorDomainEventDispatcher(IMediator mediator, ILogger<MediatorDomainEventDispatcher> logger) : IDomainEventDispatcher
 {
-    private readonly IMediator _mediator;
-    private readonly ILogger<MediatorDomainEventDispatcher> _logger;
-
-    public MediatorDomainEventDispatcher(IMediator mediator, ILogger<MediatorDomainEventDispatcher> logger)
-    {
-        _mediator = mediator;
-        _logger = logger;
-    }
+    private readonly IMediator _mediator = mediator;
+    private readonly ILogger<MediatorDomainEventDispatcher> _logger = logger;
 
     public async Task DispatchAsync(IEnumerable<IDomainEvent> domainEvents, CancellationToken cancellationToken = default)
     {

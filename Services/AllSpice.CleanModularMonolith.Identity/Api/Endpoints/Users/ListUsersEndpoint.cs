@@ -11,14 +11,9 @@ using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace AllSpice.CleanModularMonolith.Identity.Api.Endpoints.Users;
 
-public sealed class ListUsersEndpoint : EndpointWithoutRequest<Results<Ok<PagedResponse<UserResponse>>, ProblemHttpResult>>
+public sealed class ListUsersEndpoint(IMediator mediator) : EndpointWithoutRequest<Results<Ok<PagedResponse<UserResponse>>, ProblemHttpResult>>
 {
-    private readonly IMediator _mediator;
-
-    public ListUsersEndpoint(IMediator mediator)
-    {
-        _mediator = mediator;
-    }
+    private readonly IMediator _mediator = mediator;
 
     public override void Configure()
     {

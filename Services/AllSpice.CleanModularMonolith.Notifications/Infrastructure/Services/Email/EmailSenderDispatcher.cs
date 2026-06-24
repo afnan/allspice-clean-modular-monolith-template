@@ -13,33 +13,22 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Em
 /// is never used as a silent production fallback — that would quietly drop mail to a non-existent local server.
 /// In production the dispatcher fails fast when no provider is configured, or when every configured provider fails.
 /// </summary>
-public sealed class EmailSenderDispatcher : IEmailSender
+public sealed class EmailSenderDispatcher(
+    IHostEnvironment environment,
+    ResendEmailSender resendSender,
+    SendGridEmailSender sendGridSender,
+    MailKitEmailSender mailKitSender,
+    IOptions<ResendOptions> resendOptions,
+    IOptions<SendGridOptions> sendGridOptions,
+    ILogger<EmailSenderDispatcher> logger) : IEmailSender
 {
-    private readonly IHostEnvironment _environment;
-    private readonly ResendEmailSender _resendSender;
-    private readonly SendGridEmailSender _sendGridSender;
-    private readonly MailKitEmailSender _mailKitSender;
-    private readonly ResendOptions _resendOptions;
-    private readonly SendGridOptions _sendGridOptions;
-    private readonly ILogger<EmailSenderDispatcher> _logger;
-
-    public EmailSenderDispatcher(
-        IHostEnvironment environment,
-        ResendEmailSender resendSender,
-        SendGridEmailSender sendGridSender,
-        MailKitEmailSender mailKitSender,
-        IOptions<ResendOptions> resendOptions,
-        IOptions<SendGridOptions> sendGridOptions,
-        ILogger<EmailSenderDispatcher> logger)
-    {
-        _environment = environment;
-        _resendSender = resendSender;
-        _sendGridSender = sendGridSender;
-        _mailKitSender = mailKitSender;
-        _resendOptions = resendOptions.Value;
-        _sendGridOptions = sendGridOptions.Value;
-        _logger = logger;
-    }
+    private readonly IHostEnvironment _environment = environment;
+    private readonly ResendEmailSender _resendSender = resendSender;
+    private readonly SendGridEmailSender _sendGridSender = sendGridSender;
+    private readonly MailKitEmailSender _mailKitSender = mailKitSender;
+    private readonly ResendOptions _resendOptions = resendOptions.Value;
+    private readonly SendGridOptions _sendGridOptions = sendGridOptions.Value;
+    private readonly ILogger<EmailSenderDispatcher> _logger = logger;
 
     public async Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {

@@ -10,18 +10,10 @@ namespace AllSpice.CleanModularMonolith.Notifications.Api.Endpoints.Notification
 /// <summary>
 /// API endpoint that queues notifications for asynchronous dispatch.
 /// </summary>
-public sealed class QueueNotificationEndpoint : Endpoint<QueueNotificationRequest, QueueNotificationResponse>
+public sealed class QueueNotificationEndpoint(IMediator mediator)
+    : Endpoint<QueueNotificationRequest, QueueNotificationResponse>
 {
-    private readonly IMediator _mediator;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="QueueNotificationEndpoint"/> class.
-    /// </summary>
-    /// <param name="mediator">Mediator used to dispatch module commands.</param>
-    public QueueNotificationEndpoint(IMediator mediator)
-    {
-        _mediator = mediator;
-    }
+    private readonly IMediator _mediator = mediator;
 
     /// <inheritdoc />
     public override void Configure()

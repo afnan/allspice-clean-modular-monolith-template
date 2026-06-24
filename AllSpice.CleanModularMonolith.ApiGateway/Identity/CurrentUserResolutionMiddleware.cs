@@ -16,14 +16,9 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Identity;
 /// resolve lazily on first audit stamp. See TODOS.md.
 /// </para>
 /// </summary>
-public sealed class CurrentUserResolutionMiddleware
+public sealed class CurrentUserResolutionMiddleware(RequestDelegate next)
 {
-    private readonly RequestDelegate _next;
-
-    public CurrentUserResolutionMiddleware(RequestDelegate next)
-    {
-        _next = next;
-    }
+    private readonly RequestDelegate _next = next;
 
     public async Task InvokeAsync(HttpContext context, ICurrentUserContext currentUserContext, IUserExternalIdResolver resolver)
     {

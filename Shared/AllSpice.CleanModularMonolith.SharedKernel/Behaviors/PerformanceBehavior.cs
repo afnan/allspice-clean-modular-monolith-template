@@ -5,19 +5,13 @@ using Microsoft.Extensions.Options;
 
 namespace AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 
-public sealed class PerformanceBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+public sealed class PerformanceBehavior<TRequest, TResponse>(
+    ILogger<PerformanceBehavior<TRequest, TResponse>> logger,
+    IOptions<PerformanceBehaviorOptions> options) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : class, IMessage
 {
-    private readonly ILogger<PerformanceBehavior<TRequest, TResponse>> _logger;
-    private readonly long _slowRequestThresholdMs;
-
-    public PerformanceBehavior(
-        ILogger<PerformanceBehavior<TRequest, TResponse>> logger,
-        IOptions<PerformanceBehaviorOptions> options)
-    {
-        _logger = logger;
-        _slowRequestThresholdMs = options.Value.SlowRequestThresholdMs;
-    }
+    private readonly ILogger<PerformanceBehavior<TRequest, TResponse>> _logger = logger;
+    private readonly long _slowRequestThresholdMs = options.Value.SlowRequestThresholdMs;
 
     public async ValueTask<TResponse> Handle(TRequest request, MessageHandlerDelegate<TRequest, TResponse> next, CancellationToken cancellationToken)
     {

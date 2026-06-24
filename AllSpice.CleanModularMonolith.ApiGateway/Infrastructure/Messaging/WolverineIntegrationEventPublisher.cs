@@ -24,16 +24,10 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.Messaging;
 /// outbox envelopes.
 /// </para>
 /// </summary>
-public sealed class WolverineIntegrationEventPublisher : IIntegrationEventPublisher
+public sealed class WolverineIntegrationEventPublisher(IDbContextOutbox outbox, IEnumerable<IModuleDbContext> dbContexts) : IIntegrationEventPublisher
 {
-    private readonly IDbContextOutbox _outbox;
-    private readonly IEnumerable<IModuleDbContext> _dbContexts;
-
-    public WolverineIntegrationEventPublisher(IDbContextOutbox outbox, IEnumerable<IModuleDbContext> dbContexts)
-    {
-        _outbox = outbox;
-        _dbContexts = dbContexts;
-    }
+    private readonly IDbContextOutbox _outbox = outbox;
+    private readonly IEnumerable<IModuleDbContext> _dbContexts = dbContexts;
 
     public async ValueTask PublishAsync<T>(T message, CancellationToken cancellationToken = default) where T : class
     {

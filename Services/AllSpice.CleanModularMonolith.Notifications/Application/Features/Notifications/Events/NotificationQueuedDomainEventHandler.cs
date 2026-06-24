@@ -4,14 +4,10 @@ using AllSpice.CleanModularMonolith.Notifications.Domain.Events;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Notifications.Events;
 
-public sealed class NotificationQueuedDomainEventHandler : INotificationHandler<NotificationQueuedDomainEvent>
+public sealed class NotificationQueuedDomainEventHandler(ILogger<NotificationQueuedDomainEventHandler> logger)
+    : INotificationHandler<NotificationQueuedDomainEvent>
 {
-    private readonly ILogger<NotificationQueuedDomainEventHandler> _logger;
-
-    public NotificationQueuedDomainEventHandler(ILogger<NotificationQueuedDomainEventHandler> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<NotificationQueuedDomainEventHandler> _logger = logger;
 
     public ValueTask Handle(NotificationQueuedDomainEvent notification, CancellationToken cancellationToken)
     {

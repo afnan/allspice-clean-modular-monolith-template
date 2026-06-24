@@ -14,18 +14,12 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Jobs;
 /// "daily digest" name. Building a real recipient-facing digest is a feature, deliberately out of scope
 /// for the template; this job is the lightweight observability stand-in.
 /// </summary>
-public sealed class StalePendingNotificationsMonitorJob : IJob
+public sealed class StalePendingNotificationsMonitorJob(
+    INotificationRepository notificationRepository,
+    ILogger<StalePendingNotificationsMonitorJob> logger) : IJob
 {
-    private readonly INotificationRepository _notificationRepository;
-    private readonly ILogger<StalePendingNotificationsMonitorJob> _logger;
-
-    public StalePendingNotificationsMonitorJob(
-        INotificationRepository notificationRepository,
-        ILogger<StalePendingNotificationsMonitorJob> logger)
-    {
-        _notificationRepository = notificationRepository;
-        _logger = logger;
-    }
+    private readonly INotificationRepository _notificationRepository = notificationRepository;
+    private readonly ILogger<StalePendingNotificationsMonitorJob> _logger = logger;
 
     public async Task Execute(IJobExecutionContext context)
     {

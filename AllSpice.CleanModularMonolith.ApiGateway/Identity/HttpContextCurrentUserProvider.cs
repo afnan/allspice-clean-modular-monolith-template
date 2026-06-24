@@ -12,14 +12,9 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Identity;
 /// audit interceptor to consume. Returns <c>null</c> outside an HTTP request (e.g. background jobs), or when
 /// the authenticated subject has not yet been mirrored locally — both yield unattributed audit stamps.
 /// </summary>
-public sealed class HttpContextCurrentUserProvider : ICurrentUserProvider
+public sealed class HttpContextCurrentUserProvider(IHttpContextAccessor httpContextAccessor) : ICurrentUserProvider
 {
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
-    public HttpContextCurrentUserProvider(IHttpContextAccessor httpContextAccessor)
-    {
-        _httpContextAccessor = httpContextAccessor;
-    }
+    private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
 
     public string? UserId
     {

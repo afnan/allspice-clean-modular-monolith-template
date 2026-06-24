@@ -10,16 +10,10 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// <see cref="KeycloakDirectoryClient"/> to keep that class focused on user operations. Shares the
 /// directory client's configured <see cref="HttpClient"/>.
 /// </summary>
-internal sealed class KeycloakRoleClient
+internal sealed class KeycloakRoleClient(HttpClient httpClient, ILogger logger)
 {
-    private readonly HttpClient _httpClient;
-    private readonly ILogger _logger;
-
-    public KeycloakRoleClient(HttpClient httpClient, ILogger logger)
-    {
-        _httpClient = httpClient;
-        _logger = logger;
-    }
+    private readonly HttpClient _httpClient = httpClient;
+    private readonly ILogger _logger = logger;
 
     public async Task AssignRealmRoleAsync(string userId, string roleName, CancellationToken cancellationToken = default)
     {

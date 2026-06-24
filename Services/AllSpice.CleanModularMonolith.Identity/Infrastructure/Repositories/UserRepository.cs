@@ -7,15 +7,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Repositories;
 
-public sealed class UserRepository : EfRepository<IdentityDbContext, User>, IUserRepository
+public sealed class UserRepository(IdentityDbContext dbContext) : EfRepository<IdentityDbContext, User>(dbContext), IUserRepository
 {
-    private readonly IdentityDbContext _dbContext;
-
-    public UserRepository(IdentityDbContext dbContext)
-        : base(dbContext)
-    {
-        _dbContext = dbContext;
-    }
+    private readonly IdentityDbContext _dbContext = dbContext;
 
     public Task<User?> GetByExternalIdAsync(string externalId, CancellationToken cancellationToken = default) =>
         _dbContext.Users

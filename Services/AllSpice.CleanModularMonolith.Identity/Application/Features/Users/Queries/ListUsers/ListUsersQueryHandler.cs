@@ -6,14 +6,9 @@ using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Identity.Application.Features.Users.Queries.ListUsers;
 
-public sealed class ListUsersQueryHandler : IRequestHandler<ListUsersQuery, Result<PagedList<UserDto>>>
+public sealed class ListUsersQueryHandler(IUserRepository userRepository) : IRequestHandler<ListUsersQuery, Result<PagedList<UserDto>>>
 {
-    private readonly IUserRepository _userRepository;
-
-    public ListUsersQueryHandler(IUserRepository userRepository)
-    {
-        _userRepository = userRepository;
-    }
+    private readonly IUserRepository _userRepository = userRepository;
 
     public async ValueTask<Result<PagedList<UserDto>>> Handle(ListUsersQuery request, CancellationToken cancellationToken)
     {

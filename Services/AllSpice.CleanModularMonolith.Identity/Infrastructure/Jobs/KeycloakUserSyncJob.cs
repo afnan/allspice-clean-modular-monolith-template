@@ -14,24 +14,17 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
 /// Keycloak users that have no corresponding local user row.
 /// </summary>
 [DisallowConcurrentExecution]
-public sealed class KeycloakUserSyncJob : IJob
+public sealed class KeycloakUserSyncJob(
+    IServiceScopeFactory scopeFactory,
+    IOptions<IdentitySyncOptions> options,
+    ILogger<KeycloakUserSyncJob> logger) : IJob
 {
     public const string JobIdentity = "KeycloakUserSyncJob";
     private const string IssueType = "KeycloakUserSync";
 
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IOptions<IdentitySyncOptions> _options;
-    private readonly ILogger<KeycloakUserSyncJob> _logger;
-
-    public KeycloakUserSyncJob(
-        IServiceScopeFactory scopeFactory,
-        IOptions<IdentitySyncOptions> options,
-        ILogger<KeycloakUserSyncJob> logger)
-    {
-        _scopeFactory = scopeFactory;
-        _options = options;
-        _logger = logger;
-    }
+    private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
+    private readonly IOptions<IdentitySyncOptions> _options = options;
+    private readonly ILogger<KeycloakUserSyncJob> _logger = logger;
 
     public async Task Execute(IJobExecutionContext context)
     {

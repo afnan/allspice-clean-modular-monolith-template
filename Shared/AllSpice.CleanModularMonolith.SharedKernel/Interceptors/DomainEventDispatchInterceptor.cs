@@ -17,14 +17,9 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
 /// handlers must be idempotent; dispatch uses <see cref="CancellationToken.None"/> so a client disconnect
 /// can't leave the system half-reconciled.</para>
 /// </summary>
-public sealed class DomainEventDispatchInterceptor : SaveChangesInterceptor
+public sealed class DomainEventDispatchInterceptor(IServiceScopeFactory serviceScopeFactory) : SaveChangesInterceptor
 {
-    private readonly IServiceScopeFactory _serviceScopeFactory;
-
-    public DomainEventDispatchInterceptor(IServiceScopeFactory serviceScopeFactory)
-    {
-        _serviceScopeFactory = serviceScopeFactory;
-    }
+    private readonly IServiceScopeFactory _serviceScopeFactory = serviceScopeFactory;
 
     public override async ValueTask<int> SavedChangesAsync(
         SaveChangesCompletedEventData eventData,

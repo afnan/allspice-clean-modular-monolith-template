@@ -5,12 +5,9 @@ using AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Repositories;
 
-public sealed class NotificationRepository : EfRepository<NotificationsDbContext, Notification>, INotificationRepository
+public sealed class NotificationRepository(NotificationsDbContext dbContext)
+    : EfRepository<NotificationsDbContext, Notification>(dbContext), INotificationRepository
 {
-    public NotificationRepository(NotificationsDbContext dbContext)
-        : base(dbContext)
-    {
-    }
 }
 
 

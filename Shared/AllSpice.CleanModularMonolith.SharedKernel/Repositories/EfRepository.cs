@@ -13,22 +13,13 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.Repositories;
 /// </summary>
 /// <typeparam name="TContext">DbContext type serving the aggregate. Must implement <see cref="IModuleDbContext"/>.</typeparam>
 /// <typeparam name="TAggregate">Aggregate root type.</typeparam>
-public class EfRepository<TContext, TAggregate> :
-    RepositoryBase<TAggregate>,
+public class EfRepository<TContext, TAggregate>(TContext dbContext) :
+    RepositoryBase<TAggregate>(dbContext),
     IReadRepository<TAggregate>,
     IRepository<TAggregate>
     where TContext : DbContext, IModuleDbContext
     where TAggregate : AggregateRoot
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="EfRepository{TContext,TAggregate}"/> class.
-    /// </summary>
-    /// <param name="dbContext">The DbContext instance.</param>
-    public EfRepository(TContext dbContext)
-        : base(dbContext)
-    {
-    }
-
     /// <summary>
     /// Track-only: the inherited write methods (<c>AddAsync</c>/<c>UpdateAsync</c>/<c>DeleteAsync</c>)
     /// call this to persist, but here it is a no-op so they only STAGE entities in the change tracker.

@@ -7,14 +7,9 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// <summary>
 /// Health check that reports when unresolved orphan users exist.
 /// </summary>
-public sealed class IdentityOrphanHealthCheck : IHealthCheck
+public sealed class IdentityOrphanHealthCheck(IdentityDbContext dbContext) : IHealthCheck
 {
-    private readonly IdentityDbContext _dbContext;
-
-    public IdentityOrphanHealthCheck(IdentityDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
+    private readonly IdentityDbContext _dbContext = dbContext;
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {

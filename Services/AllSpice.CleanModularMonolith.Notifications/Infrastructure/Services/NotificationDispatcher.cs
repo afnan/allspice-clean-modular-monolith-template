@@ -18,45 +18,24 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 /// <summary>
 /// Coordinates notification delivery across the registered delivery channels.
 /// </summary>
-public sealed class NotificationDispatcher : INotificationDispatcher
+public sealed class NotificationDispatcher(
+    INotificationRepository notificationRepository,
+    NotificationsDbContext dbContext,
+    IEnumerable<INotificationChannel> channels,
+    INotificationPreferenceRepository preferenceRepository,
+    INotificationContentBuilder contentBuilder,
+    IDbContextOutbox outbox,
+    IOptions<NotificationDispatcherOptions> options,
+    ILogger<NotificationDispatcher> logger) : INotificationDispatcher
 {
-    private readonly INotificationRepository _notificationRepository;
-    private readonly NotificationsDbContext _dbContext;
-    private readonly IEnumerable<INotificationChannel> _channels;
-    private readonly INotificationPreferenceRepository _preferenceRepository;
-    private readonly INotificationContentBuilder _contentBuilder;
-    private readonly IDbContextOutbox _outbox;
-    private readonly NotificationDispatcherOptions _options;
-    private readonly ILogger<NotificationDispatcher> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="NotificationDispatcher"/> class.
-    /// </summary>
-    /// <param name="notificationRepository">Repository used to load and update notification records.</param>
-    /// <param name="channels">The set of delivery channel handlers available.</param>
-    /// <param name="preferenceRepository">Repository for recipient notification preferences.</param>
-    /// <param name="contentBuilder">Service that renders notification content.</param>
-    /// <param name="messageBus">Wolverine message bus used for event publication.</param>
-    /// <param name="logger">Logger used to record dispatcher activity.</param>
-    public NotificationDispatcher(
-        INotificationRepository notificationRepository,
-        NotificationsDbContext dbContext,
-        IEnumerable<INotificationChannel> channels,
-        INotificationPreferenceRepository preferenceRepository,
-        INotificationContentBuilder contentBuilder,
-        IDbContextOutbox outbox,
-        IOptions<NotificationDispatcherOptions> options,
-        ILogger<NotificationDispatcher> logger)
-    {
-        _notificationRepository = notificationRepository;
-        _dbContext = dbContext;
-        _channels = channels;
-        _preferenceRepository = preferenceRepository;
-        _contentBuilder = contentBuilder;
-        _outbox = outbox;
-        _options = options.Value;
-        _logger = logger;
-    }
+    private readonly INotificationRepository _notificationRepository = notificationRepository;
+    private readonly NotificationsDbContext _dbContext = dbContext;
+    private readonly IEnumerable<INotificationChannel> _channels = channels;
+    private readonly INotificationPreferenceRepository _preferenceRepository = preferenceRepository;
+    private readonly INotificationContentBuilder _contentBuilder = contentBuilder;
+    private readonly IDbContextOutbox _outbox = outbox;
+    private readonly NotificationDispatcherOptions _options = options.Value;
+    private readonly ILogger<NotificationDispatcher> _logger = logger;
 
     // The dispatcher runs in a BackgroundService scope, NOT through an ITransactional Mediator command,
     // so TransactionBehavior never runs for it. Repositories only STAGE writes (see EfRepository), so the

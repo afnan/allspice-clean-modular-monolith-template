@@ -9,9 +9,11 @@ public static class SharedKernelInterceptorExtensions
 {
     /// <summary>
     /// Registers the cross-cutting EF Core save interceptors (concurrency diagnostics + audit-user
-    /// stamping) as singletons. EF Core discovers <see cref="IInterceptor"/> services from the
-    /// application service provider, so every module DbContext registered in this container picks them
-    /// up automatically. A <see cref="NullCurrentUserProvider"/> is registered as the default
+    /// stamping) <em>explicitly</em> as <see cref="IInterceptor"/> singletons (via
+    /// <see cref="ServiceCollectionDescriptorExtensions.TryAddEnumerable(IServiceCollection, ServiceDescriptor)"/>).
+    /// EF Core does not scan for interceptors — it applies the <see cref="IInterceptor"/> services it resolves
+    /// from the application service provider, so this registration is what makes every module DbContext pick
+    /// them up. A <see cref="NullCurrentUserProvider"/> is registered as the default
     /// <see cref="ICurrentUserProvider"/> unless the host has already provided one (e.g. an
     /// HttpContext-backed implementation in the gateway). Idempotent.
     /// </summary>
