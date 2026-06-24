@@ -12,9 +12,11 @@ public static class GatewayApplicationExtensions
     /// <remarks>The swagger UI title is derived from <c>Application:Name</c> configuration when available.</remarks>
     public static void UseGatewayPipeline(this WebApplication app)
     {
+        // ErrorHandlingMiddleware is outermost so that exceptions thrown in SecurityHeaders/CorrelationId
+        // (and everything downstream) are still rendered as RFC7807 problem+json rather than a bare 500.
+        app.UseMiddleware<ErrorHandlingMiddleware>();
         app.UseMiddleware<SecurityHeadersMiddleware>();
         app.UseMiddleware<CorrelationIdMiddleware>();
-        app.UseMiddleware<ErrorHandlingMiddleware>();
         app.UseMiddleware<RequestValidationMiddleware>();
         app.UseResponseCompression();
         app.UseCors();
