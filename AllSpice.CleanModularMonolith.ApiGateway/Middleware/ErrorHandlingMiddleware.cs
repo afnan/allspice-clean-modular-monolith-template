@@ -64,57 +64,45 @@ public class ErrorHandlingMiddleware(
 
         var isIdentityError = exception is IdentityServerUnreachableException;
 
-        var problemDetails = new GatewayProblemDetails
+        // RFC7807: members (incl. extensions like correlationId/errors) live at the ROOT object, matching
+        // the validation-problem shape returned by the mediator/FastEndpoints path. We build a flat dictionary
+        // rather than nesting under an "extensions" object (which the previous shape did, diverging from RFC7807).
+        var problem = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
-            Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
-            Title = isIdentityError
+            ["type"] = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
+            ["title"] = isIdentityError
                 ? "Identity service is temporarily unavailable."
                 : "An error occurred while processing your request.",
-            Status = (int)statusCode,
-            // Keep the development Detail short — exception.ToString() can include
-            // connection strings, JWTs, and other secrets in inner-exception messages.
-            // The full exception is already in the structured log (LogError above);
-            // dev consumers can correlate via the correlationId extension.
-            Detail = _environment.IsDevelopment()
+            ["status"] = (int)statusCode,
+            // Keep the development Detail short — exception.ToString() can include connection strings, JWTs,
+            // and other secrets in inner-exception messages. The full exception is already in the structured
+            // log (LogError above); dev consumers can correlate via the correlationId member.
+            ["detail"] = _environment.IsDevelopment()
                 ? $"{exception.GetType().Name}: {exception.Message.Truncate(512)}"
                 : (isIdentityError ? "The identity provider is unreachable. Please try again later." : "An error occurred while processing your request."),
-            Instance = context.Request.Path
+            ["instance"] = context.Request.Path.Value,
+            ["correlationId"] = correlationId
         };
-
-        problemDetails.Extensions["correlationId"] = correlationId;
 
         // Surface field-level validation errors so clients get actionable 400s. This is the defensive
         // net: the Mediator pipeline normally maps ValidationException to Result.Invalid first.
         if (exception is FluentValidation.ValidationException validationException)
         {
-            problemDetails.Extensions["errors"] = validationException.Errors
+            problem["errors"] = validationException.Errors
                 .GroupBy(e => e.PropertyName)
                 .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
         }
 
         if (_environment.IsDevelopment())
         {
-            problemDetails.Extensions["exception"] = exception.GetType().Name;
-            problemDetails.Extensions["stackTrace"] = exception.StackTrace;
+            problem["exception"] = exception.GetType().Name;
+            problem["stackTrace"] = exception.StackTrace;
         }
 
-        var result = JsonSerializer.Serialize(problemDetails, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        var result = JsonSerializer.Serialize(problem);
 
         context.Response.ContentType = "application/problem+json";
         context.Response.StatusCode = (int)statusCode;
         return context.Response.WriteAsync(result);
-    }
-
-    private sealed class GatewayProblemDetails
-    {
-        public string Type { get; init; } = string.Empty;
-        public string Title { get; init; } = string.Empty;
-        public int Status { get; init; }
-        public string Detail { get; init; } = string.Empty;
-        public string Instance { get; init; } = string.Empty;
-        public IDictionary<string, object?> Extensions { get; } = new Dictionary<string, object?>(StringComparer.Ordinal);
     }
 }
