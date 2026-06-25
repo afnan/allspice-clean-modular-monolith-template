@@ -1,9 +1,11 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Common;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 
@@ -12,9 +14,11 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// </summary>
 public sealed class KeycloakHealthCheck(
     IHttpClientFactory httpClientFactory,
+    IOptions<KeycloakOptions> options,
     ILogger<KeycloakHealthCheck> logger) : IHealthCheck
 {
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly IOptions<KeycloakOptions> _options = options;
     private readonly ILogger<KeycloakHealthCheck> _logger = logger;
 
     private static readonly Uri HealthEndpoint = new("/users?max=1", UriKind.Relative);
@@ -24,6 +28,15 @@ public sealed class KeycloakHealthCheck(
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
+        if (!_options.Value.IsAdminConfigured)
+        {
+            // The IdP hasn't been linked yet — report Degraded (not Unhealthy) so a freshly-scaffolded app is
+            // "up and running" rather than failing readiness. Becomes a real connectivity check once configured.
+            return HealthCheckResult.Degraded(
+                "Keycloak is not linked yet. Set Identity:Keycloak (ServiceName or BaseUrl, plus an ApiToken or " +
+                "ClientId/ClientSecret) to enable directory/auth features.");
+        }
+
         var client = _httpClientFactory.CreateClient(IdentityModuleExtensions.KeycloakHttpClientName);
 
         try
