@@ -18,7 +18,7 @@ public class EfRepository<TContext, TAggregate>(TContext dbContext) :
     IReadRepository<TAggregate>,
     IRepository<TAggregate>
     where TContext : DbContext, IModuleDbContext
-    where TAggregate : AggregateRoot
+    where TAggregate : class, IAggregateRoot
 {
     /// <summary>
     /// Track-only: the inherited write methods (<c>AddAsync</c>/<c>UpdateAsync</c>/<c>DeleteAsync</c>)

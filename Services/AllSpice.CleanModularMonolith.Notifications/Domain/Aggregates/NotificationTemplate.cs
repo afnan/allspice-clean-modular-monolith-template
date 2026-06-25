@@ -3,7 +3,7 @@ using AllSpice.CleanModularMonolith.SharedKernel.Common;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 
-public sealed class NotificationTemplate : AggregateRoot
+public sealed class NotificationTemplate : Entity, IAggregateRoot
 {
     private NotificationTemplate()
     {

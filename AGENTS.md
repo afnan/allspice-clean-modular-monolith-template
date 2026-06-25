@@ -67,7 +67,9 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 ## 3. DO — patterns by layer
 
 **Domain** (`Services/{Module}/Domain`)
-- Model aggregates from `Entity` / `AggregateRoot` / `AuditableEntity` / `SoftDeletableEntity` (SharedKernel).
+- Model entities from `Entity` / `AuditableEntity` / `SoftDeletableEntity` (SharedKernel); mark aggregate roots
+  with the `IAggregateRoot` marker interface (repositories operate only on `IAggregateRoot`). Audit is a
+  concern (`IAuditable`) independent of root-ness — a root may be `Entity, IAggregateRoot` or `AuditableEntity, IAggregateRoot`.
 - Validate invariants with **Ardalis.GuardClauses** in factories/methods; raise domain events via
   `RegisterDomainEvent`. Keep domain logic free of EF/HTTP/infrastructure types.
 - Use `Ardalis.SmartEnum` for closed sets; value objects derive from `ValueObject`.

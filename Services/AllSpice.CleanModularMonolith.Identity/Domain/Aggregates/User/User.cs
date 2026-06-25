@@ -8,7 +8,7 @@ namespace AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
 /// Represents a locally synced user from the external identity provider (Keycloak).
 /// Enables relational references to users from other modules.
 /// </summary>
-public sealed class User : AuditableAggregateRoot
+public sealed class User : AuditableEntity, IAggregateRoot
 {
     private User()
     {

@@ -22,7 +22,7 @@ public class DomainEventDispatcherExtensionsTests
         Assert.IsType<SampleDomainEvent>(dispatcher.PublishedEvents.Single());
     }
 
-    private sealed class SampleAggregate : AggregateRoot
+    private sealed class SampleAggregate : Entity, IAggregateRoot
     {
         public void RaiseTestEvent() => RegisterDomainEvent(new SampleDomainEvent());
     }

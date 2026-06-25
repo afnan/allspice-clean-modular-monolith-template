@@ -8,7 +8,7 @@ using AllSpice.CleanModularMonolith.SharedKernel.Common;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 
-public sealed class Notification : AggregateRoot
+public sealed class Notification : Entity, IAggregateRoot
 {
     internal const int MaxDeliveryAttempts = 5;
 
