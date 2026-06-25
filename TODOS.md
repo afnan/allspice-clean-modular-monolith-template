@@ -135,11 +135,15 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   stamps audit rows for them. Acceptable at template scale; if the proxy path gets hot, scope resolution to local
   endpoints (FastEndpoints global pre-processor) or resolve lazily on first audit stamp.
 
-- [ ] **`AddDbContextPool` bypasses Aspire's Npgsql enrichment (P2).**
-  `IdentityModuleExtensions`/`NotificationsModuleExtensions` hand-roll `AddDbContextPool(UseNpgsql(...))` +
-  `EnrichNpgsqlDbContext(DisableHealthChecks)`. Prefer the `AddNpgsqlDbContext<T>(name, configureDbContextOptions:
-  o => o.AddInterceptors(...))` overload so Aspire's keyed connection, resilience, and telemetry wiring stays
-  intact while interceptors still attach.
+- [x] **Module DbContexts now Aspire-enriched (P2) — RESOLVED (2026-06-25).**
+  `IdentityModuleExtensions`/`NotificationsModuleExtensions` now call `builder.EnrichNpgsqlDbContext<T>()` after
+  the Wolverine-integrated registration, layering Aspire's OpenTelemetry tracing/metrics + health check +
+  command timeout onto the module contexts (interceptors and the co-located outbox still attach). **Retry is
+  disabled on purpose** (`settings.DisableRetry = true`): the transactional-outbox flow uses user-initiated
+  transactions (`TransactionBehavior`, the dispatcher's delivered-tx), which Npgsql's retrying execution
+  strategy forbids — and retrying a block that performs an external send would duplicate it. Verified live: the
+  gateway boots, the enriched contexts connect and migrate cleanly against real Postgres (no execution-strategy
+  conflict), `/alive` 200, and no DB health-check failures.
 
 - [ ] **`AzureBlobStorageService`: no SAS/URL generation; cold-start container race (P3).**
   `UploadAsync` returns a raw blob name and there is no SAS/expiry story, so any "download by URL" flow against
