@@ -14,7 +14,8 @@ public abstract class Entity : Entity<Guid>
 }
 
 /// <summary>
-/// Generic entity base using strongly typed identifiers.
+/// Generic entity base using strongly typed identifiers. Identity-based equality: two entities are equal only
+/// when they are the same runtime type and share the same <see cref="Id"/>.
 /// </summary>
 public abstract class Entity<TId> : HasDomainEventsBase
     where TId : IEquatable<TId>
@@ -27,7 +28,9 @@ public abstract class Entity<TId> : HasDomainEventsBase
 
     public override bool Equals(object? obj)
     {
-        if (obj is not Entity<TId> other)
+        // Compare the runtime type too: two different entity types that happen to share an Id are NOT equal,
+        // otherwise they would collide in a HashSet / LINQ Distinct.
+        if (obj is not Entity<TId> other || GetType() != other.GetType())
         {
             return false;
         }
@@ -54,14 +57,3 @@ public abstract class Entity<TId> : HasDomainEventsBase
         return _requestedHashCode.Value;
     }
 }
-
-/// <summary>
-/// Strongly typed entity base that works with Vogen or similar libraries.
-/// </summary>
-public abstract class Entity<T, TId> : HasDomainEventsBase
-    where T : Entity<T, TId>
-{
-    public TId Id { get; protected set; } = default!;
-}
-
-

@@ -78,7 +78,7 @@ Services/{Module}/
 
 ## Shared libraries
 
-- **SharedKernel** — base entities (`Entity`, `AggregateRoot`, `AuditableEntity`, `SoftDeletableEntity`),
+- **SharedKernel** — base entities (`Entity`, `AuditableEntity`, `SoftDeletableEntity`) + the `IAggregateRoot` marker,
   domain events, `EfRepository<T>`, value objects, Mediator pipeline behaviors, `IIntegrationEventPublisher`,
   `IUserExternalIdResolver`, `ICurrentUserProvider`, `IModuleDbContext`, EF interceptors, `DbContextHealthCheck`,
   `IFileStorageService`, `SoftDeleteQueryFilterConvention`, `MigrationRunner`.

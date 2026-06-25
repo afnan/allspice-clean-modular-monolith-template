@@ -10,7 +10,7 @@ namespace AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
 /// canonical local identity convention is enforced here so a preference written
 /// from one code path can be read from another without identity drift.
 /// </summary>
-public sealed class NotificationPreference : AggregateRoot
+public sealed class NotificationPreference : Entity, IAggregateRoot
 {
     private NotificationPreference()
     {
