@@ -130,16 +130,7 @@ public static class IdentityModuleExtensions
     private static void ConfigureKeycloakClient(IServiceProvider serviceProvider, HttpClient client)
     {
         var options = serviceProvider.GetRequiredService<IOptions<KeycloakOptions>>().Value;
-        Guard.Against.NullOrWhiteSpace(options.Realm, nameof(options.Realm));
 
-        // Use service discovery if ServiceName is provided, otherwise use BaseUrl
-        var baseUrl = !string.IsNullOrWhiteSpace(options.ServiceName)
-            ? $"http://{options.ServiceName}/admin/realms/{options.Realm}"
-            : (string.IsNullOrWhiteSpace(options.BaseUrl)
-                ? throw new InvalidOperationException("Either ServiceName or BaseUrl must be provided for Keycloak configuration")
-                : $"{options.BaseUrl.TrimEnd('/')}/admin/realms/{options.Realm}");
-
-        client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         // Cap admin-API calls so a hung Keycloak doesn't block invitation flows forever.
@@ -147,6 +138,15 @@ public static class IdentityModuleExtensions
         client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds <= 0
             ? 30
             : options.RequestTimeoutSeconds);
+
+        // Until the IdP is linked, AdminApiBaseAddress is null — leave the base address unset so this client
+        // can still be CONSTRUCTED. The gateway's CurrentUserResolutionMiddleware resolves it on every request
+        // (incl. anonymous /health); throwing here would 500 those. No call is made while unlinked (health
+        // checks short-circuit on IsAdminConfigured; the sync job is idle), so an unset base is harmless.
+        if (options.AdminApiBaseAddress is { } baseAddress)
+        {
+            client.BaseAddress = baseAddress;
+        }
     }
 
     private static HttpMessageHandler CreateKeycloakHandler(IServiceProvider serviceProvider)

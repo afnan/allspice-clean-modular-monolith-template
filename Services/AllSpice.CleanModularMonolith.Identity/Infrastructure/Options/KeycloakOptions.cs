@@ -17,9 +17,9 @@ public sealed class KeycloakOptions
     public string BaseUrl { get; set; } = string.Empty;
 
     /// <summary>
-    /// Keycloak realm name (e.g. allspice).
+    /// Keycloak realm name (e.g. allspice). Required only once the IdP is being configured — enforced
+    /// conditionally by <see cref="KeycloakOptionsValidator"/> so an unlinked app can still boot.
     /// </summary>
-    [Required]
     public string Realm { get; set; } = string.Empty;
 
     /// <summary>
@@ -55,5 +55,47 @@ public sealed class KeycloakOptions
     /// </summary>
     [Range(0, 600)]
     public int RequestTimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Whether Keycloak admin access is actually configured: a base (<see cref="ServiceName"/> or
+    /// <see cref="BaseUrl"/>) PLUS admin credentials (an <see cref="ApiToken"/>, or a
+    /// <see cref="ClientId"/>+<see cref="ClientSecret"/> for the client-credentials flow). When this is
+    /// <c>false</c> the IdP simply hasn't been linked yet — admin-dependent features (Keycloak connectivity,
+    /// user sync) report <c>Degraded</c> rather than <c>Unhealthy</c>, so a freshly-scaffolded app is "up and
+    /// running" and becomes fully healthy once these settings are supplied.
+    /// </summary>
+    public bool IsAdminConfigured =>
+        (!string.IsNullOrWhiteSpace(ServiceName) || !string.IsNullOrWhiteSpace(BaseUrl))
+        && (!string.IsNullOrWhiteSpace(ApiToken)
+            || (!string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret)));
+
+    /// <summary>
+    /// The Keycloak Admin REST API base address — derived from <see cref="ServiceName"/> (Aspire service
+    /// discovery, preferred) or <see cref="BaseUrl"/>, scoped to <see cref="Realm"/>. Returns <c>null</c>
+    /// while the IdP isn't linked (no realm, or no base) so the admin <c>HttpClient</c> can still be
+    /// CONSTRUCTED without a base address — it is resolved on every request by the gateway's
+    /// CurrentUserResolutionMiddleware, including anonymous <c>/health</c>. No call is made while unlinked
+    /// (the Keycloak-dependent health checks short-circuit on <see cref="IsAdminConfigured"/> and the sync
+    /// job is idle), so the missing base address is harmless until the IdP is configured.
+    /// </summary>
+    public Uri? AdminApiBaseAddress
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Realm))
+            {
+                return null;
+            }
+
+            if (!string.IsNullOrWhiteSpace(ServiceName))
+            {
+                return new Uri($"http://{ServiceName}/admin/realms/{Realm}", UriKind.Absolute);
+            }
+
+            return string.IsNullOrWhiteSpace(BaseUrl)
+                ? null
+                : new Uri($"{BaseUrl.TrimEnd('/')}/admin/realms/{Realm}", UriKind.Absolute);
+        }
+    }
 }
 

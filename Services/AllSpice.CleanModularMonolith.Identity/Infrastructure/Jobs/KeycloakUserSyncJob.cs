@@ -17,6 +17,7 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
 public sealed class KeycloakUserSyncJob(
     IServiceScopeFactory scopeFactory,
     IOptions<IdentitySyncOptions> options,
+    IOptions<KeycloakOptions> keycloakOptions,
     ILogger<KeycloakUserSyncJob> logger) : IJob
 {
     public const string JobIdentity = "KeycloakUserSyncJob";
@@ -24,10 +25,21 @@ public sealed class KeycloakUserSyncJob(
 
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
     private readonly IOptions<IdentitySyncOptions> _options = options;
+    private readonly IOptions<KeycloakOptions> _keycloakOptions = keycloakOptions;
     private readonly ILogger<KeycloakUserSyncJob> _logger = logger;
 
     public async Task Execute(IJobExecutionContext context)
     {
+        if (!_keycloakOptions.Value.IsAdminConfigured)
+        {
+            // The IdP isn't linked yet (no base + admin credentials), so there's nothing to reconcile against.
+            // Stay genuinely idle: don't open a scope, don't call the directory client (its HttpClient has no
+            // base address while unlinked), don't record a sync-issue row. Resumes automatically once
+            // Identity:Keycloak is configured. See KeycloakHealthCheck / IdentitySyncHealthCheck (Degraded).
+            _logger.LogDebug("Keycloak is not linked yet — skipping user sync.");
+            return;
+        }
+
         var cancellationToken = context.CancellationToken;
 
         await using var scope = _scopeFactory.CreateAsyncScope();
