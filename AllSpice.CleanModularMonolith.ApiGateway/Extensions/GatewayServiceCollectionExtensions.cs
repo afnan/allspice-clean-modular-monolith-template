@@ -327,7 +327,13 @@ public static class GatewayServiceCollectionExtensions
                 {
                     policy.RequireAuthenticatedUser();
                 }
-                // If authentication is not enabled, the policy allows all (no requirements)
+                else
+                {
+                    // Auth disabled (no IdP configured): allow all — but a policy MUST have at least one
+                    // requirement or ASP.NET Core throws "AuthorizationPolicy must have at least one requirement"
+                    // at startup, which previously prevented the gateway from booting without a Keycloak client.
+                    policy.RequireAssertion(_ => true);
+                }
             });
 
             if (authenticationEnabled)
