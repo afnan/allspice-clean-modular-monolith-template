@@ -45,6 +45,13 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
 
         builder.Property(notification => notification.LastAttemptedUtc);
 
+        // Optimistic-concurrency token. The dispatcher's claim (mark Dispatched) is a conditional UPDATE
+        // guarded on this value, so when multiple dispatcher replicas grab the same batch, exactly one wins
+        // the claim and the others get DbUpdateConcurrencyException (handled by skipping) — no double-send.
+        // LastUpdatedUtc changes on every state transition, so it's a natural row version here.
+        builder.Property(notification => notification.LastUpdatedUtc)
+            .IsConcurrencyToken();
+
         builder.Property(notification => notification.NextAttemptUtc);
 
         builder.Property(notification => notification.LastError)

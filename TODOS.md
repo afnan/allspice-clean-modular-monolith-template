@@ -103,11 +103,15 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
 
 ## In-app notification dispatch
 
-- [ ] **Mark-dispatched-before-send loss-on-crash (P1, debated).** `NotificationDispatcher`
-  marks a notification `Dispatched` and saves before `SendAsync`; a crash in between strands it
-  (never re-selected, never sent). Consider a `Claimed`/`Dispatching` intermediate state with a
-  reclaim timeout, or `FOR UPDATE SKIP LOCKED` claim → deliver → mark `Delivered`. (One reviewer
-  considered the single-replica path acceptable; confirm desired delivery semantics first.)
+- [x] **Dispatcher is now multi-replica safe (at-least-once) — RESOLVED (2026-06-25).** Decision: at-least-once
+  delivery + multi-replica safety. `Notification.LastUpdatedUtc` is an EF optimistic-concurrency token, so the
+  claim (mark `Dispatched`) is a conditional UPDATE — when several dispatcher replicas poll the same batch,
+  exactly one wins per row and the losers get `DbUpdateConcurrencyException` (handled by skipping), so a row is
+  never sent twice. Crash-strand is still reclaimed (F4); a crash after a successful send but before `Delivered`
+  commits re-sends on reclaim (accepted at-least-once duplicate), mitigated by the documented channel-idempotency
+  contract on `INotificationChannel` (dedup on the stable `Notification.Id`). Covered by
+  `NotificationClaimConcurrencyTests`. (An equivalent Postgres-native `SELECT … FOR UPDATE SKIP LOCKED` claim was
+  considered; the optimistic approach was chosen for being provider-agnostic and preserving the per-row flow.)
 
 ## Template scaffolding
 

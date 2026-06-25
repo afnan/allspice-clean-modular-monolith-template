@@ -40,26 +40,41 @@ public sealed class NotificationDispatcher(
     // The dispatcher runs in a BackgroundService scope, NOT through an ITransactional Mediator command,
     // so TransactionBehavior never runs for it. Repositories only STAGE writes (see EfRepository), so the
     // dispatcher owns its own unit of work: stage via the repository, then flush via the module DbContext.
-    // Each notification is persisted independently so a mid-batch failure doesn't lose prior progress, and
-    // the "mark Dispatched before SendAsync" crash-safety guarantee actually reaches the database.
-    private async Task PersistAsync(Notification notification, CancellationToken cancellationToken)
+    // Each notification is persisted independently so a mid-batch failure doesn't lose prior progress.
+    //
+    // Returns false when the write loses an optimistic-concurrency race (Notification.LastUpdatedUtc is the
+    // concurrency token): another dispatcher replica claimed/reclaimed/terminalized the same row first. The
+    // stale instance is detached so it isn't retried, and the caller skips the row.
+    private async Task<bool> TryPersistAsync(Notification notification, CancellationToken cancellationToken)
     {
         await _notificationRepository.UpdateAsync(notification, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _dbContext.Entry(notification).State = EntityState.Detached;
+            _logger.LogDebug(
+                "Notification {NotificationId} was concurrently modified by another replica; skipping.",
+                notification.Id);
+            return false;
+        }
     }
 
     /// <inheritdoc />
     /// <remarks>
-    /// KNOWN LIMITATION (multi-replica): the SELECT (Pending notifications) and the
-    /// subsequent UPDATE (mark Dispatched) are not atomic, so two replicas of the
-    /// gateway can both grab the same batch and double-send. The "mark Dispatched
-    /// before SendAsync" pattern below shrinks the window but does not close it.
+    /// Multi-replica safe: marking a notification <c>Dispatched</c> is a CONDITIONAL update guarded by the
+    /// <c>LastUpdatedUtc</c> optimistic-concurrency token (see <see cref="TryPersistAsync"/>). When several
+    /// dispatcher replicas poll the same batch, exactly one wins the claim per row; the losers get a
+    /// concurrency conflict and skip — so a row is never sent by two replicas. (An atomic
+    /// <c>SELECT ... FOR UPDATE SKIP LOCKED</c> claim is an equivalent Postgres-native alternative; the
+    /// optimistic approach is used here because it is provider-agnostic and preserves the per-row flow.)
     ///
-    /// The proper fix when scaling beyond a single replica is an atomic claim via
-    /// `UPDATE notifications SET status='Dispatched' ... WHERE id IN (SELECT ...
-    /// FOR UPDATE SKIP LOCKED) RETURNING *` — implementable as raw SQL on the
-    /// repository or by adding a `ClaimedByDispatcherId` column. Document then
-    /// implement when multi-replica deployment is on the roadmap.
+    /// Delivery is at-least-once: a crash AFTER a successful send but BEFORE <c>Delivered</c> commits leaves
+    /// the row in <c>Dispatched</c>; the reclaim path re-sends it, which can duplicate a real delivery. The
+    /// mitigation is channel idempotency — see <see cref="INotificationChannel"/>.
     /// </remarks>
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default)
     {
@@ -88,8 +103,11 @@ public sealed class NotificationDispatcher(
                 notification.AttemptCount >= Notification.MaxDeliveryAttempts)
             {
                 notification.HandleFailure("Stranded in Dispatched after exhausting delivery attempts.");
-                await PersistAsync(notification, cancellationToken);
-                _logger.LogWarning("Notification {NotificationId} terminalized: stranded in Dispatched at max attempts.", notification.Id);
+                if (await TryPersistAsync(notification, cancellationToken))
+                {
+                    _logger.LogWarning("Notification {NotificationId} terminalized: stranded in Dispatched at max attempts.", notification.Id);
+                }
+
                 continue;
             }
 
@@ -119,23 +137,28 @@ public sealed class NotificationDispatcher(
                     notification.Id,
                     notification.Recipient.UserId);
                 notification.HandleFailure("Invalid Recipient.UserId format; cannot evaluate notification preferences.");
-                await PersistAsync(notification, cancellationToken);
+                await TryPersistAsync(notification, cancellationToken);
                 continue;
             }
 
             notification.RecordAttempt();
 
-            // Mark as Dispatched and persist BEFORE sending to prevent duplicate dispatch
-            // by the background service polling concurrently.
+            // Claim: mark Dispatched and persist BEFORE sending. This is the optimistic-concurrency claim —
+            // if another replica already claimed/reclaimed this row, the persist loses the race and we skip
+            // (no double dispatch).
             notification.MarkDispatched();
-            await PersistAsync(notification, cancellationToken);
+            if (!await TryPersistAsync(notification, cancellationToken))
+            {
+                _logger.LogDebug("Notification {NotificationId} claimed by another replica; skipping.", notification.Id);
+                continue;
+            }
 
             var contentResult = await _contentBuilder.BuildAsync(notification, cancellationToken);
             if (!contentResult.IsSuccess)
             {
                 var errorDetail = contentResult.Errors.FirstOrDefault() ?? "Failed to build notification content.";
                 notification.HandleFailure(errorDetail);
-                await PersistAsync(notification, cancellationToken);
+                await TryPersistAsync(notification, cancellationToken);
                 _logger.LogWarning("Notification {NotificationId} content build failed: {Error}", notification.Id, errorDetail);
                 continue;
             }
@@ -145,7 +168,7 @@ public sealed class NotificationDispatcher(
             if (channelHandler is null)
             {
                 notification.HandleFailure($"No notification channel registered for '{notification.Channel.Name}'.");
-                await PersistAsync(notification, cancellationToken);
+                await TryPersistAsync(notification, cancellationToken);
                 _logger.LogWarning("No channel handler for notification {NotificationId} ({Channel})", notification.Id, notification.Channel.Name);
                 continue;
             }
@@ -187,14 +210,24 @@ public sealed class NotificationDispatcher(
                 {
                     var errorDetail = sendResult.Errors.FirstOrDefault() ?? "Unknown delivery error";
                     notification.HandleFailure(errorDetail);
-                    await PersistAsync(notification, cancellationToken);
+                    await TryPersistAsync(notification, cancellationToken);
                     _logger.LogWarning("Notification {NotificationId} failed via {Channel}: {Error}", notification.Id, notification.Channel.Name, errorDetail);
                 }
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // The send succeeded, but another replica reclaimed the row before Delivered could commit
+                // (the send outran the reclaim window). We can't record Delivered; that replica will retry —
+                // an accepted at-least-once duplicate. Channels must be idempotent on notification.Id.
+                _dbContext.Entry(notification).State = EntityState.Detached;
+                _logger.LogWarning(
+                    "Notification {NotificationId} was delivered but concurrently reclaimed; a duplicate send may occur (at-least-once).",
+                    notification.Id);
             }
             catch (Exception ex)
             {
                 notification.HandleFailure(ex.Message);
-                await PersistAsync(notification, cancellationToken);
+                await TryPersistAsync(notification, cancellationToken);
                 _logger.LogError(ex, "Error dispatching notification {NotificationId}", notification.Id);
             }
         }
