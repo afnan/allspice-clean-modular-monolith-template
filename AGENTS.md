@@ -84,7 +84,9 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 - One `DbContext` per module; configurations in `Persistence/Configurations`. Soft delete is automatic for
   `ISoftDelete` entities: `Remove()` is turned into a soft delete by `SoftDeleteInterceptor` (sets `IsDeleted` +
   stamps the user) and `SoftDeleteQueryFilterConvention` hides deleted rows (`IgnoreQueryFilters()` to include
-  them). UTC is enforced by `UtcDateTimeOffsetConvention`.
+  them). **Soft delete does not cascade:** if a soft-deletable aggregate owns child entities, make the children
+  `ISoftDelete` too (or remove them explicitly) — otherwise `Remove()` soft-deletes the parent but hard-deletes
+  the children. UTC is enforced by `UtcDateTimeOffsetConvention`.
 - Cross-cutting EF interceptors are attached through the SP-aware pooled registration (see §6); register new
   ones via `AddSharedKernelInterceptors` or the module's `AddDbContextPool((sp, options) => ...AddInterceptors(...))`.
 - Each module exposes `Add{Module}ModuleServices` + `Ensure{Module}ModuleDatabaseAsync` extensions.

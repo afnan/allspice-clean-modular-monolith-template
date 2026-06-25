@@ -87,6 +87,11 @@ public sealed class SoftDeleteInterceptorTests
             Assert.True(probe.IsDeleted);
             Assert.NotNull(probe.DeletedOnUtc);
             Assert.Equal(expectedUserId, probe.DeletedBy);
+
+            // SoftDeleteInterceptor runs before AuditableEntityInterceptor, so the delete-turned-modify
+            // is also audit-stamped — this pins that ordering contract.
+            Assert.NotNull(probe.LastModifiedOnUtc);
+            Assert.Equal(expectedUserId, probe.LastModifiedBy);
         }
 
         await connection.DisposeAsync();
