@@ -34,13 +34,18 @@ public static class IdentityModuleExtensions
         // registration), giving a true transactional outbox. The (IServiceProvider, options) overload lets
         // us keep attaching the cross-cutting EF Core save interceptors (audit + concurrency) registered via
         // AddSharedKernelInterceptors — EF Core does NOT auto-discover IInterceptor services from DI.
-        // NOTE: this registration is not pooled and does not layer Aspire's EnrichNpgsqlDbContext
-        // resilience/telemetry (deferred — see TODOS.md); the explicit DbContextHealthCheck below still
-        // covers connectivity.
         var connectionString = builder.Configuration[$"ConnectionStrings:{DatabaseResourceName}"];
         builder.Services.AddDbContextWithWolverineIntegration<IdentityDbContext>((sp, options) => options
             .UseNpgsql(connectionString)
             .AddInterceptors(sp.GetServices<Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor>()));
+
+        // Layer Aspire's Npgsql enrichment (OpenTelemetry tracing/metrics + health check + command timeout)
+        // onto the Wolverine-integrated context. Retry is DISABLED on purpose: the transactional-outbox flow
+        // uses user-initiated transactions (TransactionBehavior, the dispatcher's delivered-tx), which Npgsql's
+        // retrying execution strategy forbids — and retrying a block that performs an external send would
+        // duplicate it. Connection-level retry would mean wrapping each transaction in an execution strategy
+        // (excluding sends); deferred. See TODOS.md.
+        builder.EnrichNpgsqlDbContext<IdentityDbContext>(settings => settings.DisableRetry = true);
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
         builder.Services.AddScoped<IUserRepository, UserRepository>();
