@@ -49,6 +49,9 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
         // guarded on this value, so when multiple dispatcher replicas grab the same batch, exactly one wins
         // the claim and the others get DbUpdateConcurrencyException (handled by skipping) — no double-send.
         // LastUpdatedUtc changes on every state transition, so it's a natural row version here.
+        // NOTE: this token now applies to EVERY Notification UPDATE, not just the dispatcher claim. Any
+        // load-then-save command handler added later (e.g. MarkAsRead / Cancel) must handle a possible
+        // DbUpdateConcurrencyException (a concurrent dispatcher claim could win the row first).
         builder.Property(notification => notification.LastUpdatedUtc)
             .IsConcurrencyToken();
 

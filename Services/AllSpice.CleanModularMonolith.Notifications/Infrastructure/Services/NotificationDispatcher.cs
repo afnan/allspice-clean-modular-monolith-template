@@ -149,7 +149,7 @@ public sealed class NotificationDispatcher(
             notification.MarkDispatched();
             if (!await TryPersistAsync(notification, cancellationToken))
             {
-                _logger.LogDebug("Notification {NotificationId} claimed by another replica; skipping.", notification.Id);
+                // Lost the claim to another replica — TryPersistAsync already logged the skip.
                 continue;
             }
 
