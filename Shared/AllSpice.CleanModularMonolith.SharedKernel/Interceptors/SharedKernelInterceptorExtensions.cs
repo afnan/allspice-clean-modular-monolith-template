@@ -22,6 +22,8 @@ public static class SharedKernelInterceptorExtensions
         services.TryAddSingleton<ICurrentUserProvider, NullCurrentUserProvider>();
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IInterceptor, ConcurrencyDiagnosticInterceptor>());
+        // SoftDelete runs before Auditable so a delete-turned-modify is also audit-stamped (LastModified*).
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IInterceptor, SoftDeleteInterceptor>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IInterceptor, AuditableEntityInterceptor>());
 
         return services;

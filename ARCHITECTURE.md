@@ -61,7 +61,7 @@ Services/{Module}/
 | Integration events | **IIntegrationEventPublisher** (SharedKernel) → `WolverineIntegrationEventPublisher` (gateway). Envelope commits atomically with the state change; survives crashes |
 | Transactional commands | `TransactionBehavior` — repositories stage only; the behavior owns the single flush+commit on the dirty module context (a real unit of work) + domain-event dispatch |
 | EF interceptors | `ConcurrencyDiagnosticInterceptor`, `AuditableEntityInterceptor` (attached via the SP-aware `AddDbContextWithWolverineIntegration` registration — see AGENTS.md §6) |
-| Soft delete | `SoftDeleteQueryFilterConvention` auto-filters `ISoftDelete` entities in `OnModelCreating` |
+| Soft delete | `SoftDeleteInterceptor` turns `Remove()` into a soft delete; `SoftDeleteQueryFilterConvention` hides `ISoftDelete` rows |
 | Scheduling | **Quartz.NET** (registered in ServiceDefaults, jobs per module) |
 | Realtime | **SignalR** via `Shared/RealTime/AppHub` at `/hubs/app` |
 | ORM | **EF Core** + PostgreSQL (Npgsql); each module owns its DbContext |
