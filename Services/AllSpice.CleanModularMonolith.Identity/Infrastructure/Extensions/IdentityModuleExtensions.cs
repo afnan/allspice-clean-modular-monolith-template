@@ -45,7 +45,13 @@ public static class IdentityModuleExtensions
         // retrying execution strategy forbids — and retrying a block that performs an external send would
         // duplicate it. Connection-level retry would mean wrapping each transaction in an execution strategy
         // (excluding sends); deferred. See TODOS.md.
-        builder.EnrichNpgsqlDbContext<IdentityDbContext>(settings => settings.DisableRetry = true);
+        builder.EnrichNpgsqlDbContext<IdentityDbContext>(settings =>
+        {
+            settings.DisableRetry = true;
+            // The explicit DbContextHealthCheck<IdentityDbContext> ("identity-db") below already covers
+            // connectivity (and carries the name the gateway's health filtering uses) — don't add a duplicate.
+            settings.DisableHealthChecks = true;
+        });
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
         builder.Services.AddScoped<IUserRepository, UserRepository>();

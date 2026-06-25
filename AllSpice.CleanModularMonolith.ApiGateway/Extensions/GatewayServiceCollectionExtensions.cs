@@ -306,11 +306,6 @@ public static class GatewayServiceCollectionExtensions
     /// </summary>
     /// <param name="builder">The web application builder.</param>
     /// <param name="authenticationEnabled">Indicates whether authentication has been configured.</param>
-    /// <summary>
-    /// Establishes authorization policies, including the authenticated fallback and an allow-anonymous policy.
-    /// </summary>
-    /// <param name="builder">The web application builder.</param>
-    /// <param name="authenticationEnabled">Indicates whether authentication has been configured.</param>
     /// <remarks>
     /// When authentication is enabled, the fallback policy enforces authenticated access by default while retaining
     /// an <c>allow-anonymous</c> policy for health checks and public endpoints.

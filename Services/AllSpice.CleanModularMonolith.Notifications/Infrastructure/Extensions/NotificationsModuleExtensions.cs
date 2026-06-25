@@ -39,7 +39,13 @@ public static class NotificationsModuleExtensions
         // retrying execution strategy forbids — and retrying a block that performs an external send would
         // duplicate it. Connection-level retry would mean wrapping each transaction in an execution strategy
         // (excluding sends); deferred. See TODOS.md.
-        builder.EnrichNpgsqlDbContext<NotificationsDbContext>(settings => settings.DisableRetry = true);
+        builder.EnrichNpgsqlDbContext<NotificationsDbContext>(settings =>
+        {
+            settings.DisableRetry = true;
+            // The explicit DbContextHealthCheck<NotificationsDbContext> ("notifications-db") below already
+            // covers connectivity (and carries the name the gateway's health filtering uses) — no duplicate.
+            settings.DisableHealthChecks = true;
+        });
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<NotificationsDbContext>());
 
         builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
