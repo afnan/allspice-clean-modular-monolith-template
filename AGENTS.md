@@ -81,8 +81,10 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 - Query objects use **Ardalis.Specification**; expose them through bespoke repository methods.
 
 **Infrastructure** (`Infrastructure/...`)
-- One `DbContext` per module; configurations in `Persistence/Configurations`. Soft-delete filtering is
-  automatic via `SoftDeleteQueryFilterConvention`. UTC is enforced by `UtcDateTimeOffsetConvention`.
+- One `DbContext` per module; configurations in `Persistence/Configurations`. Soft delete is automatic for
+  `ISoftDelete` entities: `Remove()` is turned into a soft delete by `SoftDeleteInterceptor` (sets `IsDeleted` +
+  stamps the user) and `SoftDeleteQueryFilterConvention` hides deleted rows (`IgnoreQueryFilters()` to include
+  them). UTC is enforced by `UtcDateTimeOffsetConvention`.
 - Cross-cutting EF interceptors are attached through the SP-aware pooled registration (see §6); register new
   ones via `AddSharedKernelInterceptors` or the module's `AddDbContextPool((sp, options) => ...AddInterceptors(...))`.
 - Each module exposes `Add{Module}ModuleServices` + `Ensure{Module}ModuleDatabaseAsync` extensions.
