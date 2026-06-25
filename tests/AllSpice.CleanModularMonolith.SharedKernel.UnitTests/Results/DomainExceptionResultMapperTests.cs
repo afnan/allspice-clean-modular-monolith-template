@@ -1,4 +1,5 @@
 using Ardalis.Result;
+using AllSpice.CleanModularMonolith.SharedKernel.Exceptions;
 using AllSpice.CleanModularMonolith.SharedKernel.Results;
 using FluentValidation;
 using FluentValidation.Results;
@@ -35,15 +36,26 @@ public class DomainExceptionResultMapperTests
     }
 
     [Fact]
-    public void MapToResult_rejects_PagedResult_as_an_unsupported_response_type()
+    public void MapToResult_rethrows_the_original_exception_for_an_unsupported_response_type()
     {
-        // Ardalis PagedResult<T> derives from Result<T> but is NOT the Result<> generic definition,
-        // and the library exposes no way to build one in an error state. So it must never be used as a
-        // mediator response type — doing so turns validation/domain failures into 500s. Paged queries
-        // wrap their page in a plain Result<T> instead (e.g. ListUsersQuery -> Result<PagedList<UserDto>>).
+        // For a response type that isn't an Ardalis Result (here PagedResult<T>, which derives from Result<T>
+        // but isn't the Result<> generic definition and can't be built in an error state), the mapper has
+        // nothing to map onto — it must re-throw the ORIGINAL exception so ErrorHandlingMiddleware renders it
+        // with the right status, NOT mask it as a 500.
         var exception = new ValidationException([new ValidationFailure("PageSize", "out of range")]);
 
-        Assert.Throws<InvalidOperationException>(
+        var rethrown = Assert.Throws<ValidationException>(
             () => DomainExceptionResultMapper.MapToResult<PagedResult<int>>(exception));
+        Assert.Same(exception, rethrown);
+    }
+
+    [Fact]
+    public void MapToResult_rethrows_a_domain_exception_for_an_unsupported_response_type()
+    {
+        var exception = new NotFoundException("User", "missing-id");
+
+        var rethrown = Assert.Throws<NotFoundException>(
+            () => DomainExceptionResultMapper.MapToResult<int>(exception));
+        Assert.Same(exception, rethrown);
     }
 }

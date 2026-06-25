@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Ardalis.Result;
 using FluentValidation;
 using AllSpice.CleanModularMonolith.SharedKernel.Exceptions;
@@ -29,9 +30,12 @@ public static class DomainExceptionResultMapper
             return (TResponse)(object)MapToUntypedResult(exception);
         }
 
-        throw new InvalidOperationException(
-            $"DomainExceptionBehavior cannot map exceptions for response type {responseType.Name}. " +
-            "Only Ardalis.Result and Ardalis.Result<T> are supported.");
+        // The response type isn't an Ardalis Result (e.g. a handler returning a bare DTO), so there's nothing
+        // to map the exception ONTO. Re-throw the ORIGINAL exception (preserving its stack) so it reaches
+        // ErrorHandlingMiddleware and is rendered with the correct status (ValidationException -> 400,
+        // NotFoundException -> 404, ...) rather than being masked as a generic 500.
+        ExceptionDispatchInfo.Capture(exception).Throw();
+        return default!; // unreachable — Throw() always throws.
     }
 
     private static Result MapToUntypedResult(Exception exception) =>
