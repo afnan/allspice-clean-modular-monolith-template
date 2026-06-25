@@ -18,6 +18,22 @@ internal sealed class TestSqliteDatabase : IAsyncDisposable
 
     public NotificationsDbContext Context => _context;
 
+    /// <summary>
+    /// Creates an additional <see cref="NotificationsDbContext"/> bound to the SAME in-memory database
+    /// (shared connection) but with its own change tracker — used to simulate two dispatcher replicas
+    /// racing to claim the same row. The caller owns disposal.
+    /// </summary>
+    public NotificationsDbContext NewContext()
+    {
+        var options = new DbContextOptionsBuilder<NotificationsDbContext>()
+            .UseSqlite(_connection)
+            .ReplaceService<IModelCustomizer, SqliteJsonbModelCustomizer>()
+            .EnableSensitiveDataLogging()
+            .Options;
+
+        return new NotificationsDbContext(options);
+    }
+
     public static async Task<TestSqliteDatabase> CreateAsync()
     {
         var connection = new SqliteConnection("Filename=:memory:");
