@@ -60,10 +60,12 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   emits its members (incl. `correlationId` and `errors`) at the **root** of the problem+json object (RFC7807),
   matching the root-`errors` shape of the mediator/FastEndpoints path, instead of nesting them under an
   `extensions` object. `ErrorHandlingMiddlewareTests` asserts the root shape.
-- [ ] **Mapper 500s for `DomainException`/`ValidationException` on non-`Result` response types.**
-  `DomainExceptionResultMapper` only maps to `Result`/`Result<T>`; a handler whose response isn't an Ardalis
-  Result that throws a domain/validation exception yields `InvalidOperationException` → 500. Pre-existing; the F2
-  reorder slightly widens exposure. Consider a graceful fallback.
+- [x] **Mapper no longer 500s on non-`Result` response types — RESOLVED (2026-06-25).**
+  When `TResponse` isn't an Ardalis `Result`/`Result<T>`, `DomainExceptionResultMapper` now re-throws the
+  ORIGINAL exception (via `ExceptionDispatchInfo`, preserving the stack) instead of throwing
+  `InvalidOperationException`. `ErrorHandlingMiddleware` then renders it with the correct status
+  (`ValidationException` → 400, `NotFoundException` → 404, …) rather than a masked 500. Covered by
+  `DomainExceptionResultMapperTests`.
 
 ## Startup / Migrations
 
@@ -91,10 +93,13 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   persisted, delivered by Wolverine's recovery sweep after a restart) is not exercised. Add a test that commits
   without flushing and asserts recovery-loop delivery (size the wait against the agent poll interval).
 
-- [ ] **`EfRepository` track-only write methods fail silently for non-UoW callers (LOW, harden).** A caller
-  that writes through a bespoke repository outside an `ITransactional` command (as the dispatcher did) gets a
-  silent no-op. Consider making misuse loud (e.g. throw when there is no ambient transaction and the caller
-  never flushes), so it fails at test time rather than in production.
+- [~] **`EfRepository` track-only write silent no-op — WON'T-FIX, documented (2026-06-25).** Investigated: a
+  reliable "fail loud" isn't achievable. The failure ("a write was staged but nobody flushed") is only knowable
+  at scope-end, not at write time — when `AddAsync` runs, `TransactionBehavior` hasn't opened its transaction
+  yet, so there's no ambient transaction to check. A dispose-time `HasChanges()` guard is fragile (pooled
+  DbContexts reset their change-tracker; a deliberately rolled-back failed command false-positives), and the
+  write methods all funnel through `SaveChangesAsync`, so a throwing guard is brittle against Ardalis. The real
+  occurrence (the dispatcher) was fixed in Phase 0, and the track-only contract is documented on `EfRepository`.
 
 ## In-app notification dispatch
 
