@@ -38,16 +38,21 @@ public sealed class AuditableEntityInterceptor(ICurrentUserProvider currentUserP
         }
 
         var userId = _currentUserProvider.UserId;
+        var now = DateTimeOffset.UtcNow;
 
+        // Audit columns are read-only on the domain (IAuditable exposes no mutators), so stamp them through
+        // EF's change tracker rather than a domain method — audit stays a pure persistence concern.
         foreach (var entry in context.ChangeTracker.Entries<IAuditable>())
         {
             switch (entry.State)
             {
                 case EntityState.Added:
-                    entry.Entity.SetCreated(userId);
+                    entry.Property(nameof(IAuditable.CreatedOnUtc)).CurrentValue = now;
+                    entry.Property(nameof(IAuditable.CreatedBy)).CurrentValue = userId;
                     break;
                 case EntityState.Modified:
-                    entry.Entity.SetModified(userId);
+                    entry.Property(nameof(IAuditable.LastModifiedOnUtc)).CurrentValue = now;
+                    entry.Property(nameof(IAuditable.LastModifiedBy)).CurrentValue = userId;
                     break;
             }
         }

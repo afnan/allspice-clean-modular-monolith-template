@@ -20,11 +20,16 @@ public abstract class Entity : Entity<Guid>
 public abstract class Entity<TId> : HasDomainEventsBase
     where TId : IEquatable<TId>
 {
-    private int? _requestedHashCode;
-
     public TId Id { get; protected set; } = default!;
 
     protected void RegisterDomainEvent(IDomainEvent domainEvent) => AddDomainEvent(domainEvent);
+
+    /// <summary>
+    /// True while the entity has no real identity yet (its <see cref="Id"/> is still the default — e.g. an
+    /// unsaved entity with a DB-generated key). Transient entities are never equal to one another, since each
+    /// freshly-constructed entity is a distinct identity until persistence assigns a key.
+    /// </summary>
+    private bool IsTransient() => EqualityComparer<TId>.Default.Equals(Id, default!);
 
     public override bool Equals(object? obj)
     {
@@ -40,6 +45,12 @@ public abstract class Entity<TId> : HasDomainEventsBase
             return true;
         }
 
+        // Two transient entities are distinct identities even if both Ids are still default.
+        if (IsTransient() || other.IsTransient())
+        {
+            return false;
+        }
+
         return EqualityComparer<TId>.Default.Equals(Id, other.Id);
     }
 
@@ -47,13 +58,8 @@ public abstract class Entity<TId> : HasDomainEventsBase
 
     public static bool operator !=(Entity<TId>? left, Entity<TId>? right) => !(left == right);
 
-    public override int GetHashCode()
-    {
-        if (!_requestedHashCode.HasValue)
-        {
-            _requestedHashCode = EqualityComparer<TId>.Default.GetHashCode(Id) ^ 31;
-        }
-
-        return _requestedHashCode.Value;
-    }
+    // Derived from the current Id, NOT cached: a hash cached while the Id was still transient would go stale
+    // once a DB-generated key is assigned, "losing" the entity in a hash-based collection. (Standard caveat:
+    // don't rely on an unsaved entity's hash across the point its key is assigned.)
+    public override int GetHashCode() => EqualityComparer<TId>.Default.GetHashCode(Id);
 }
