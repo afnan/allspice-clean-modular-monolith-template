@@ -18,8 +18,7 @@ namespace AllSpice.CleanModularMonolith.Foundation.IntegrationTests;
 /// </summary>
 public sealed class OutboxAtomicityTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
         .Build();
 
     private IHost _host = null!;
