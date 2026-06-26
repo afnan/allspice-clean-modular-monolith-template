@@ -138,6 +138,12 @@ changes use **EF Core migrations** — `MigrateAsync` runs at startup with retry
 provisioned at startup via `IMessageStore.Admin.MigrateAsync`. Design-time `DbContextFactory` classes read
 connection details from `EF_DESIGN_*` env vars (no hardcoded password; they fail fast if none is provided).
 
+> **Wolverine 6 codegen:** Wolverine 6 removed the runtime code compiler from core, so any Wolverine **host**
+> (the gateway, and Wolverine-starting integration tests) must reference **`WolverineFx.RuntimeCompilation`**
+> for the default `TypeLoadMode.Dynamic` — without it, messaging fails to start (`no IAssemblyGenerator`). The
+> gateway already references it. For production cold-start/AOT you can instead pre-generate code
+> (`dotnet run -- codegen write` + `TypeLoadMode.Static`).
+
 ```bash
 EF_DESIGN_DB_PASSWORD=<local-pg-password> dotnet ef migrations add <Name> \
   --project Services/AllSpice.CleanModularMonolith.<Module>/AllSpice.CleanModularMonolith.<Module>.csproj \
