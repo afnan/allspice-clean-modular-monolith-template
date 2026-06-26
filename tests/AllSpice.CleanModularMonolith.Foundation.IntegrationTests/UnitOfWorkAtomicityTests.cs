@@ -4,6 +4,7 @@ using AllSpice.CleanModularMonolith.Identity.Domain.ValueObjects;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
 using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 using AllSpice.CleanModularMonolith.SharedKernel.Events;
+using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Ardalis.Result;
 using Mediator;
@@ -30,6 +31,7 @@ public sealed class UnitOfWorkAtomicityTests(PostgresFixture pg)
             var behavior = new TransactionBehavior<AtomicityTestCommand, Result>(
                 sp.GetServices<IModuleDbContext>(),
                 sp.GetRequiredService<IDomainEventDispatcher>(),
+                sp.GetServices<IOutboxFlusher>(), // none registered here — empty set, so the flush step is a no-op
                 NullLogger<TransactionBehavior<AtomicityTestCommand, Result>>.Instance);
 
             var users = sp.GetRequiredService<IUserRepository>();
