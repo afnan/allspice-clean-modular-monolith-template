@@ -24,9 +24,9 @@ namespace AllSpice.CleanModularMonolith.Foundation.IntegrationTests;
 /// </summary>
 public sealed class HybridOutboxTopologyTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _messagingDb = new PostgreSqlBuilder().WithImage("postgres:16-alpine").Build();
-    private readonly PostgreSqlContainer _identityDb = new PostgreSqlBuilder().WithImage("postgres:16-alpine").Build();
-    private readonly PostgreSqlContainer _notificationsDb = new PostgreSqlBuilder().WithImage("postgres:16-alpine").Build();
+    private readonly PostgreSqlContainer _messagingDb = new PostgreSqlBuilder("postgres:16-alpine").Build();
+    private readonly PostgreSqlContainer _identityDb = new PostgreSqlBuilder("postgres:16-alpine").Build();
+    private readonly PostgreSqlContainer _notificationsDb = new PostgreSqlBuilder("postgres:16-alpine").Build();
     private IHost _host = null!;
 
     public async Task InitializeAsync()

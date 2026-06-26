@@ -48,9 +48,12 @@ public abstract class PdfGeneratorBase
 
         await using var page = await browser.NewPageAsync();
         await page.SetViewportAsync(new ViewPortOptions { Width = 794, Height = 1123 });
-        await page.SetContentAsync(html, new NavigationOptions
+        // PuppeteerSharp 25 deprecated SetContentAsync(string, NavigationOptions): the networkidle wait
+        // conditions never worked reliably with SetContent. Wait for the load event instead; the explicit
+        // chart/mermaid waits below handle settling of dynamically-rendered content.
+        await page.SetContentAsync(html, new SetContentOptions
         {
-            WaitUntil = [WaitUntilNavigation.Networkidle0]
+            WaitUntil = [WaitUntilNavigation.Load]
         });
 
         if (waitForCharts)
