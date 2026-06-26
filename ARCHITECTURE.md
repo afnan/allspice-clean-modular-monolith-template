@@ -75,6 +75,11 @@ Services/{Module}/
 | PDF | **PuppeteerSharp** via `Shared/...Pdf` (headless Chromium, A4) |
 | Observability | **Serilog** + **OpenTelemetry**; `DbContextHealthCheck<TContext>` for DB probes |
 | Cross-module identity | **IUserExternalIdResolver** — local `Guid` ↔ Keycloak external ID |
+| Clock | **`TimeProvider`** everywhere (`GetUtcNow()`); domain methods take an explicit `nowUtc` — no direct `UtcNow` |
+| HTTP idempotency | `IdempotencyMiddleware` — opt-in `Idempotency-Key` header on POST/PUT/PATCH; Redis-backed replay |
+| Error contract | RFC7807 problem+json with a machine-readable `code` (auto-derived from `DomainException` type) |
+| PII in logs | `[SensitiveData]` on request properties → redacted by `LoggingBehavior`; responses never logged |
+| Architecture enforcement | **NetArchTest** fitness tests (`tests/...Architecture.Tests`) assert the golden rules at build time |
 
 ## Shared libraries
 
@@ -150,6 +155,24 @@ EF_DESIGN_DB_PASSWORD=<local-pg-password> dotnet ef migrations add <Name> \
   --startup-project AllSpice.CleanModularMonolith.ApiGateway/AllSpice.CleanModularMonolith.ApiGateway.csproj \
   --context <Module>DbContext --output-dir Infrastructure/Migrations
 ```
+
+## Deployment
+
+The whole system ships as **one container** — the `ApiGateway` host. `AppHost` (Aspire) is **development
+only**. A multi-stage [`Dockerfile`](./Dockerfile) builds the gateway; [`deploy/`](./deploy) has a sample
+Kubernetes Deployment/Service and a deploy guide. Liveness (`/alive`) and readiness (`/health`) endpoints are
+mapped in **every** environment (orchestrators need them in production); keep them off the public ingress. See
+[`deploy/README.md`](./deploy/README.md).
+
+## Testing & enforcement
+
+- **xUnit + Moq + coverlet**; integration tests use **Testcontainers** (Postgres) and SQLite.
+- **Architecture-fitness tests** (`tests/...Architecture.Tests`, NetArchTest) turn the golden rules into
+  build-time assertions: domain purity, module isolation, layer/naming conventions, sealed domain events. They
+  run as part of `dotnet test` and in CI. When a rule legitimately changes, update the test in the same change.
+- **CI** (`.github/workflows/ci.yml`) builds (warnings-as-errors), runs all tests with coverage, and fails on
+  any known-vulnerable NuGet package. **Dependabot** keeps NuGet/Actions/Docker dependencies current.
+- Key decisions are recorded as ADRs under [`docs/adr/`](./docs/adr).
 
 ## Conventions
 

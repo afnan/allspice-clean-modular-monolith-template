@@ -36,7 +36,12 @@ The API Gateway runs at `https://localhost:7113` (or `http://localhost:5120`).
 
 ## 3. Configure Keycloak (Required for Authentication)
 
-After Aspire starts Keycloak, you need to create a realm and clients:
+After Aspire starts Keycloak, you need to create a realm and clients.
+
+> **Shortcut:** import [`keycloak/realm-import.json`](./keycloak/realm-import.json) (Create realm → Resource
+> file) to get the realm, the `Identity.Admin` role, the portal clients, and the sync service-account client in
+> one step — then follow the two manual follow-ups in [`keycloak/README.md`](./keycloak/README.md). The manual
+> walkthrough below is the alternative.
 
 ### a. Access Keycloak Admin Console
 
@@ -135,8 +140,13 @@ dotnet run --project YourProject.AppHost
 Then:
 1. Open the Aspire dashboard (URL shown in terminal output)
 2. Verify all services are healthy (green)
-3. Test the API at `https://localhost:7113/swagger`
+3. Test the API at `https://localhost:7113/swagger`, or run the requests in
+   `YourProject.ApiGateway.http` (list users, queue a notification, idempotent retry, health probes)
 4. Check Papercut for test emails at `http://localhost:37408`
+
+> **Deploying?** The gateway is the single container to ship — see [`deploy/README.md`](./deploy/README.md)
+> for the `Dockerfile` build and the Kubernetes sample (`deploy/k8s/`). Health probes: `/alive` (liveness),
+> `/health` (readiness).
 
 ## 6. Add a New Module
 

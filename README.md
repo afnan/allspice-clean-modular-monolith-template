@@ -14,7 +14,12 @@ A production-ready .NET 10 modular monolith template (`dotnet new allspice-modul
 - **Aspire AppHost** to spin up PostgreSQL, Redis, Keycloak, and Papercut SMTP in one command
 - **Central package management** with .NET 10, Clean Architecture patterns powered by Ardalis libraries
 - **FastEndpoints** with explicit assembly discovery (not controllers)
-- **Serilog + OpenTelemetry** logging and tracing
+- **Serilog + OpenTelemetry** logging and tracing (PII-safe: `[SensitiveData]` redaction in the logging pipeline)
+- **`TimeProvider`-based clock** throughout for deterministic, testable time
+- **Architecture-fitness tests** (NetArchTest) that enforce the golden rules at build time
+- **HTTP idempotency** (`Idempotency-Key`) for safe POST/PUT/PATCH retries, plus RFC7807 errors with machine-readable `code`s
+- **Container + Kubernetes ready** — multi-stage `Dockerfile`, `deploy/` k8s sample, production liveness/readiness probes
+- **Hardened CI** — coverage reporting + vulnerable-package gate, Dependabot, and ADRs under `docs/adr/`
 
 ## Getting Started
 

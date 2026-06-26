@@ -111,7 +111,11 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 - ❌ Hardcoded passwords/secrets/connection strings (including design-time and AppHost dev defaults that leak
   to non-dev).
 - ❌ Pinning package versions in individual `.csproj` files — versions live in `Directory.Packages.props`.
-- ❌ MVC controllers, `DateTime.Now` (use `DateTimeOffset.UtcNow`), broad `catch`-and-swallow, blanket `NoWarn`.
+- ❌ MVC controllers, broad `catch`-and-swallow, blanket `NoWarn`.
+- ❌ Reading the clock directly (`DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.UtcNow`) in domain/application/
+  infrastructure code. Inject **`TimeProvider`** and call `GetUtcNow()`; in domain aggregates take an explicit
+  `nowUtc` timestamp parameter sourced from it (so time is deterministic and testable). The only literal
+  `TimeProvider.System` lives at the composition root (`AddSharedKernelInterceptors`).
 - ❌ Relying on EF Core to auto-discover DI-registered `IInterceptor`s — it does **not**; attach explicitly (§6).
 - ❌ Adding a Claude/AI `Co-Authored-By` trailer to commits.
 
@@ -135,6 +139,22 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 from inside an `ITransactional` command; consume it with a Wolverine handler in the target module. Put shared
 event DTOs in a `*.Contracts` library.
 
+**Model a rich aggregate (DDD checklist)** — the template ships only Identity + Notifications (deliberately no
+sample business domain). When you add your own aggregate, follow this shape:
+- **Identity:** base on `Entity`/`AuditableEntity`/`SoftDeletableEntity`; mark the root `IAggregateRoot`. For a
+  typed key, derive from `Entity<TId>` with a `readonly record struct XxxId(Guid Value)` and map it in EF with
+  `builder.Property(x => x.Id).HasConversion(id => id.Value, v => new XxxId(v))`.
+- **Encapsulation:** `private` ctor + static factory (e.g. `Order.CreateDraft(...)`); child entities held in a
+  `private readonly List<T>` exposed as `IReadOnlyCollection<T>`; mutate only through aggregate methods.
+- **Invariants:** enforce with `Ardalis.GuardClauses` in the factory/methods; throw a `DomainException` subtype
+  (`BusinessRuleViolationException`, `ConflictException`, …) for rule breaks — they map to the right HTTP status
+  + a machine-readable `code`.
+- **Value objects** derive from `ValueObject` (e.g. `Money`); **closed sets** use `Ardalis.SmartEnum`.
+- **Time:** aggregate methods take an explicit `nowUtc` (the handler passes `TimeProvider.GetUtcNow()`).
+- **Events:** raise an in-process domain event via `RegisterDomainEvent(...)` (pass `nowUtc`); a same-module
+  `IDomainEventHandler<T>` may translate it into a cross-module integration event via `IIntegrationEventPublisher`
+  (only inside an `ITransactional` command). Add a bespoke `IXxxRepository` + `Ardalis.Specification` queries.
+
 **Add a migration**
 ```bash
 EF_DESIGN_DB_PASSWORD=<local-pg-pw> dotnet ef migrations add <Name> \
@@ -156,6 +176,7 @@ EF_DESIGN_DB_PASSWORD=<local-pg-pw> dotnet ef migrations add <Name> \
 | Cross-module messaging | `IIntegrationEventPublisher` (durable Wolverine outbox) |
 | Local↔external id | `IUserExternalIdResolver` |
 | Current user for audit | `ICurrentUserProvider` (HttpContext/claims impl in the gateway) |
+| Current time / clock | injected `TimeProvider` (`GetUtcNow()`); domain methods take an explicit `nowUtc` |
 | Audit stamping | `AuditableEntityInterceptor` (auto-wired via `AddSharedKernelInterceptors`) |
 | Concurrency debugging | `ConcurrencyDiagnosticInterceptor` (auto-wired) |
 | DB connectivity health | `DbContextHealthCheck<TContext>` |

@@ -1,7 +1,50 @@
-@AllSpice.CleanModularMonolith.ApiGateway_HostAddress = http://localhost:5120
+@host = https://localhost:7113
+# Paste a Bearer token from your Keycloak portal client (see GETTING_STARTED.md). Endpoints require auth
+# when Keycloak is configured; the Identity endpoints additionally require the "Identity.Admin" role.
+@token = REPLACE_WITH_JWT
 
-GET {{AllSpice.CleanModularMonolith.ApiGateway_HostAddress}}/weatherforecast/
+### Liveness probe (no auth) — process is responsive
+GET {{host}}/alive
+
+### Readiness probe (no auth) — DB connectivity + migrations healthy
+GET {{host}}/health
+
+### List users (paged) — requires Identity.Admin
+GET {{host}}/api/identity/users?page=1&pageSize=20
+Authorization: Bearer {{token}}
 Accept: application/json
 
-###
+### Get a single user by external (Keycloak) id — requires Identity.Admin
+GET {{host}}/api/identity/users/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{token}}
+Accept: application/json
 
+### Queue a notification (any authenticated user)
+POST {{host}}/api/notifications
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "recipientUserId": "11111111-1111-1111-1111-111111111111",
+  "recipientEmail": "user@example.com",
+  "channel": "Email",
+  "subject": "Hello from the API",
+  "body": "This is a test notification."
+}
+
+### Queue a notification idempotently — retrying with the SAME Idempotency-Key replays the first response
+# (no duplicate). Send this twice and compare: the second carries header "Idempotency-Replayed: true".
+POST {{host}}/api/notifications
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: 3f1a6b2c-0001-demo-key-aaaaaaaaaaaa
+
+{
+  "recipientUserId": "11111111-1111-1111-1111-111111111111",
+  "recipientEmail": "user@example.com",
+  "channel": "Email",
+  "subject": "Idempotent send",
+  "body": "Safe to retry."
+}
+
+###
