@@ -23,6 +23,9 @@
     <PackageReference Include="Yarp.ReverseProxy" />
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery.Yarp" />
     <PackageReference Include="WolverineFx" />
+    <!-- Wolverine 6 removed the runtime Roslyn compiler from core; this restores it for the default
+         TypeLoadMode.Dynamic (otherwise messaging fails to start). See the Wolverine 6 migration notes. -->
+    <PackageReference Include="WolverineFx.RuntimeCompilation" />
     <PackageReference Include="WolverineFx.EntityFrameworkCore" />
     <PackageReference Include="WolverineFx.Postgresql" />
   </ItemGroup>

@@ -24,6 +24,12 @@
     <ProjectReference Include="..\..\Services\AllSpice.CleanModularMonolith.Notifications\AllSpice.CleanModularMonolith.Notifications.csproj" />
   </ItemGroup>
 
+  <!-- These tests use Wolverine types at compile time only (mocked IDbContextOutbox) and never start a
+       Wolverine host, so WolverineFx.RuntimeCompilation isn't needed. If you add a test here that calls
+       UseWolverine, add <PackageReference Include="WolverineFx.RuntimeCompilation" /> or it will fail at
+       startup with "no IAssemblyGenerator" under Wolverine 6's default dynamic codegen. -->
+
+
 </Project>
 
 
