@@ -111,6 +111,13 @@ public static class GatewayServiceCollectionExtensions
                 options.InstanceName = "{{ProjectName}}_";
             });
         }
+        else
+        {
+            // No Redis configured (e.g. a minimal local run): fall back to an in-memory IDistributedCache so
+            // components that depend on it (idempotency, distributed cache reads) still resolve and work
+            // single-node. Multi-replica deployments must configure Redis for these to be shared.
+            builder.Services.AddDistributedMemoryCache();
+        }
 
         builder.Services.AddOutputCache(options =>
         {

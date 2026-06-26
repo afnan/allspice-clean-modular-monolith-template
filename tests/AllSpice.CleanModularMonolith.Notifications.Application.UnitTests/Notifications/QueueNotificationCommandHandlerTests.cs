@@ -18,7 +18,7 @@ public class QueueNotificationCommandHandlerTests
             .Setup(repository => repository.AddAsync(It.IsAny<Notification>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Notification notification, CancellationToken _) => notification);
 
-        _handler = new QueueNotificationCommandHandler(_repositoryMock.Object);
+        _handler = new QueueNotificationCommandHandler(_repositoryMock.Object, TimeProvider.System);
     }
 
     [Fact]

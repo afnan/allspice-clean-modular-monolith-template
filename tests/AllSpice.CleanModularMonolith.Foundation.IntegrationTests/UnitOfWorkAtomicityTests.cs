@@ -40,7 +40,7 @@ public sealed class UnitOfWorkAtomicityTests(PostgresFixture pg)
             {
                 var user = User.Create(
                     ExternalUserId.From(Guid.NewGuid().ToString()),
-                    "a@b.com", "a@b.com", "A", "B");
+                    "a@b.com", "a@b.com", "A", "B", DateTimeOffset.UtcNow);
                 await users.AddAsync(user, ct);
                 throw new InvalidOperationException("boom after first write");
             };

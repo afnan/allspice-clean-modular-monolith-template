@@ -4,7 +4,12 @@ namespace AllSpice.CleanModularMonolith.Notifications.Domain.Events;
 
 public sealed class NotificationQueuedDomainEvent : DomainEventBase
 {
-    public NotificationQueuedDomainEvent(Guid notificationId, string recipientUserId, string channelName)
+    public NotificationQueuedDomainEvent(
+        Guid notificationId,
+        string recipientUserId,
+        string channelName,
+        DateTimeOffset occurredOnUtc)
+        : base(occurredOnUtc)
     {
         NotificationId = notificationId;
         RecipientUserId = recipientUserId;

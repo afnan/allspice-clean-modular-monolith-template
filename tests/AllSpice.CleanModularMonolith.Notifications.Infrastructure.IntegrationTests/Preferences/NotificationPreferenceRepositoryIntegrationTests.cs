@@ -15,7 +15,7 @@ public class NotificationPreferenceRepositoryIntegrationTests
         await using var database = await TestSqliteDatabase.CreateAsync();
         var repository = new NotificationPreferenceRepository(database.Context);
 
-        var preference = NotificationPreference.Create(SampleUserId, NotificationChannel.InApp, isEnabled: true);
+        var preference = NotificationPreference.Create(SampleUserId, NotificationChannel.InApp, isEnabled: true, nowUtc: DateTimeOffset.UtcNow);
         await repository.AddAsync(preference, CancellationToken.None);
         // Repositories stage only; flush via the context (TransactionBehavior owns this in production).
         await database.Context.SaveChangesAsync(CancellationToken.None);

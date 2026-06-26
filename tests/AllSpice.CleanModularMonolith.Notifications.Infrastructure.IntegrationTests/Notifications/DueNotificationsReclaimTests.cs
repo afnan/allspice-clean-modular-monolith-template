@@ -21,6 +21,7 @@ public sealed class DueNotificationsReclaimTests
         "Body",
         templateKey: null,
         metadataJson: null,
+        nowUtc: DateTimeOffset.UtcNow,
         scheduledSendUtc: DateTimeOffset.UtcNow.AddMinutes(-1));
 
     [Fact]
@@ -30,7 +31,7 @@ public sealed class DueNotificationsReclaimTests
         var repository = new NotificationRepository(database.Context);
 
         var notification = QueuedEmail();
-        notification.MarkDispatched(); // LastUpdatedUtc ~= now; status Dispatched
+        notification.MarkDispatched(DateTimeOffset.UtcNow); // LastUpdatedUtc ~= now; status Dispatched
         await repository.AddAsync(notification, CancellationToken.None);
         await database.Context.SaveChangesAsync(CancellationToken.None);
 
@@ -57,9 +58,9 @@ public sealed class DueNotificationsReclaimTests
         const int maxDeliveryAttempts = 5; // mirrors Notification.MaxDeliveryAttempts (internal const)
         for (var i = 0; i < maxDeliveryAttempts; i++)
         {
-            notification.RecordAttempt();
+            notification.RecordAttempt(DateTimeOffset.UtcNow);
         }
-        notification.MarkDispatched(); // Dispatched, AttemptCount == Max
+        notification.MarkDispatched(DateTimeOffset.UtcNow); // Dispatched, AttemptCount == Max
         await repository.AddAsync(notification, CancellationToken.None);
         await database.Context.SaveChangesAsync(CancellationToken.None);
 

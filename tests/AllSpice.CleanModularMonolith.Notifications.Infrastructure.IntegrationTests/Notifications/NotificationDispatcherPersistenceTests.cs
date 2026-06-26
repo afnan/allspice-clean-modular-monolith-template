@@ -44,6 +44,7 @@ public sealed class NotificationDispatcherPersistenceTests
             "Body",
             templateKey: null,
             metadataJson: null,
+            nowUtc: DateTimeOffset.UtcNow,
             scheduledSendUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
             correlationId: "corr-1");
         await repository.AddAsync(notification, CancellationToken.None);
@@ -63,6 +64,7 @@ public sealed class NotificationDispatcherPersistenceTests
             contentBuilder.Object,
             outbox.Object,
             Microsoft.Extensions.Options.Options.Create(new NotificationDispatcherOptions()),
+            TimeProvider.System,
             NullLogger<NotificationDispatcher>.Instance);
 
         var processed = await dispatcher.DispatchPendingAsync(CancellationToken.None);

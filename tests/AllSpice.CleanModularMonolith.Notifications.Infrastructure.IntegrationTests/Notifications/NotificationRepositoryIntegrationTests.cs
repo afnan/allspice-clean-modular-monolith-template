@@ -24,6 +24,7 @@ public class NotificationRepositoryIntegrationTests
             "Body",
             templateKey: null,
             metadataJson: "{\"key\":\"value\"}",
+            nowUtc: DateTimeOffset.UtcNow,
             scheduledSendUtc: DateTimeOffset.UtcNow,
             correlationId: "corr-1");
 
@@ -54,7 +55,8 @@ public class NotificationRepositoryIntegrationTests
             "Subject",
             "Body",
             null,
-            null);
+            null,
+            DateTimeOffset.UtcNow);
 
         var other = Notification.Queue(
             NotificationChannel.Sms,
@@ -62,7 +64,8 @@ public class NotificationRepositoryIntegrationTests
             "Other",
             "Other body",
             null,
-            null);
+            null,
+            DateTimeOffset.UtcNow);
 
         await repository.AddAsync(matching, CancellationToken.None);
         await repository.AddAsync(other, CancellationToken.None);

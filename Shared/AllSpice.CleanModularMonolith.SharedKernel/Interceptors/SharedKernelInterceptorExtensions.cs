@@ -20,6 +20,9 @@ public static class SharedKernelInterceptorExtensions
     public static IServiceCollection AddSharedKernelInterceptors(this IServiceCollection services)
     {
         services.TryAddSingleton<ICurrentUserProvider, NullCurrentUserProvider>();
+        // The sanctioned clock. Domain/app/infra read time from TimeProvider (or an explicit timestamp
+        // parameter sourced from it) — never DateTimeOffset.UtcNow directly — so time is testable.
+        services.TryAddSingleton(TimeProvider.System);
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IInterceptor, ConcurrencyDiagnosticInterceptor>());
         // SoftDelete runs before Auditable so a delete-turned-modify is also audit-stamped (LastModified*).

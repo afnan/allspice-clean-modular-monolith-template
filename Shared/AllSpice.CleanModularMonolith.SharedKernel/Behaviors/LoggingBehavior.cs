@@ -1,9 +1,7 @@
 using Ardalis.GuardClauses;
 using Mediator;
 using Microsoft.Extensions.Logging;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Reflection;
 
 namespace AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 
@@ -19,9 +17,15 @@ public sealed class LoggingBehavior<TRequest, TResponse>(ILogger<LoggingBehavior
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("Handling {RequestName}", typeof(TRequest).Name);
-            var props = new List<PropertyInfo>(request.GetType().GetProperties());
-            foreach (var prop in props)
+            foreach (var prop in request.GetType().GetProperties())
             {
+                // Redact anything marked [SensitiveData] (passwords/tokens/PII) so it never reaches the log sink.
+                if (prop.IsDefined(typeof(SensitiveDataAttribute), inherit: true))
+                {
+                    _logger.LogInformation("Property {Property} : ***", prop.Name);
+                    continue;
+                }
+
                 var value = prop.GetValue(request, null);
                 _logger.LogInformation("Property {Property} : {@Value}", prop.Name, value);
             }
@@ -33,10 +37,11 @@ public sealed class LoggingBehavior<TRequest, TResponse>(ILogger<LoggingBehavior
 
         stopwatch.Stop();
 
+        // Log only the request name + elapsed — never the response payload, which may carry PII or secrets
+        // that no [SensitiveData] annotation can reach (the attribute applies to request properties).
         _logger.LogInformation(
-            "Handled {RequestName} with {@Response} in {ElapsedMilliseconds} ms",
+            "Handled {RequestName} in {ElapsedMilliseconds} ms",
             typeof(TRequest).Name,
-            response,
             stopwatch.ElapsedMilliseconds);
 
         return response;

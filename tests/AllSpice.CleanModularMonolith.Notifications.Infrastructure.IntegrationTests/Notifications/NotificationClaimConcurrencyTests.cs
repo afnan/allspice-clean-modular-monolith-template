@@ -22,6 +22,7 @@ public sealed class NotificationClaimConcurrencyTests
         "Body",
         templateKey: null,
         metadataJson: null,
+        nowUtc: DateTimeOffset.UtcNow,
         scheduledSendUtc: DateTimeOffset.UtcNow.AddMinutes(-1));
 
     [Fact]
@@ -42,11 +43,11 @@ public sealed class NotificationClaimConcurrencyTests
         var rowForB = await replicaB.Set<Notification>().SingleAsync(n => n.Id == id);
 
         // Replica A claims it first.
-        rowForA.MarkDispatched();
+        rowForA.MarkDispatched(DateTimeOffset.UtcNow);
         await replicaA.SaveChangesAsync(CancellationToken.None);
 
         // Replica B's claim must lose the optimistic-concurrency race.
-        rowForB.MarkDispatched();
+        rowForB.MarkDispatched(DateTimeOffset.UtcNow);
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
             () => replicaB.SaveChangesAsync(CancellationToken.None));
 

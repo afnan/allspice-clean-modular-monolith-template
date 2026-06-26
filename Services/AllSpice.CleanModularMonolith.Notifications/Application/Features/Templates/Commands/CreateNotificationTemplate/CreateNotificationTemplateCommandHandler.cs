@@ -5,10 +5,13 @@ using Mediator;
 
 namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Templates.Commands.CreateNotificationTemplate;
 
-public sealed class CreateNotificationTemplateCommandHandler(INotificationTemplateRepository templateRepository)
+public sealed class CreateNotificationTemplateCommandHandler(
+    INotificationTemplateRepository templateRepository,
+    TimeProvider timeProvider)
     : IRequestHandler<CreateNotificationTemplateCommand, Result<Guid>>
 {
     private readonly INotificationTemplateRepository _templateRepository = templateRepository;
+    private readonly TimeProvider _timeProvider = timeProvider;
 
     public async ValueTask<Result<Guid>> Handle(CreateNotificationTemplateCommand request, CancellationToken cancellationToken)
     {
@@ -20,7 +23,7 @@ public sealed class CreateNotificationTemplateCommandHandler(INotificationTempla
                 return Result.Error("Template key already exists.");
             }
 
-            var template = NotificationTemplate.Create(request.Key, request.SubjectTemplate, request.BodyTemplate, request.IsHtml);
+            var template = NotificationTemplate.Create(request.Key, request.SubjectTemplate, request.BodyTemplate, request.IsHtml, _timeProvider.GetUtcNow());
             await _templateRepository.AddAsync(template, cancellationToken);
             return Result.Success(template.Id);
         }

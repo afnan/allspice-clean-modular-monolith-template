@@ -9,15 +9,15 @@ public sealed class NotificationTemplate : Entity, IAggregateRoot
     {
     }
 
-    private NotificationTemplate(string key, string subjectTemplate, string bodyTemplate, bool isHtml)
+    private NotificationTemplate(string key, string subjectTemplate, string bodyTemplate, bool isHtml, DateTimeOffset nowUtc)
     {
         Id = Guid.NewGuid();
         Key = key;
         SubjectTemplate = subjectTemplate;
         BodyTemplate = bodyTemplate;
         IsHtml = isHtml;
-        CreatedUtc = DateTimeOffset.UtcNow;
-        UpdatedUtc = CreatedUtc;
+        CreatedUtc = nowUtc;
+        UpdatedUtc = nowUtc;
     }
 
     public string Key { get; private set; } = string.Empty;
@@ -30,21 +30,19 @@ public sealed class NotificationTemplate : Entity, IAggregateRoot
         = true;
 
     public DateTimeOffset CreatedUtc { get; private set; }
-        = DateTimeOffset.UtcNow;
 
     public DateTimeOffset UpdatedUtc { get; private set; }
-        = DateTimeOffset.UtcNow;
 
-    public static NotificationTemplate Create(string key, string subjectTemplate, string bodyTemplate, bool isHtml)
+    public static NotificationTemplate Create(string key, string subjectTemplate, string bodyTemplate, bool isHtml, DateTimeOffset nowUtc)
     {
         Guard.Against.NullOrWhiteSpace(key, nameof(key));
         Guard.Against.NullOrWhiteSpace(subjectTemplate, nameof(subjectTemplate));
         Guard.Against.NullOrWhiteSpace(bodyTemplate, nameof(bodyTemplate));
 
-        return new NotificationTemplate(key.Trim(), subjectTemplate, bodyTemplate, isHtml);
+        return new NotificationTemplate(key.Trim(), subjectTemplate, bodyTemplate, isHtml, nowUtc);
     }
 
-    public void UpdateContent(string subjectTemplate, string bodyTemplate, bool isHtml)
+    public void UpdateContent(string subjectTemplate, string bodyTemplate, bool isHtml, DateTimeOffset nowUtc)
     {
         Guard.Against.NullOrWhiteSpace(subjectTemplate, nameof(subjectTemplate));
         Guard.Against.NullOrWhiteSpace(bodyTemplate, nameof(bodyTemplate));
@@ -52,7 +50,7 @@ public sealed class NotificationTemplate : Entity, IAggregateRoot
         SubjectTemplate = subjectTemplate;
         BodyTemplate = bodyTemplate;
         IsHtml = isHtml;
-        UpdatedUtc = DateTimeOffset.UtcNow;
+        UpdatedUtc = nowUtc;
     }
 }
 

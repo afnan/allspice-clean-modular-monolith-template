@@ -23,6 +23,7 @@ public sealed class Notification : Entity, IAggregateRoot
         string body,
         string? templateKey,
         string? metadataJson,
+        DateTimeOffset nowUtc,
         DateTimeOffset? scheduledSendUtc,
         string? correlationId)
     {
@@ -36,9 +37,9 @@ public sealed class Notification : Entity, IAggregateRoot
         Status = NotificationStatus.Pending;
         ScheduledSendUtc = scheduledSendUtc;
         CorrelationId = correlationId;
-        CreatedUtc = DateTimeOffset.UtcNow;
+        CreatedUtc = nowUtc;
 
-        RegisterDomainEvent(new NotificationQueuedDomainEvent(Id, recipient.UserId, channel.Name));
+        RegisterDomainEvent(new NotificationQueuedDomainEvent(Id, recipient.UserId, channel.Name, nowUtc));
     }
 
     public NotificationChannel Channel { get; private set; } = null!;
@@ -58,7 +59,6 @@ public sealed class Notification : Entity, IAggregateRoot
     public NotificationStatus Status { get; private set; } = NotificationStatus.Pending;
 
     public DateTimeOffset CreatedUtc { get; private set; }
-        = DateTimeOffset.UtcNow;
 
     public DateTimeOffset? ScheduledSendUtc { get; private set; }
         = null;
@@ -92,6 +92,7 @@ public sealed class Notification : Entity, IAggregateRoot
         string body,
         string? templateKey,
         string? metadataJson,
+        DateTimeOffset nowUtc,
         DateTimeOffset? scheduledSendUtc = null,
         string? correlationId = null)
     {
@@ -104,7 +105,7 @@ public sealed class Notification : Entity, IAggregateRoot
             Guard.Against.NullOrWhiteSpace(body, nameof(body));
         }
 
-        return new Notification(channel, recipient, subject, body, templateKey, metadataJson, scheduledSendUtc, correlationId);
+        return new Notification(channel, recipient, subject, body, templateKey, metadataJson, nowUtc, scheduledSendUtc, correlationId);
     }
 
     public bool IsReadyToDispatch(DateTimeOffset utcNow)
@@ -124,31 +125,31 @@ public sealed class Notification : Entity, IAggregateRoot
         return dueAt <= utcNow;
     }
 
-    public void RecordAttempt()
+    public void RecordAttempt(DateTimeOffset nowUtc)
     {
         AttemptCount += 1;
-        LastAttemptedUtc = DateTimeOffset.UtcNow;
+        LastAttemptedUtc = nowUtc;
         LastUpdatedUtc = LastAttemptedUtc;
     }
 
-    public void MarkDispatched()
+    public void MarkDispatched(DateTimeOffset nowUtc)
     {
         Status = NotificationStatus.Dispatched;
-        LastUpdatedUtc = DateTimeOffset.UtcNow;
+        LastUpdatedUtc = nowUtc;
     }
 
-    public void MarkDelivered()
+    public void MarkDelivered(DateTimeOffset nowUtc)
     {
         Status = NotificationStatus.Delivered;
-        LastUpdatedUtc = DateTimeOffset.UtcNow;
+        LastUpdatedUtc = nowUtc;
         LastError = null;
         NextAttemptUtc = null;
     }
 
-    public void HandleFailure(string error)
+    public void HandleFailure(string error, DateTimeOffset nowUtc)
     {
         LastError = error;
-        LastUpdatedUtc = DateTimeOffset.UtcNow;
+        LastUpdatedUtc = nowUtc;
 
         if (AttemptCount >= MaxDeliveryAttempts)
         {
@@ -158,21 +159,21 @@ public sealed class Notification : Entity, IAggregateRoot
         }
 
         Status = NotificationStatus.Pending;
-        NextAttemptUtc = CalculateBackoff(AttemptCount);
+        NextAttemptUtc = CalculateBackoff(AttemptCount, nowUtc);
     }
 
-    public void Cancel(string? reason = null)
+    public void Cancel(DateTimeOffset nowUtc, string? reason = null)
     {
         Status = NotificationStatus.Cancelled;
-        LastUpdatedUtc = DateTimeOffset.UtcNow;
+        LastUpdatedUtc = nowUtc;
         LastError = reason;
         NextAttemptUtc = null;
     }
 
-    public void MarkAsRead()
+    public void MarkAsRead(DateTimeOffset nowUtc)
     {
         if (ReadAt.HasValue) return;
-        ReadAt = DateTimeOffset.UtcNow;
+        ReadAt = nowUtc;
         LastUpdatedUtc = ReadAt;
     }
 
@@ -186,12 +187,12 @@ public sealed class Notification : Entity, IAggregateRoot
         return JsonSerializer.Deserialize<Dictionary<string, string>>(MetadataJson) ?? new Dictionary<string, string>();
     }
 
-    private static DateTimeOffset CalculateBackoff(int attemptCount)
+    private static DateTimeOffset CalculateBackoff(int attemptCount, DateTimeOffset nowUtc)
     {
         var seconds = Math.Pow(2, attemptCount); // exponential backoff
         var maxDelay = TimeSpan.FromMinutes(15);
         var delay = TimeSpan.FromSeconds(Math.Min(seconds, maxDelay.TotalSeconds));
-        return DateTimeOffset.UtcNow.Add(delay);
+        return nowUtc.Add(delay);
     }
 }
 

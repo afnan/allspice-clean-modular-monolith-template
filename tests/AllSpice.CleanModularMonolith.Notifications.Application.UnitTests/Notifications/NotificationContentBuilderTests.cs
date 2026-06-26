@@ -19,7 +19,8 @@ public class NotificationContentBuilderTests
         subject,
         "Body",
         templateKey: null,
-        metadataJson: metadataJson);
+        metadataJson: metadataJson,
+        nowUtc: DateTimeOffset.UtcNow);
 
     [Fact]
     public async Task BuildAsync_strips_crlf_from_subject()

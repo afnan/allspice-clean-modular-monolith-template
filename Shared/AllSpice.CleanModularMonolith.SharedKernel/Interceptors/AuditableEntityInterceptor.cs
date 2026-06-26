@@ -13,9 +13,12 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
 /// Registered as a singleton and discovered by EF Core from the application service provider, so it works
 /// with pooled DbContexts.
 /// </summary>
-public sealed class AuditableEntityInterceptor(ICurrentUserProvider currentUserProvider) : SaveChangesInterceptor
+public sealed class AuditableEntityInterceptor(
+    ICurrentUserProvider currentUserProvider,
+    TimeProvider timeProvider) : SaveChangesInterceptor
 {
     private readonly ICurrentUserProvider _currentUserProvider = currentUserProvider;
+    private readonly TimeProvider _timeProvider = timeProvider;
 
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
     {
@@ -40,7 +43,7 @@ public sealed class AuditableEntityInterceptor(ICurrentUserProvider currentUserP
         }
 
         var userId = _currentUserProvider.UserId;
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
 
         // Audit columns are read-only on the domain (IAuditable exposes no mutators), so stamp them through
         // EF's change tracker rather than a domain method — audit stays a pure persistence concern.

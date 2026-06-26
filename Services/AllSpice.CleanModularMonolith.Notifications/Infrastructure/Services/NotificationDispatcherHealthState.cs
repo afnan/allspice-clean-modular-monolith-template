@@ -8,8 +8,9 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 /// Registered as a singleton so the hosted service and the health check share state
 /// across requests.
 /// </remarks>
-public sealed class NotificationDispatcherHealthState
+public sealed class NotificationDispatcherHealthState(TimeProvider timeProvider)
 {
+    private readonly TimeProvider _timeProvider = timeProvider;
     private readonly object _gate = new();
     private DateTimeOffset? _lastRunUtc;
     private bool _lastRunSucceeded;
@@ -20,7 +21,7 @@ public sealed class NotificationDispatcherHealthState
     {
         lock (_gate)
         {
-            _lastRunUtc = DateTimeOffset.UtcNow;
+            _lastRunUtc = _timeProvider.GetUtcNow();
             _lastRunSucceeded = true;
             _lastError = null;
             _processedSinceStart += processedCount;
@@ -31,7 +32,7 @@ public sealed class NotificationDispatcherHealthState
     {
         lock (_gate)
         {
-            _lastRunUtc = DateTimeOffset.UtcNow;
+            _lastRunUtc = _timeProvider.GetUtcNow();
             _lastRunSucceeded = false;
             _lastError = error;
         }
