@@ -6,10 +6,12 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
 
 /// <summary>
-/// Stamps <see cref="IAuditable"/> entities with the current user (from <see cref="ICurrentUserProvider"/>)
-/// on save: <c>SetCreated</c> for added entities, <c>SetModified</c> for modified ones. Registered as a
-/// singleton and discovered by EF Core from the application service provider, so it works with pooled
-/// DbContexts. Timestamps are set by the entity itself; this fills in the user identifier.
+/// Stamps <see cref="IAuditable"/> entities on save via EF Core's change tracker (<c>PropertyEntry</c>):
+/// <c>CreatedOnUtc</c>/<c>CreatedBy</c> for added entities, <c>LastModifiedOnUtc</c>/<c>LastModifiedBy</c> for
+/// modified ones, using the current user from <see cref="ICurrentUserProvider"/>. The audit columns are
+/// read-only on the domain — both the timestamp and the user are written here, never by domain code.
+/// Registered as a singleton and discovered by EF Core from the application service provider, so it works
+/// with pooled DbContexts.
 /// </summary>
 public sealed class AuditableEntityInterceptor(ICurrentUserProvider currentUserProvider) : SaveChangesInterceptor
 {
@@ -38,16 +40,21 @@ public sealed class AuditableEntityInterceptor(ICurrentUserProvider currentUserP
         }
 
         var userId = _currentUserProvider.UserId;
+        var now = DateTimeOffset.UtcNow;
 
+        // Audit columns are read-only on the domain (IAuditable exposes no mutators), so stamp them through
+        // EF's change tracker rather than a domain method — audit stays a pure persistence concern.
         foreach (var entry in context.ChangeTracker.Entries<IAuditable>())
         {
             switch (entry.State)
             {
                 case EntityState.Added:
-                    entry.Entity.SetCreated(userId);
+                    entry.Property(nameof(IAuditable.CreatedOnUtc)).CurrentValue = now;
+                    entry.Property(nameof(IAuditable.CreatedBy)).CurrentValue = userId;
                     break;
                 case EntityState.Modified:
-                    entry.Entity.SetModified(userId);
+                    entry.Property(nameof(IAuditable.LastModifiedOnUtc)).CurrentValue = now;
+                    entry.Property(nameof(IAuditable.LastModifiedBy)).CurrentValue = userId;
                     break;
             }
         }
