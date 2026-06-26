@@ -6,10 +6,12 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
 
 /// <summary>
-/// Stamps <see cref="IAuditable"/> entities with the current user (from <see cref="ICurrentUserProvider"/>)
-/// on save: <c>SetCreated</c> for added entities, <c>SetModified</c> for modified ones. Registered as a
-/// singleton and discovered by EF Core from the application service provider, so it works with pooled
-/// DbContexts. Timestamps are set by the entity itself; this fills in the user identifier.
+/// Stamps <see cref="IAuditable"/> entities on save via EF Core's change tracker (<c>PropertyEntry</c>):
+/// <c>CreatedOnUtc</c>/<c>CreatedBy</c> for added entities, <c>LastModifiedOnUtc</c>/<c>LastModifiedBy</c> for
+/// modified ones, using the current user from <see cref="ICurrentUserProvider"/>. The audit columns are
+/// read-only on the domain — both the timestamp and the user are written here, never by domain code.
+/// Registered as a singleton and discovered by EF Core from the application service provider, so it works
+/// with pooled DbContexts.
 /// </summary>
 public sealed class AuditableEntityInterceptor(ICurrentUserProvider currentUserProvider) : SaveChangesInterceptor
 {
