@@ -1,4 +1,5 @@
 using AllSpice.CleanModularMonolith.SharedKernel.Events;
+using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -24,11 +25,13 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 public sealed class TransactionBehavior<TRequest, TResponse>(
     IEnumerable<IModuleDbContext> dbContexts,
     IDomainEventDispatcher dispatcher,
+    IEnumerable<IOutboxFlusher> outboxFlushers,
     ILogger<TransactionBehavior<TRequest, TResponse>> logger) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : class, IMessage, ITransactional
 {
     private readonly IEnumerable<IModuleDbContext> _dbContexts = dbContexts;
     private readonly IDomainEventDispatcher _dispatcher = dispatcher;
+    private readonly IEnumerable<IOutboxFlusher> _outboxFlushers = outboxFlushers;
     private readonly ILogger<TransactionBehavior<TRequest, TResponse>> _logger = logger;
 
     public async ValueTask<TResponse> Handle(
@@ -111,8 +114,6 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogDebug("Committed transaction {TransactionId} for {RequestType}",
                 transaction.TransactionId, typeof(TRequest).Name);
-
-            return response;
         }
         catch
         {
@@ -124,6 +125,35 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
         finally
         {
             await transaction.DisposeAsync().ConfigureAwait(false);
+        }
+
+        // The command's data AND the integration-event envelopes it enrolled are now committed atomically.
+        // Release the envelopes so they are sent immediately instead of on the messaging layer's next durable
+        // recovery sweep (seconds of latency). Reached only on a successful commit — the catch above rethrows.
+        await FlushOutboxAsync(cancellationToken).ConfigureAwait(false);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Invokes every registered <see cref="IOutboxFlusher"/> after commit. Best-effort: a flush failure is
+    /// swallowed (logged) because the envelope is already durably persisted — the recovery loop will still
+    /// deliver it, and failing an already-committed command would be wrong. No-op when none is registered.
+    /// </summary>
+    private async ValueTask FlushOutboxAsync(CancellationToken cancellationToken)
+    {
+        foreach (var flusher in _outboxFlushers)
+        {
+            try
+            {
+                await flusher.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Outbox flush after commit failed for {RequestType}; the persisted envelope(s) will be " +
+                    "delivered by the durable recovery loop instead.", typeof(TRequest).Name);
+            }
         }
     }
 }

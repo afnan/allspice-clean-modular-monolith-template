@@ -109,5 +109,9 @@ public static class GatewayModuleRegistrationExtensions
         });
 
         builder.Services.AddScoped<IIntegrationEventPublisher, WolverineIntegrationEventPublisher>();
+
+        // Lets TransactionBehavior release the durable outbox right after commit (prompt send instead of
+        // waiting for Wolverine's recovery sweep). Scoped so it shares the publisher's IDbContextOutbox.
+        builder.Services.AddScoped<IOutboxFlusher, WolverineOutboxFlusher>();
     }
 }
