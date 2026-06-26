@@ -17,6 +17,21 @@ public abstract class PdfGeneratorBase
     protected const string PuppeteerPathEnv = "PUPPETEER_CACHE_DIR";
     protected const string DisableDownloadEnv = "PUPPETEER_DISABLE_DOWNLOAD";
 
+    // Awaits web fonts and any still-loading images before the PDF snapshot. Each image resolves on
+    // load/error or a 5s cap so a broken/hanging resource can't stall rendering; runs in the page context.
+    private const string ResourceSettleScript = @"
+        async () => {
+            if (document.fonts && document.fonts.ready) {
+                try { await document.fonts.ready; } catch (e) { }
+            }
+            const pending = Array.from(document.images).filter(img => !img.complete);
+            await Promise.all(pending.map(img => new Promise(resolve => {
+                img.addEventListener('load', () => resolve(), { once: true });
+                img.addEventListener('error', () => resolve(), { once: true });
+                setTimeout(() => resolve(), 5000);
+            })));
+        }";
+
     /// <summary>
     /// Generates a PDF from HTML content with standard A4 page settings.
     /// </summary>
@@ -74,6 +89,17 @@ public abstract class PdfGeneratorBase
             }
             catch { /* Mermaid CDN unavailable */ }
         }
+
+        // Settle late-loading resources the `load` event doesn't cover: web fonts (so @font-face text isn't
+        // captured in a fallback face) and images still in flight after load (e.g. logo/chart images fetched
+        // by script). Each image is individually time-boxed so a broken or hanging resource can't stall
+        // rendering, and the whole step is best-effort. A stronger guarantee than SetContent's
+        // (never-reliable) networkidle wait ever provided.
+        try
+        {
+            await page.EvaluateFunctionAsync(ResourceSettleScript);
+        }
+        catch { /* best-effort: render with whatever has loaded */ }
 
         return await page.PdfDataAsync(new PdfOptions
         {
