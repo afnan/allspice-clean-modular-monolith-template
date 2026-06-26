@@ -1,0 +1,38 @@
+version: 2
+updates:
+  # .NET / NuGet (versions are centrally managed in Directory.Packages.props)
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # Batch low-risk updates together to reduce PR noise.
+      microsoft-and-aspire:
+        patterns:
+          - "Microsoft.*"
+          - "Aspire.*"
+          - "System.*"
+      opentelemetry:
+        patterns:
+          - "OpenTelemetry.*"
+      test-dependencies:
+        patterns:
+          - "xunit*"
+          - "Moq"
+          - "coverlet.*"
+          - "NetArchTest.*"
+          - "Testcontainers.*"
+          - "Microsoft.NET.Test.Sdk"
+
+  # GitHub Actions used by the CI workflow
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Base images in the Dockerfile
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
