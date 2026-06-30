@@ -1290,60 +1290,119 @@ git commit -m "feat(authz): Layer 2 resource authorizer facade over built-in han
 
 ---
 
-## Task 8: Seed system permissions + end-to-end enforcement test
+## Task 8: Seed system permissions + enforcement integration test
 
 **Files:**
-- Modify: the `AddAuthorizationModel` migration (or add a new `SeedAuthorizationSystemData` migration) to seed the two `IsSystem` permissions + the `AuthzMapVersion` singleton.
-- Test: `tests/.../Identity.Infrastructure.IntegrationTests/Authorization/PermissionGateEndToEndTests.cs`
+- Create: a NEW migration `SeedAuthorizationSystemData` under `Services/.../Identity/Infrastructure/Migrations/` (do NOT edit the already-applied `AddAuthorizationModel`).
+- Test: `tests/.../Identity.Infrastructure.IntegrationTests/Authorization/PermissionEnforcementTests.cs`
 
 **Interfaces:**
-- Consumes: everything above.
-- Produces: a booted system where `Policies(PermissionPolicy.For("authz.read"))` returns 401/403/200 correctly.
+- Consumes: the real `PermissionMapStore`, `PermissionMapCache`, `CurrentUserPermissions`, `PermissionAuthorizationHandler`, plus the Task 4 `TestIdentityDbContextFactory`.
+- Produces: a seeded catalog (`authz.read`, `authz.manage` as `IsSystem`; `AuthzMapVersion` singleton) + proof that the real seed→DB→resolver→handler decision path authorizes a mapped role and denies others.
 
-- [ ] **Step 1: Write the failing end-to-end test** — using the integration host (Testcontainers Postgres + the gateway test host pattern from `Foundation.IntegrationTests/TwoModuleHost`). Seed role `qa-admin` → `authz.read`. A test endpoint `GET /test/authz-read` configured with `Policies(PermissionPolicy.For(Permissions.AuthzRead))`:
-  - no token → **401**
-  - token with role that has no mapping → **403**
-  - token with `qa-admin` → **200**
+**Why handler-level, not HTTP (decision):** `TwoModuleHost` is a Postgres/Testcontainers DI host (Docker-dependent), not an HTTP harness, and the repo has no `TestServer`/`WebApplicationFactory`. This test drives the real `PermissionAuthorizationHandler` over the real resolver + cache + store + a seeded **SQLite** `IdentityDbContext` — proving the integration that the Task 5/6 unit tests stub, Docker-free. The handler succeeding/failing is the in-process equivalent of the gateway's 200/403.
+
+- [ ] **Step 1: Write the failing integration test.** Seed `qa-admin → authz.read` into a SQLite `IdentityDbContext`, then wire the REAL components over that same database and assert the real handler's decision for three principals (mapped role → authorized; unmapped role → denied; no roles → denied).
 
 ```csharp
-// tests/.../Authorization/PermissionGateEndToEndTests.cs  (sketch — fill host wiring from TwoModuleHost)
-[Fact] public async Task Anonymous_gets_401() { /* GET without auth -> 401 */ }
-[Fact] public async Task Authenticated_without_permission_gets_403() { /* role bob -> 403 */ }
-[Fact] public async Task Authenticated_with_permission_gets_200() { /* role qa-admin mapped to authz.read -> 200 */ }
+// tests/.../Identity.Infrastructure.IntegrationTests/Authorization/PermissionEnforcementTests.cs
+using System.Security.Claims;
+using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
+using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Authorization;
+using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.IntegrationTests.Authorization;
+
+public sealed class PermissionEnforcementTests
+{
+    private static async Task<bool> EvaluateAsync(string[] roles)
+    {
+        // Arrange: a SQLite Identity DB seeded with qa-admin -> authz.read, shared with the DI graph below.
+        // Extend the Task 4 TestIdentityDbContextFactory to expose the open SqliteConnection (or a ready
+        // ServiceProvider bound to it) so the DI-resolved PermissionMapStore reads these very rows —
+        // SQLite :memory: is per-connection, so the seed context and the store MUST share one connection.
+        await using var harness = await TestIdentityDbContextFactory.CreateSharedAsync();
+        var role = Role.Create("qa-admin", null);
+        var perm = Permission.Create("authz.read", "Read authz", isSystem: true);
+        harness.Context.Roles.Add(role);
+        harness.Context.Permissions.Add(perm);
+        harness.Context.RolePermissions.Add(RolePermission.Create(role.Id, perm.Id));
+        harness.Context.AuthzMapVersions.Add(AuthzMapVersion.Initial());
+        await harness.Context.SaveChangesAsync();
+
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            roles.Select(r => new Claim(ClaimTypes.Role, r)), "test", ClaimTypes.Name, ClaimTypes.Role));
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMemoryCache();
+        harness.RegisterDbContext(services); // registers IdentityDbContext over the SAME open connection
+        services.AddScoped<IPermissionMapStore, PermissionMapStore>();
+        services.AddSingleton<IPermissionMapCache, PermissionMapCache>();
+        services.AddSingleton<IHttpContextAccessor>(
+            new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = principal } });
+        services.AddScoped<ICurrentUserPermissions, CurrentUserPermissions>();
+        await using var provider = services.BuildServiceProvider();
+
+        await using var scope = provider.CreateAsyncScope();
+        var handler = new PermissionAuthorizationHandler(
+            scope.ServiceProvider.GetRequiredService<ICurrentUserPermissions>());
+        var context = new AuthorizationHandlerContext(
+            [new PermissionRequirement("authz.read")], principal, resource: null);
+        await handler.HandleAsync(context);
+        return context.HasSucceeded;
+    }
+
+    [Fact] public async Task Mapped_role_is_authorized() => Assert.True(await EvaluateAsync(["qa-admin"]));
+    [Fact] public async Task Unmapped_role_is_denied()   => Assert.False(await EvaluateAsync(["bob"]));
+    [Fact] public async Task No_roles_is_denied()        => Assert.False(await EvaluateAsync([]));
+}
 ```
 
-(Concrete assertions: `Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode)`, `Forbidden`, `OK` respectively. Use the existing test-host JWT helper that stamps `ClaimTypes.Role`; seed the `qa-admin → authz.read` mapping in the test's arrange via the DbContext.)
+The `TestIdentityDbContextFactory.CreateSharedAsync()` / `harness.RegisterDbContext(...)` names above are illustrative: implement whatever shape the Task 4 factory makes cleanest, as long as the seed context and the DI-resolved `PermissionMapStore` share ONE open SQLite connection (so the store reads the seeded rows) and the factory's existing `SqliteJsonbModelCustomizer` is applied to both. The three assertions are fixed.
 
-- [ ] **Step 2: Run to verify it fails** — Expected: FAIL (403 for the mapped user, because nothing is seeded yet, or 404 if the test endpoint is not registered).
+- [ ] **Step 2: Run to verify it fails** — Expected: FAIL (`PermissionEnforcementTests` / the shared-connection helper don't exist yet).
 
-- [ ] **Step 3: Seed via migration** — in the migration's `Up`, after table creation:
+- [ ] **Step 3: Add the seed migration.** Generate a NEW migration and put the seed in its `Up` (remove it in `Down`). Open `AddAuthorizationModel` first and match the ACTUAL `authz_permissions` column names/types/order — including the audit columns from `AuditableEntity` (`CreatedOnUtc`, `CreatedBy`, `LastModifiedOnUtc`, `LastModifiedBy`) and their nullability. Use FIXED deterministic values (never `DateTime.UtcNow`).
+
+```bash
+EF_DESIGN_DB_PASSWORD=postgres dotnet ef migrations add SeedAuthorizationSystemData \
+  --project Services/AllSpice.CleanModularMonolith.Identity/AllSpice.CleanModularMonolith.Identity.csproj \
+  --startup-project AllSpice.CleanModularMonolith.ApiGateway/AllSpice.CleanModularMonolith.ApiGateway.csproj \
+  --context IdentityDbContext --output-dir Infrastructure/Migrations
+```
 
 ```csharp
+// in Up(): match the real column list/order from AddAuthorizationModel; fixed audit values
 migrationBuilder.InsertData(
     table: "authz_permissions",
-    columns: ["Id", "Key", "Description", "IsSystem", "CreatedOnUtc", "CreatedBy", "LastModifiedOnUtc", "LastModifiedBy"],
+    columns: [/* Id, Key, Description, IsSystem, + the real audit columns in the migration's order */],
     values: new object[,]
     {
-        { Guid.Parse("00000000-0000-0000-0000-0000000000a1"), "authz.read", "Read authorization config", true, DateTime.UnixEpoch, null!, null!, null! },
-        { Guid.Parse("00000000-0000-0000-0000-0000000000a2"), "authz.manage", "Manage authorization config", true, DateTime.UnixEpoch, null!, null!, null! },
+        { Guid.Parse("00000000-0000-0000-0000-0000000000a1"), "authz.read",   "Read authorization config",   true, /* fixed audit values */ },
+        { Guid.Parse("00000000-0000-0000-0000-0000000000a2"), "authz.manage", "Manage authorization config", true, /* fixed audit values */ },
     });
-
 migrationBuilder.InsertData(
     table: "authz_map_version",
     columns: ["Id", "Version"],
     values: new object[] { Guid.Parse("00000000-0000-0000-0000-0000000000b1"), 0L });
 ```
 
-(Use a fixed timestamp, not `DateTime.UtcNow` — migrations must be deterministic. The audit columns are nullable for seed rows. `authz.manage`/`authz.read` are mapped to a role by Plan B's config bootstrap; the e2e test seeds its own `qa-admin` mapping.)
+(The test seeds its OWN `qa-admin → authz.read` mapping, so it does not depend on this migration's seed; the migration seed is what a real deployment boots with. `authz.*` get mapped to a role by Plan B's config bootstrap.)
 
-- [ ] **Step 4: Apply + run** — Run: `dotnet test tests/AllSpice.CleanModularMonolith.Identity.Infrastructure.IntegrationTests --filter PermissionGateEndToEndTests` — Expected: PASS (401/403/200).
+- [ ] **Step 4: Run the focused test + full suite** — `dotnet test tests/AllSpice.CleanModularMonolith.Identity.Infrastructure.IntegrationTests --filter PermissionEnforcementTests` (Expected: 3/3 PASS), then `dotnet build AllSpice.CleanModularMonolith.slnx` (0 warnings) and `dotnet test AllSpice.CleanModularMonolith.slnx` (all green, Docker-free).
 
-- [ ] **Step 5: Full suite + commit**
+- [ ] **Step 5: Commit**
 
-Run: `dotnet test AllSpice.CleanModularMonolith.slnx` — Expected: all green, 0 warnings.
 ```bash
 git add Services tests
-git commit -m "feat(authz): seed system permissions + end-to-end permission gate test"
+git commit -m "feat(authz): seed system permissions + enforcement integration test"
 ```
 
 ---
@@ -1358,12 +1417,12 @@ git commit -m "feat(authz): seed system permissions + end-to-end permission gate
 - §4 resolution + local scoping — Task 5 (lazy per-request resolution = only pays when a permission is checked). Push eviction is **Plan B**. ✓
 - §5 Layer 1 + provider delegation — Task 6. ✓
 - §6 Layer 2 facade over built-in handler — Task 7. ✓
-- §9 critical tests — provider-delegation (Task 6), regression after `module_roles` removal (Task 0), 401/403/200 (Task 8). Reconciler/role-sync/bootstrap criticals are **Plan B**.
+- §9 critical tests — provider-delegation (Task 6), regression after `module_roles` removal (Task 0), and the seed→DB→resolver→real-handler decision for mapped/unmapped/no-role principals (Task 8, handler-level integration; the HTTP 401/403/200 harness was dropped as unavailable — see Task 8 decision note). Reconciler/role-sync/bootstrap criticals are **Plan B**.
 - Issue 1 removal — Task 0. ✓
 
 **Deferred to Plan B (not gaps):** `IModulePermissionManifest` + reconciler (idempotent, `pg_advisory_lock`); `RoleSyncJob` + `GetAllRealmRolesAsync`; config bootstrap; admin API; `AuthzMapVersion` bump-on-mutation + Redis pub-sub eviction; per-user overrides (TODO).
 
-**Placeholder scan:** the Task 8 e2e test is a sketch (host wiring deferred to the existing `TwoModuleHost` helper) — the assertions are concrete (401/403/200) but the harness wiring must be filled from that helper during implementation. Flagged here rather than inventing a host signature I have not read. Every other step has complete code.
+**Placeholder scan:** Task 8's test wires the real components over a shared SQLite connection; the `TestIdentityDbContextFactory.CreateSharedAsync()`/`RegisterDbContext` helper shape is the implementer's to finalize on the Task 4 factory they own (the three assertions are fixed). Every other step has complete code.
 
 **Type consistency:** `ICurrentUserPermissions` (HasPermission/Permissions), `IPermissionMapStore.GetMapAsync`, `IPermissionMapCache.GetAsync`, `PermissionPolicy.For/TryGetKey`, `PermissionRequirement.PermissionKey`, `IResourceAuthorizer.AuthorizeAsync<TResource>`, `IAuthorizationContext.{UserId,TenantId,Permissions}` — names are used identically across tasks. ✓
 
@@ -1373,6 +1432,6 @@ git commit -m "feat(authz): seed system permissions + end-to-end permission gate
 
 Plan complete and saved to `docs/superpowers/plans/2026-06-30-rbac-enforcement-core.md`.
 
-**Open item before execution:** Task 8's end-to-end test needs the project's integration test-host helper (`Foundation.IntegrationTests/TwoModuleHost` + its JWT/role stamping). The first implementer should read that helper and fill the host wiring; the assertions (401/403/200) are fixed.
+**Open item before execution:** Task 8 proves enforcement at the handler level over a seeded SQLite DB (Docker-free), not via HTTP — `TwoModuleHost` is a Postgres/Docker DI host, not an HTTP harness, and the repo has no `TestServer`/`WebApplicationFactory`. A full HTTP 401/403/200 e2e would need a net-new TestServer + test auth scheme; deferred.
 
 **Plan B (Provisioning, modules & propagation)** is not yet written — it covers the manifest+reconciler, role sync, bootstrap, admin API, and Redis pub-sub eviction. I can write it after Plan A lands (it builds on these interfaces).
