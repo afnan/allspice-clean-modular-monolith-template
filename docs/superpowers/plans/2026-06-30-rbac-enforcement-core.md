@@ -1149,6 +1149,7 @@ public sealed class ResourceAuthorizerTests
     {
         var services = new ServiceCollection();
         services.AddAuthorizationCore();
+        services.AddHttpContextAccessor(); // ResourceAuthorizer depends on IHttpContextAccessor
         var userCtx = new CurrentUserContext();
         userCtx.Resolve(currentUser);
         services.AddSingleton<ICurrentUserContext>(userCtx);
