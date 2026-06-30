@@ -14,7 +14,7 @@
 
 Same as Plan A: 0 warnings, central package versions, bespoke repository per aggregate (ADR-0004), local UUID principal (ADR-0005), `Result.Forbidden()` → 403, staged repository writes committed by `TransactionBehavior`, Keycloak-optional boot (jobs degrade, `/health` Degraded), `module_roles` stays removed.
 
-**Plan A interfaces consumed (exact):** `Permissions.All` / `Permissions.IsValidKey` / `Permissions.AuthzRead` / `Permissions.AuthzManage`; `IPermissionMapStore.GetMapAsync`; `IPermissionMapCache` (singleton, IMemoryCache key `"authz:map"`); `Permission.Create(key, description, isSystem)`; `Role.Create(key, description)`; `RolePermission.Create(roleId, permissionId)`; `AuthzMapVersion.Initial()/Bump()/Version`; `PermissionPolicy.For(key)`; `IdentityDbContext.{Permissions,Roles,RolePermissions,AuthzMapVersions}`.
+**Plan A interfaces consumed (exact):** `Permissions.All` / `Permissions.AuthzRead` / `Permissions.AuthzManage` (constants, in `Identity.Abstractions`); `PermissionKey.IsValid` (the key-format validator — now in `Identity.Domain.Aggregates.Authorization`, moved out of Abstractions during the Plan A review fixes; `PermissionCatalog` lives in Infrastructure so it can reference Domain); `IPermissionMapStore.GetMapAsync`; `IPermissionMapCache` (singleton, IMemoryCache key `"authz:map"`); `Permission.Create(key, description, isSystem)`; `Role.Create(key, description)`; `RolePermission.Create(roleId, permissionId)`; `AuthzMapVersion.Initial()/Bump()/Version`; `PermissionPolicy.For(key)`; `IdentityDbContext.{Permissions,Roles,RolePermissions,AuthzMapVersions}`.
 
 ---
 
@@ -134,7 +134,7 @@ public static class PermissionCatalog
         {
             foreach (var def in manifest.Permissions)
             {
-                if (!Permissions.IsValidKey(def.Key))
+                if (!PermissionKey.IsValid(def.Key)) // PermissionKey is the Domain validator (moved out of Abstractions in Plan A review fixes); PermissionCatalog is in Infrastructure, which may reference Domain
                 {
                     throw new InvalidOperationException(
                         $"Module '{manifest.ModuleKey}' declares an invalid permission key '{def.Key}'.");
