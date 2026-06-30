@@ -21,6 +21,7 @@ try
   // Ensure module databases
   await app.EnsureNotificationsModuleDatabaseAsync();
   await app.EnsureIdentityModuleDatabaseAsync();
+  await app.ReconcileAuthorizationCatalogAsync();
 
   // Provision each Wolverine message store's schema. The main store (messagingdb) auto-builds, but the
   // enrolled ancillary module stores (identitydb/notificationsdb outbox tables) must be migrated explicitly.

@@ -78,6 +78,7 @@ public static class IdentityModuleExtensions
         builder.Services.AddScoped<IUserLookupService, UserLookupService>();
         builder.Services.AddScoped<IUserAccessService, UserAccessService>();
         builder.Services.AddScoped<IUserExternalIdResolver, UserLookupService>();
+        builder.Services.AddScoped<AuthorizationCatalogReconciler>();
 
         builder.Services.AddMediator();
 
@@ -193,6 +194,23 @@ public static class IdentityModuleExtensions
             app.Services,
             app.Lifetime,
             loggerCategory: "IdentityDatabase");
+
+        return app;
+    }
+
+    /// <summary>
+    /// Seeds any missing code-referenced permission keys as <c>IsSystem</c> and warns
+    /// about orphan system permissions. Idempotent; safe to call on every startup.
+    /// Must be invoked after <see cref="EnsureIdentityModuleDatabaseAsync"/> so the
+    /// schema exists.
+    /// </summary>
+    /// <param name="app">The web application instance.</param>
+    /// <returns>The application instance to continue fluent configuration.</returns>
+    public static async Task<WebApplication> ReconcileAuthorizationCatalogAsync(this WebApplication app)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var reconciler = scope.ServiceProvider.GetRequiredService<AuthorizationCatalogReconciler>();
+        await reconciler.ReconcileAsync(app.Lifetime.ApplicationStopping);
 
         return app;
     }
