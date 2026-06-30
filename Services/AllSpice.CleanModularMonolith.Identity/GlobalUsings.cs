@@ -29,6 +29,7 @@ global using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persis
 // Infrastructure-only — used by Infrastructure and Api layers, not Domain/Application.
 // See convention comment at the top of this file.
 global using Aspire.Npgsql.EntityFrameworkCore.PostgreSQL;
+global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization;
 global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
 global using AllSpice.CleanModularMonolith.Identity.Infrastructure.Repositories;

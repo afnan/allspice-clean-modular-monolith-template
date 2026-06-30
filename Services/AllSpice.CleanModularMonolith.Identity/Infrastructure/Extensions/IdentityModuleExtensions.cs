@@ -59,6 +59,14 @@ public static class IdentityModuleExtensions
         builder.Services.AddScoped<IUserRepository, UserRepository>();
         builder.Services.AddScoped<IPermissionMapStore, PermissionMapStore>();
 
+        // Permission map cache (singleton) + per-request permission resolver (scoped).
+        // AddHttpContextAccessor uses TryAdd — safe to call even if the gateway registered it already.
+        // AddMemoryCache also uses TryAdd — no double-registration risk.
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddMemoryCache();
+        builder.Services.AddSingleton<IPermissionMapCache, PermissionMapCache>();
+        builder.Services.AddScoped<ICurrentUserPermissions, CurrentUserPermissions>();
+
         // New services
         builder.Services.AddScoped<IUserLookupService, UserLookupService>();
         builder.Services.AddScoped<IUserAccessService, UserAccessService>();
