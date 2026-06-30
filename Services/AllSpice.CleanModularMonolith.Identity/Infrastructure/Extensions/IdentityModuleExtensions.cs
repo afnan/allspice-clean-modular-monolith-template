@@ -79,6 +79,11 @@ public static class IdentityModuleExtensions
         builder.Services.AddScoped<IUserAccessService, UserAccessService>();
         builder.Services.AddScoped<IUserExternalIdResolver, UserLookupService>();
         builder.Services.AddScoped<AuthorizationCatalogReconciler>();
+        builder.Services.AddScoped<AuthorizationBootstrapper>();
+
+        builder.Services
+            .AddOptions<AuthorizationOptions>()
+            .Bind(builder.Configuration.GetSection(AuthorizationOptions.SectionName));
 
         builder.Services.AddMediator();
 
@@ -211,6 +216,11 @@ public static class IdentityModuleExtensions
         await using var scope = app.Services.CreateAsyncScope();
         var reconciler = scope.ServiceProvider.GetRequiredService<AuthorizationCatalogReconciler>();
         await reconciler.ReconcileAsync(app.Lifetime.ApplicationStopping);
+
+        var bootstrapper = scope.ServiceProvider.GetRequiredService<AuthorizationBootstrapper>();
+        await bootstrapper.BootstrapAsync(app.Lifetime.ApplicationStopping);
+
+        await scope.ServiceProvider.GetRequiredService<IdentityDbContext>().SaveChangesAsync(app.Lifetime.ApplicationStopping);
 
         return app;
     }
