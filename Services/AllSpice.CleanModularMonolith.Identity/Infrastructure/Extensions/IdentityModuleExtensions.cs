@@ -64,7 +64,6 @@ public static class IdentityModuleExtensions
         builder.Services.AddMediator();
 
         builder.Services.AddValidatorsFromAssembly(AppAssemblyReference.Assembly);
-        builder.Services.AddModuleRoleAuthorization();
 
         builder.Services
             .AddOptions<KeycloakOptions>()
