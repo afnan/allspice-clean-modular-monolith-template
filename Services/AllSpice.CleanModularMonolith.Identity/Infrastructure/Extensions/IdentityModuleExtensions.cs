@@ -1,5 +1,7 @@
 using System.Net.Http;
+using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Services;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
@@ -55,6 +57,7 @@ public static class IdentityModuleExtensions
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
         builder.Services.AddScoped<IUserRepository, UserRepository>();
+        builder.Services.AddScoped<IPermissionMapStore, PermissionMapStore>();
 
         // New services
         builder.Services.AddScoped<IUserLookupService, UserLookupService>();
