@@ -42,8 +42,16 @@ public sealed class PermissionKeyConsistencyTests
         // Every key must satisfy the domain pattern.
         Assert.All(catalog, d => Assert.True(PermissionKey.IsValid(d.Key), $"Invalid key '{d.Key}'"));
 
-        // Post-Collect the dictionary already deduplicates; this confirms no residual duplicates.
-        Assert.Equal(catalog.Select(d => d.Key).Distinct(StringComparer.Ordinal).Count(), catalog.Count);
+        // Uniqueness must be checked on the RAW manifest declarations — PermissionCatalog.Collect
+        // dedups by key into a dictionary, so asserting on its output is a tautology. Two modules
+        // declaring the same key (a real conflict, possibly with different descriptions) is caught here.
+        var rawKeys = manifests.SelectMany(m => m.Permissions).Select(d => d.Key).ToList();
+        var duplicates = rawKeys
+            .GroupBy(k => k, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+        Assert.True(duplicates.Count == 0, $"Duplicate manifest permission key(s): {string.Join(", ", duplicates)}");
     }
 
     [Fact]
