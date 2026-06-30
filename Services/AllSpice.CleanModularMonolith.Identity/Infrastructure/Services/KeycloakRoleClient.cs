@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Ardalis.GuardClauses;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
@@ -10,10 +11,29 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 /// <see cref="KeycloakDirectoryClient"/> to keep that class focused on user operations. Shares the
 /// directory client's configured <see cref="HttpClient"/>.
 /// </summary>
-internal sealed class KeycloakRoleClient(HttpClient httpClient, ILogger logger)
+internal sealed class KeycloakRoleClient
 {
-    private readonly HttpClient _httpClient = httpClient;
-    private readonly ILogger _logger = logger;
+    private readonly HttpClient _httpClient;
+    private readonly ILogger _logger;
+
+    /// <summary>
+    /// DI constructor — resolved by <c>AddHttpClient&lt;KeycloakRoleClient&gt;</c>.
+    /// <see cref="ActivatorUtilitiesConstructorAttribute"/> ensures this constructor is chosen
+    /// when the typed-client factory creates an instance from the DI container.
+    /// </summary>
+    [ActivatorUtilitiesConstructor]
+    public KeycloakRoleClient(HttpClient httpClient, ILogger<KeycloakRoleClient> logger)
+        : this(httpClient, (ILogger)logger) { }
+
+    /// <summary>
+    /// Internal constructor used by <see cref="KeycloakDirectoryClient"/> for direct instantiation.
+    /// Accepts the non-generic <see cref="ILogger"/> so the directory client can share its own logger.
+    /// </summary>
+    internal KeycloakRoleClient(HttpClient httpClient, ILogger logger)
+    {
+        _httpClient = httpClient;
+        _logger = logger;
+    }
 
     public async Task AssignRealmRoleAsync(string userId, string roleName, CancellationToken cancellationToken = default)
     {
@@ -64,6 +84,17 @@ internal sealed class KeycloakRoleClient(HttpClient httpClient, ILogger logger)
 
         using var doc = await response.ReadJsonAsync(cancellationToken);
 
+        return doc.RootElement.EnumerateArray()
+            .Select(r => r.GetProperty("name").GetString() ?? string.Empty)
+            .Where(name => !string.IsNullOrEmpty(name))
+            .ToList();
+    }
+
+    public async Task<List<string>> GetAllRealmRolesAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.GetAsync("roles", cancellationToken);
+        response.EnsureSuccessStatusCode();
+        using var doc = await response.ReadJsonAsync(cancellationToken);
         return doc.RootElement.EnumerateArray()
             .Select(r => r.GetProperty("name").GetString() ?? string.Empty)
             .Where(name => !string.IsNullOrEmpty(name))

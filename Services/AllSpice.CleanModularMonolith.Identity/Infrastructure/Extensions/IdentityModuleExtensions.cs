@@ -7,6 +7,7 @@ using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Services;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -136,6 +137,10 @@ public static class IdentityModuleExtensions
             .AddHttpMessageHandler<KeycloakTokenHandler>()
             .ConfigurePrimaryHttpMessageHandler(CreateKeycloakHandler);
 
+        builder.Services.AddHttpClient<KeycloakRoleClient>(ConfigureKeycloakClient)
+            .AddHttpMessageHandler<KeycloakTokenHandler>()
+            .ConfigurePrimaryHttpMessageHandler(CreateKeycloakHandler);
+
         builder.Services.AddScoped<IExternalDirectoryClient>(sp =>
             sp.GetRequiredService<KeycloakDirectoryClient>());
 
@@ -166,8 +171,18 @@ public static class IdentityModuleExtensions
             q.AddTrigger(opts => opts
                 .ForJob(jobKey)
                 .WithIdentity($"{KeycloakUserSyncJob.JobIdentity}-trigger")
-                .WithCronSchedule(cronExpression, builder =>
-                    builder.InTimeZone(TimeZoneInfo.Utc)));
+                .WithCronSchedule(cronExpression, b =>
+                    b.InTimeZone(TimeZoneInfo.Utc)));
+
+            var roleSyncJobKey = new JobKey(RoleSyncJob.JobIdentity);
+
+            q.AddJob<RoleSyncJob>(opts => opts.WithIdentity(roleSyncJobKey));
+
+            q.AddTrigger(opts => opts
+                .ForJob(roleSyncJobKey)
+                .WithIdentity($"{RoleSyncJob.JobIdentity}-trigger")
+                .WithCronSchedule(cronExpression, b =>
+                    b.InTimeZone(TimeZoneInfo.Utc)));
         });
     }
 
