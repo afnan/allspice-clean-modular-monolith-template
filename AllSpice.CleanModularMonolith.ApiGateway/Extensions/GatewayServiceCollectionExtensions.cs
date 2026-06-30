@@ -1,4 +1,6 @@
-﻿namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
+﻿using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
+
+namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
 
 /// <summary>
 /// Provides extension methods that encapsulate all service registrations required by the gateway.
@@ -49,6 +51,7 @@ public static class GatewayServiceCollectionExtensions
         builder.Services.AddSingleton(new GatewayAuthenticationState(authenticationEnabled));
 
         builder.ConfigureAuthorization(authenticationEnabled);
+        builder.Services.AddPermissionAuthorization();
 
         builder.Services
             .AddReverseProxy()
