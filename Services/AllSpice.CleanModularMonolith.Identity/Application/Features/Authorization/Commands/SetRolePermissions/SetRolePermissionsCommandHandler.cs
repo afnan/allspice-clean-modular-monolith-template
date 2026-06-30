@@ -45,11 +45,23 @@ public sealed class SetRolePermissionsCommandHandler(
             newMappings.Add(RolePermission.Create(role.Id, permission.Id));
         }
 
-        // Pass 2: all keys resolved — now safe to mutate.
+        // Pass 2: diff-based update — compute adds and removes so unchanged rows are not re-created.
+        // This avoids EF ordering surprises on the unique index when the old and new sets overlap,
+        // and avoids bumping the version on a true no-op call.
+        var desiredPermissionIds = newMappings.Select(m => m.PermissionId).ToHashSet();
         var existing = await _rolePermissionRepository.ListByRoleIdAsync(role.Id, cancellationToken);
-        _rolePermissionRepository.RemoveRange(existing);
+        var existingPermissionIds = existing.Select(rp => rp.PermissionId).ToHashSet();
 
-        foreach (var mapping in newMappings)
+        var toRemove = existing.Where(rp => !desiredPermissionIds.Contains(rp.PermissionId)).ToList();
+        var toAdd = newMappings.Where(m => !existingPermissionIds.Contains(m.PermissionId)).ToList();
+
+        if (toRemove.Count == 0 && toAdd.Count == 0)
+        {
+            return Result.Success(); // no-op: desired set equals existing set; don't churn rows or bump the version.
+        }
+
+        _rolePermissionRepository.RemoveRange(toRemove);
+        foreach (var mapping in toAdd)
         {
             _rolePermissionRepository.Add(mapping);
         }

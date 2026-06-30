@@ -158,6 +158,21 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
 
 ## Authorization (RBAC) — deferred (see ADR-0008, spec 2026-06-29-app-rbac-design)
 
+- [ ] **Post-commit cache invalidation (P2).** Admin write handlers call `IAuthzCacheInvalidator.InvalidateAsync`
+  INSIDE the handler, which fires just before `TransactionBehavior` commits — a reader racing that window can
+  re-cache pre-commit data for up to the 60s TTL. Move invalidation to a post-commit hook (e.g. via the
+  `IOutboxFlusher`-style post-commit seam or an integration event) so eviction happens only after the mutation
+  is durable. Also: `AuthzMapVersion.Bump()` is persisted but the read path doesn't compare it — wire
+  version-checking if push eviction is ever insufficient.
+- [ ] **Break-glass: protect the last `authz.manage` mapping (P2).** `IsSystem` protects the permission KEY
+  from deletion, but an admin can still `SetRolePermissions`/delete the last role→`authz.manage` mapping and
+  lock the whole org out of the admin surface. Add a guard that refuses to remove the final `authz.manage`
+  grant (or a config bootstrap re-grant on next start).
+- [ ] **Admin endpoint authorization HTTP test + `[HasPermission]` static-scan (P3).** The admin endpoints'
+  401/403/200 gating has no end-to-end HTTP test (no TestServer harness), and `Every_HasPermission_attribute_key_is_declared`
+  is vacuous because all gates use `Policies(PermissionPolicy.For(...))` (runtime, not statically reflectable).
+  Add a TestServer-based gate test and/or a source-scan of `Configure()` policy strings against the catalog.
+
 - [ ] **Per-user permission overrides (P3).** The model is role→permission only; a user's permissions come
   entirely from their Keycloak roles. Add per-user grant/deny exceptions: extend the resolver to compute
   `rolePerms ∪ userGrants \ userDenies`, backed by a `UserPermissionOverride(localUserId, permissionKey, mode)`

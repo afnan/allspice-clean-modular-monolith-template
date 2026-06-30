@@ -25,6 +25,10 @@ public static class IdentityModuleExtensions
     private const string DatabaseResourceName = "identitydb";
     internal const string KeycloakHttpClientName = "keycloak-directory";
 
+    // FNV-1a-inspired stable 64-bit key: "AUTHZREC" in ASCII hex. Shared between the reconcile and bootstrap
+    // steps; held for the duration of both so concurrent replicas cannot race on unique-constrained rows.
+    private const long AdvisoryLockKey = 0x4155_5448_5A52_4543;
+
     /// <summary>
     /// Registers identity module services including persistence, external directory integration, and authorization helpers.
     /// </summary>
@@ -240,23 +244,57 @@ public static class IdentityModuleExtensions
     }
 
     /// <summary>
-    /// Seeds any missing code-referenced permission keys as <c>IsSystem</c> and warns
-    /// about orphan system permissions. Idempotent; safe to call on every startup.
-    /// Must be invoked after <see cref="EnsureIdentityModuleDatabaseAsync"/> so the
-    /// schema exists.
+    /// Seeds any missing code-referenced permission keys as <c>IsSystem</c>, warns about
+    /// orphan system permissions, and bootstraps the platform-admin role. Idempotent; safe
+    /// to call on every startup. Must be invoked after
+    /// <see cref="EnsureIdentityModuleDatabaseAsync"/> so the schema exists.
     /// </summary>
+    /// <remarks>
+    /// On PostgreSQL the entire reconcile + bootstrap sequence runs under a session-scoped
+    /// advisory lock (key <see cref="AdvisoryLockKey"/>) so concurrent replicas cold-starting
+    /// together cannot race on the unique indexes on <c>Permission.Key</c>, <c>Role.Key</c>,
+    /// or <c>RolePermission(RoleId, PermissionId)</c>. The lock is skipped on non-Npgsql
+    /// providers (e.g. SQLite in integration tests). The lock is released in a
+    /// <c>finally</c> block with <see cref="CancellationToken.None"/> so it is always
+    /// freed even when <c>ApplicationStopping</c> fires.
+    /// </remarks>
     /// <param name="app">The web application instance.</param>
     /// <returns>The application instance to continue fluent configuration.</returns>
     public static async Task<WebApplication> ReconcileAuthorizationCatalogAsync(this WebApplication app)
     {
+        var ct = app.Lifetime.ApplicationStopping;
         await using var scope = app.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var reconciler = scope.ServiceProvider.GetRequiredService<AuthorizationCatalogReconciler>();
-        await reconciler.ReconcileAsync(app.Lifetime.ApplicationStopping);
-
         var bootstrapper = scope.ServiceProvider.GetRequiredService<AuthorizationBootstrapper>();
-        await bootstrapper.BootstrapAsync(app.Lifetime.ApplicationStopping);
 
-        await scope.ServiceProvider.GetRequiredService<IdentityDbContext>().SaveChangesAsync(app.Lifetime.ApplicationStopping);
+        var isNpgsql = dbContext.Database.IsNpgsql();
+        if (isNpgsql)
+        {
+            await dbContext.Database.OpenConnectionAsync(ct);
+            await dbContext.Database.ExecuteSqlRawAsync(
+                $"SELECT pg_advisory_lock({AdvisoryLockKey})", ct);
+        }
+
+        try
+        {
+            // Reconciler saves first so the bootstrapper's GetByKeyAsync queries see the seeded permissions.
+            await reconciler.ReconcileAsync(ct);
+            await bootstrapper.BootstrapAsync(ct);
+            await dbContext.SaveChangesAsync(ct);
+        }
+        finally
+        {
+            if (isNpgsql)
+            {
+                // Release with a non-cancellable token: cleanup in a finally must run even when the caller's
+                // token (ApplicationStopping) has fired, or the session-level advisory lock would stay held
+                // on the pooled connection past shutdown.
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    $"SELECT pg_advisory_unlock({AdvisoryLockKey})", CancellationToken.None);
+                await dbContext.Database.CloseConnectionAsync();
+            }
+        }
 
         return app;
     }
