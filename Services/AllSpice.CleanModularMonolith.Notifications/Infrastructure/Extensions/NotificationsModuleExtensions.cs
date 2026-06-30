@@ -1,3 +1,5 @@
+using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
+using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Authorization;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +25,9 @@ public static class NotificationsModuleExtensions
         this IHostApplicationBuilder builder,
         ILogger logger)
     {
+        // Declare the permission keys this module enforces; the reconciler seeds them as IsSystem records.
+        builder.Services.AddSingleton<IModulePermissionManifest, NotificationsPermissionManifest>();
+
         // Register the context with Wolverine's EF Core integration so this module's database hosts its
         // OWN durable outbox tables (see NotificationsDbContext.OnModelCreating + the gateway's ancillary-
         // store registration), giving a true transactional outbox. The (IServiceProvider, options) overload

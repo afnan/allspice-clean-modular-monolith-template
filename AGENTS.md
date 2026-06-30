@@ -106,6 +106,12 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
   handlers — pass the entity and let the authorizer resolve context from DI.
 - Never re-introduce a second authorization mechanism (`[Authorize(Roles=...)]`, custom middleware, etc.).
   One model; see ADR-0008.
+- **Every permission key a module enforces must be declared in its `IModulePermissionManifest`** — this is the
+  only way the reconciler seeds the key as `IsSystem` and the arch-fitness test
+  (`PermissionKeyConsistencyTests`) can verify it. FastEndpoints `Policies(PermissionPolicy.For(...))` calls
+  in `Configure()` are runtime and not statically reflectable; covering them via the manifest is the
+  convention. `[HasPermission("...")]` attributes on types are reflectable and are checked directly by the
+  arch test — they also require a matching manifest entry.
 
 ---
 
