@@ -63,8 +63,11 @@ public sealed class AuthorizationCatalogReconciler(
         {
             if (isNpgsql)
             {
+                // Release the lock with a non-cancellable token: cleanup in a finally must run even when the
+                // caller's token (ApplicationStopping) has fired, or the session-level advisory lock would
+                // stay held on the pooled connection past shutdown.
                 await _dbContext.Database.ExecuteSqlRawAsync(
-                    $"SELECT pg_advisory_unlock({AdvisoryLockKey})", cancellationToken);
+                    $"SELECT pg_advisory_unlock({AdvisoryLockKey})", CancellationToken.None);
                 await _dbContext.Database.CloseConnectionAsync();
             }
         }
