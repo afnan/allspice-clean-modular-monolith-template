@@ -155,3 +155,15 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   `PublicAccessType.None` will 403. `EnsureContainerExistsAsync` uses an unsynchronized `volatile bool` so
   concurrent first-uploads each call `CreateIfNotExistsAsync` (benign/idempotent). Add a SAS-URI generation
   method when a download-by-URL flow is needed.
+
+## Authorization (RBAC) — deferred (see ADR-0008, spec 2026-06-29-app-rbac-design)
+
+- [ ] **Per-user permission overrides (P3).** The model is role→permission only; a user's permissions come
+  entirely from their Keycloak roles. Add per-user grant/deny exceptions: extend the resolver to compute
+  `rolePerms ∪ userGrants \ userDenies`, backed by a `UserPermissionOverride(localUserId, permissionKey, mode)`
+  table keyed on the canonical local UUID (ADR-0005). Lets an operator grant one person an extra permission, or
+  deny a specific one, without inventing a role. Out of scope for the initial RBAC PR.
+- [ ] **Authz-change audit view (P3).** Role→permission mutations are already audit-stamped (the
+  `AuditableEntity` interceptor) and bump `AuthzMapVersion`, but there's no query surface to review who changed
+  which mapping when. Add a read endpoint over the audit columns when an admin needs change history. Small sibling
+  to per-user overrides.
