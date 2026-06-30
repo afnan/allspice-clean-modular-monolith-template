@@ -701,9 +701,9 @@ git commit -m "feat(authz): permission map read store (roleKey -> permission key
 
 **Interfaces:**
 - Consumes: `IPermissionMapStore`, `IHttpContextAccessor`, `IMemoryCache`, `TimeProvider`.
-- Produces: `ICurrentUserPermissions.HasPermission(string key) : bool` and `ICurrentUserPermissions.Permissions : IReadOnlySet<string>`; `IPermissionMapCache.GetAsync(CancellationToken) : ValueTask<PermissionMap>`.
+- Produces: `ICurrentUserPermissions.HasPermissionAsync(string key, CancellationToken) : ValueTask<bool>` and `ICurrentUserPermissions.GetPermissionsAsync(CancellationToken) : ValueTask<IReadOnlySet<string>>`; `IPermissionMapCache.GetAsync(CancellationToken) : ValueTask<PermissionMap>`.
 
-- [ ] **Step 1: Write the failing test** — given a map cache returning `platform-admin → {authz.read}` and a principal with role `platform-admin`, `HasPermission("authz.read")` is true and `"authz.manage"` is false; empty roles → deny-all; role matching is case-insensitive.
+- [ ] **Step 1: Write the failing test** — given a map cache returning `platform-admin → {authz.read}` and a principal with role `platform-admin`, `HasPermissionAsync("authz.read")` is true and `"authz.manage"` is false; empty roles → deny-all; role matching is case-insensitive; resolution is memoized (the cache is loaded once across repeated calls).
 
 ```csharp
 // tests/.../Authorization/CurrentUserPermissionsTests.cs
@@ -737,20 +737,36 @@ public sealed class CurrentUserPermissionsTests
         });
 
     [Fact]
-    public void Grants_permission_from_role()
-        => Assert.True(Build(["platform-admin"], MapWith("platform-admin", "authz.read")).HasPermission("authz.read"));
+    public async Task Grants_permission_from_role()
+        => Assert.True(await Build(["platform-admin"], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.read"));
 
     [Fact]
-    public void Denies_unmapped_permission()
-        => Assert.False(Build(["platform-admin"], MapWith("platform-admin", "authz.read")).HasPermission("authz.manage"));
+    public async Task Denies_unmapped_permission()
+        => Assert.False(await Build(["platform-admin"], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.manage"));
 
     [Fact]
-    public void Empty_roles_deny_all()
-        => Assert.False(Build([], MapWith("platform-admin", "authz.read")).HasPermission("authz.read"));
+    public async Task Empty_roles_deny_all()
+        => Assert.False(await Build([], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.read"));
 
     [Fact]
-    public void Role_match_is_case_insensitive()
-        => Assert.True(Build(["Platform-Admin"], MapWith("platform-admin", "authz.read")).HasPermission("authz.read"));
+    public async Task Role_match_is_case_insensitive()
+        => Assert.True(await Build(["Platform-Admin"], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.read"));
+
+    [Fact]
+    public async Task Resolves_once_and_memoizes()
+    {
+        var cache = new Mock<IPermissionMapCache>();
+        cache.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(MapWith("platform-admin", "authz.read"));
+        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Role, "platform-admin")], "test", ClaimTypes.Name, ClaimTypes.Role);
+        var accessor = new Mock<IHttpContextAccessor>();
+        accessor.Setup(a => a.HttpContext).Returns(new DefaultHttpContext { User = new ClaimsPrincipal(identity) });
+        var sut = new CurrentUserPermissions(cache.Object, accessor.Object);
+
+        await sut.HasPermissionAsync("authz.read");
+        await sut.HasPermissionAsync("authz.read");
+
+        cache.Verify(c => c.GetAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
 }
 ```
 
@@ -762,12 +778,13 @@ public sealed class CurrentUserPermissionsTests
 // Shared/.../Identity.Abstractions/Authorization/ICurrentUserPermissions.cs
 namespace AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 
-/// <summary>The current request's resolved permission set. Scoped; computed lazily on first access from the
-/// authenticated principal's role claims, so proxied routes that never check a permission pay nothing.</summary>
+/// <summary>The current request's resolved permission set. Scoped; resolved lazily on first call from the
+/// authenticated principal's role claims (memoized for the request), so proxied routes that never check a
+/// permission pay nothing. Async so the cache-miss DB load never blocks a thread.</summary>
 public interface ICurrentUserPermissions
 {
-    bool HasPermission(string permissionKey);
-    IReadOnlySet<string> Permissions { get; }
+    ValueTask<bool> HasPermissionAsync(string permissionKey, CancellationToken cancellationToken = default);
+    ValueTask<IReadOnlySet<string>> GetPermissionsAsync(CancellationToken cancellationToken = default);
 }
 ```
 
@@ -829,22 +846,25 @@ public sealed class CurrentUserPermissions(IPermissionMapCache cache, IHttpConte
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
     private IReadOnlySet<string>? _resolved;
 
-    public IReadOnlySet<string> Permissions => _resolved ??= Resolve();
+    public async ValueTask<bool> HasPermissionAsync(string permissionKey, CancellationToken cancellationToken = default)
+        => (await GetPermissionsAsync(cancellationToken)).Contains(permissionKey);
 
-    public bool HasPermission(string permissionKey) => Permissions.Contains(permissionKey);
-
-    private IReadOnlySet<string> Resolve()
+    public async ValueTask<IReadOnlySet<string>> GetPermissionsAsync(CancellationToken cancellationToken = default)
     {
+        // Resolved once per request, then memoized (a request is logically single-threaded, so no locking).
+        if (_resolved is not null)
+        {
+            return _resolved;
+        }
+
         var user = _httpContextAccessor.HttpContext?.User;
         var roles = user?.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray() ?? [];
         if (roles.Length == 0)
         {
-            return new HashSet<string>(StringComparer.Ordinal);
+            return _resolved = new HashSet<string>(StringComparer.Ordinal);
         }
 
-        // GetAwaiter().GetResult() is safe here: the cache hit path is synchronous, and on miss the load is a
-        // short, scoped DB read. Resolution happens once per request (memoized in _resolved).
-        var map = _cache.GetAsync(CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        var map = await _cache.GetAsync(cancellationToken);
         var result = new HashSet<string>(StringComparer.Ordinal);
         foreach (var role in roles)
         {
@@ -854,7 +874,7 @@ public sealed class CurrentUserPermissions(IPermissionMapCache cache, IHttpConte
             }
         }
 
-        return result;
+        return _resolved = result;
     }
 }
 ```
@@ -929,7 +949,7 @@ public sealed class PermissionAuthorizationHandlerTests
     private static async Task<bool> Evaluate(bool userHasIt)
     {
         var perms = new Mock<ICurrentUserPermissions>();
-        perms.Setup(p => p.HasPermission("authz.read")).Returns(userHasIt);
+        perms.Setup(p => p.HasPermissionAsync("authz.read", It.IsAny<CancellationToken>())).ReturnsAsync(userHasIt);
         var handler = new PermissionAuthorizationHandler(perms.Object);
         var requirement = new PermissionRequirement("authz.read");
         var context = new AuthorizationHandlerContext([requirement], user: new System.Security.Claims.ClaimsPrincipal(), resource: null);
@@ -1001,14 +1021,12 @@ public sealed class PermissionAuthorizationHandler(ICurrentUserPermissions curre
 {
     private readonly ICurrentUserPermissions _currentUserPermissions = currentUserPermissions;
 
-    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionRequirement requirement)
+    protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionRequirement requirement)
     {
-        if (_currentUserPermissions.HasPermission(requirement.PermissionKey))
+        if (await _currentUserPermissions.HasPermissionAsync(requirement.PermissionKey))
         {
             context.Succeed(requirement);
         }
-
-        return Task.CompletedTask;
     }
 }
 ```
@@ -1050,7 +1068,7 @@ public sealed class PermissionPolicyProvider : IAuthorizationPolicyProvider
 
 ```csharp
 // Authorization/AuthorizationServiceCollectionExtensions.cs  (replace the deleted module-role helpers)
-using AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization; // ResourceAuthorizer (Task 7)
+// NOTE: this file lives in Identity.Abstractions — it must NOT reference Identity.Infrastructure.
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -1094,8 +1112,8 @@ git commit -m "feat(authz): Layer 1 endpoint permission gate (policy provider + 
 - Test: `tests/.../Identity.Application.UnitTests/Authorization/ResourceAuthorizerTests.cs`
 
 **Interfaces:**
-- Consumes: `ICurrentUserContext` (local UUID, ADR-0005), `ICurrentUserPermissions`, the built-in `IAuthorizationService`.
-- Produces: `IResourceAuthorizer.AuthorizeAsync<TResource>(TResource resource, string action, CancellationToken) : Task<Result>`; `IAuthorizationContext { Guid? UserId; string TenantId; IReadOnlySet<string> Permissions }`; `AuthorizationActions.{Read,Create,Update,Delete,Approve}`; `Tenant.Default`.
+- Consumes: `ICurrentUserContext` (local UUID, ADR-0005), the built-in `IAuthorizationService`.
+- Produces: `IResourceAuthorizer.AuthorizeAsync<TResource>(TResource resource, string action, CancellationToken) : Task<Result>`; `IAuthorizationContext { Guid? UserId; string TenantId }`; `AuthorizationActions.{Read,Create,Update,Delete,Approve}`; `Tenant.Default`. (Rules needing permission checks inject `ICurrentUserPermissions` and await `HasPermissionAsync`.)
 
 - [ ] **Step 1: Write the failing test** — a sample owned resource + a registered rule (owner may Update); owner → `Result.IsSuccess`, non-owner → `Result.Status == Forbidden`.
 
@@ -1134,17 +1152,10 @@ public sealed class ResourceAuthorizerTests
         var userCtx = new CurrentUserContext();
         userCtx.Resolve(currentUser);
         services.AddSingleton<ICurrentUserContext>(userCtx);
-        services.AddSingleton<ICurrentUserPermissions>(new StubPermissions());
         services.AddScoped<IAuthorizationContext, AuthorizationContext>();
         services.AddSingleton<IAuthorizationHandler>(sp => new OwnedThingRule(sp.GetRequiredService<IAuthorizationContext>()));
         services.AddScoped<IResourceAuthorizer, ResourceAuthorizer>();
         return services.BuildServiceProvider().GetRequiredService<IResourceAuthorizer>();
-    }
-
-    private sealed class StubPermissions : ICurrentUserPermissions
-    {
-        public bool HasPermission(string permissionKey) => false;
-        public IReadOnlySet<string> Permissions { get; } = new HashSet<string>();
     }
 
     [Fact]
@@ -1200,12 +1211,12 @@ public static class AuthorizationActions
 // Authorization/IAuthorizationContext.cs
 namespace AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 
-/// <summary>Tenant-aware identity + permissions for resource rules. Built from ICurrentUserContext (local UUID).</summary>
+/// <summary>Tenant-aware identity for resource rules. Built from ICurrentUserContext (local UUID). Rules that
+/// also need permission checks inject ICurrentUserPermissions and await HasPermissionAsync.</summary>
 public interface IAuthorizationContext
 {
     Guid? UserId { get; }
     string TenantId { get; }
-    IReadOnlySet<string> Permissions { get; }
 }
 ```
 
@@ -1230,12 +1241,10 @@ using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization;
 
-public sealed class AuthorizationContext(ICurrentUserContext currentUser, ICurrentUserPermissions permissions)
-    : IAuthorizationContext
+public sealed class AuthorizationContext(ICurrentUserContext currentUser) : IAuthorizationContext
 {
     public Guid? UserId => currentUser.LocalUserId;
     public string TenantId => Tenant.Default;
-    public IReadOnlySet<string> Permissions => permissions.Permissions;
 }
 ```
 
