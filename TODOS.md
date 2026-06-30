@@ -167,3 +167,7 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   `AuditableEntity` interceptor) and bump `AuthzMapVersion`, but there's no query surface to review who changed
   which mapping when. Add a read endpoint over the audit columns when an admin needs change history. Small sibling
   to per-user overrides.
+- [ ] **FK constraints on `authz_role_permissions` (P3, Plan B).** `RolePermissionConfiguration` defines only
+  indexes; the join table has no FKs to `authz_roles`/`authz_permissions`. Security is unaffected today (the
+  `PermissionMapStore` inner-joins, so orphan rows drop out and default-deny holds), but the Plan B mutation API
+  should add the FKs + cascade delete so orphan mappings can't accumulate. Surfaced by the Plan A whole-branch review.
