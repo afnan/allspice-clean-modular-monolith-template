@@ -1,4 +1,5 @@
 using System.Net.Http;
+using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Services;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization;
@@ -66,6 +67,8 @@ public static class IdentityModuleExtensions
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton<IPermissionMapCache, PermissionMapCache>();
         builder.Services.AddScoped<ICurrentUserPermissions, CurrentUserPermissions>();
+        builder.Services.AddScoped<IAuthorizationContext, AuthorizationContext>();
+        builder.Services.AddScoped<IResourceAuthorizer, ResourceAuthorizer>();
 
         // New services
         builder.Services.AddScoped<IUserLookupService, UserLookupService>();
