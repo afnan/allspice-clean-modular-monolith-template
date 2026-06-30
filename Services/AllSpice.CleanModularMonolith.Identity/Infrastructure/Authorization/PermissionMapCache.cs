@@ -7,6 +7,7 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization;
 public interface IPermissionMapCache
 {
     ValueTask<PermissionMap> GetAsync(CancellationToken cancellationToken);
+    void Invalidate();
 }
 
 /// <summary>Caches the whole role→permission map in-process with a short TTL backstop. The map is small
@@ -15,10 +16,12 @@ public interface IPermissionMapCache
 public sealed class PermissionMapCache(IServiceScopeFactory scopeFactory, IMemoryCache cache) : IPermissionMapCache
 {
     private const string CacheKey = "authz:map";
-    private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(60);
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
     private readonly IMemoryCache _cache = cache;
     private readonly SemaphoreSlim _lock = new(1, 1);
+
+    public void Invalidate() => _cache.Remove(CacheKey);
 
     public async ValueTask<PermissionMap> GetAsync(CancellationToken cancellationToken)
     {

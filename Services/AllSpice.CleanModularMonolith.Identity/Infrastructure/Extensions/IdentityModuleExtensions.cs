@@ -1,6 +1,8 @@
 using System.Net.Http;
 using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Authorization;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using StackExchange.Redis;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Services;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
@@ -70,6 +72,25 @@ public static class IdentityModuleExtensions
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton<IPermissionMapCache, PermissionMapCache>();
+
+        // Register the best-effort cache invalidator. When a Redis connection string is present, publish a
+        // pub-sub nudge so EVERY replica drops its cached map near-instantly; otherwise, evict in-process
+        // only (single-node correctness). The 60s TTL on PermissionMapCache is the backstop in both cases.
+        var redisConnectionString = builder.Configuration.GetConnectionString("redis");
+        if (!string.IsNullOrEmpty(redisConnectionString))
+        {
+            var parsedRedis = redisConnectionString.StartsWith("redis://", StringComparison.OrdinalIgnoreCase)
+                ? redisConnectionString.Substring(8)
+                : redisConnectionString;
+            builder.Services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(parsedRedis));
+            builder.Services.AddSingleton<IAuthzCacheInvalidator, RedisAuthzCacheInvalidator>();
+            builder.Services.AddHostedService<AuthzCacheEvictionSubscriber>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IAuthzCacheInvalidator, InProcessAuthzCacheInvalidator>();
+        }
+
         builder.Services.AddScoped<ICurrentUserPermissions, CurrentUserPermissions>();
         builder.Services.AddScoped<IAuthorizationContext, AuthorizationContext>();
         builder.Services.AddScoped<IResourceAuthorizer, ResourceAuthorizer>();
