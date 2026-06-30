@@ -84,26 +84,30 @@ public sealed class SetRolePermissionsCommandHandlerTests
             .ReturnsAsync(role);
 
         var rolePermRepo = new Mock<IRolePermissionRepository>();
-        rolePermRepo.Setup(r => r.ListByRoleIdAsync(role.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
 
         var permRepo = new Mock<IPermissionRepository>();
         permRepo.Setup(r => r.GetByKeyAsync("unknown.key", It.IsAny<CancellationToken>()))
             .ReturnsAsync((Permission?)null);
 
+        var versionRepo = new Mock<IAuthzMapVersionRepository>();
         var cacheInvalidator = new Mock<IAuthzCacheInvalidator>();
 
         var handler = new SetRolePermissionsCommandHandler(
             roleRepo.Object,
             rolePermRepo.Object,
             permRepo.Object,
-            new Mock<IAuthzMapVersionRepository>().Object,
+            versionRepo.Object,
             cacheInvalidator.Object);
 
         var result = await handler.Handle(
             new SetRolePermissionsCommand("admin", ["unknown.key"]), CancellationToken.None);
 
         Assert.Equal(ResultStatus.Invalid, result.Status);
+
+        // No mutations must have been staged — the two-pass design guarantees this.
+        rolePermRepo.Verify(r => r.RemoveRange(It.IsAny<IEnumerable<RolePermission>>()), Times.Never);
+        rolePermRepo.Verify(r => r.Add(It.IsAny<RolePermission>()), Times.Never);
+        versionRepo.Verify(r => r.GetTrackedAsync(It.IsAny<CancellationToken>()), Times.Never);
         cacheInvalidator.Verify(r => r.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }

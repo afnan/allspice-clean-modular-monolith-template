@@ -29,11 +29,8 @@ public sealed class SetRolePermissionsCommandHandler(
             return Result.NotFound($"Role '{command.RoleKey}' not found.");
         }
 
-        // Remove existing mappings.
-        var existing = await _rolePermissionRepository.ListByRoleIdAsync(role.Id, cancellationToken);
-        _rolePermissionRepository.RemoveRange(existing);
-
-        // Resolve each requested key; any unknown key aborts the operation.
+        // Pass 1: resolve every requested key BEFORE staging any mutations.
+        // Returning Invalid here leaves the DB untouched (no RemoveRange has been called yet).
         var newMappings = new List<RolePermission>(command.PermissionKeys.Count);
         foreach (var key in command.PermissionKeys)
         {
@@ -47,6 +44,10 @@ public sealed class SetRolePermissionsCommandHandler(
 
             newMappings.Add(RolePermission.Create(role.Id, permission.Id));
         }
+
+        // Pass 2: all keys resolved — now safe to mutate.
+        var existing = await _rolePermissionRepository.ListByRoleIdAsync(role.Id, cancellationToken);
+        _rolePermissionRepository.RemoveRange(existing);
 
         foreach (var mapping in newMappings)
         {

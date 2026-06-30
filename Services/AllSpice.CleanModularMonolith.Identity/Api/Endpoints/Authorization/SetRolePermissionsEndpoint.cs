@@ -42,7 +42,3 @@ public sealed class SetRolePermissionsEndpoint(IMediator mediator)
     }
 }
 
-public sealed class SetRolePermissionsRequest
-{
-    public IReadOnlyList<string> PermissionKeys { get; set; } = [];
-}

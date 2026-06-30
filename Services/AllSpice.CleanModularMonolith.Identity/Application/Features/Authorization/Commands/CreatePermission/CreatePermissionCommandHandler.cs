@@ -18,6 +18,12 @@ public sealed class CreatePermissionCommandHandler(
 
     public async ValueTask<Result> Handle(CreatePermissionCommand command, CancellationToken cancellationToken)
     {
+        var existing = await _permissionRepository.GetByKeyAsync(command.Key, cancellationToken);
+        if (existing is not null)
+        {
+            return Result.Conflict($"Permission key '{command.Key}' already exists.");
+        }
+
         var permission = Permission.Create(command.Key, command.Description, isSystem: false);
         await _permissionRepository.AddAsync(permission, cancellationToken);
         (await _versionRepository.GetTrackedAsync(cancellationToken)).Bump();
