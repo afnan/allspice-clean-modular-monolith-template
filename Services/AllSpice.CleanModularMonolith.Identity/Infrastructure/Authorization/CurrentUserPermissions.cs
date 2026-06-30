@@ -11,22 +11,25 @@ public sealed class CurrentUserPermissions(IPermissionMapCache cache, IHttpConte
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
     private IReadOnlySet<string>? _resolved;
 
-    public IReadOnlySet<string> Permissions => _resolved ??= Resolve();
+    public async ValueTask<bool> HasPermissionAsync(string permissionKey, CancellationToken cancellationToken = default)
+        => (await GetPermissionsAsync(cancellationToken)).Contains(permissionKey);
 
-    public bool HasPermission(string permissionKey) => Permissions.Contains(permissionKey);
-
-    private IReadOnlySet<string> Resolve()
+    public async ValueTask<IReadOnlySet<string>> GetPermissionsAsync(CancellationToken cancellationToken = default)
     {
+        // Resolved once per request, then memoized (a request is logically single-threaded, so no locking).
+        if (_resolved is not null)
+        {
+            return _resolved;
+        }
+
         var user = _httpContextAccessor.HttpContext?.User;
         var roles = user?.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray() ?? [];
         if (roles.Length == 0)
         {
-            return new HashSet<string>(StringComparer.Ordinal);
+            return _resolved = new HashSet<string>(StringComparer.Ordinal);
         }
 
-        // GetAwaiter().GetResult() is safe here: the cache hit path is synchronous, and on miss the load is a
-        // short, scoped DB read. Resolution happens once per request (memoized in _resolved).
-        var map = _cache.GetAsync(CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        var map = await _cache.GetAsync(cancellationToken);
         var result = new HashSet<string>(StringComparer.Ordinal);
         foreach (var role in roles)
         {
@@ -36,6 +39,6 @@ public sealed class CurrentUserPermissions(IPermissionMapCache cache, IHttpConte
             }
         }
 
-        return result;
+        return _resolved = result;
     }
 }

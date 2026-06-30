@@ -28,18 +28,34 @@ public sealed class CurrentUserPermissionsTests
         });
 
     [Fact]
-    public void Grants_permission_from_role()
-        => Assert.True(Build(["platform-admin"], MapWith("platform-admin", "authz.read")).HasPermission("authz.read"));
+    public async Task Grants_permission_from_role()
+        => Assert.True(await Build(["platform-admin"], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.read"));
 
     [Fact]
-    public void Denies_unmapped_permission()
-        => Assert.False(Build(["platform-admin"], MapWith("platform-admin", "authz.read")).HasPermission("authz.manage"));
+    public async Task Denies_unmapped_permission()
+        => Assert.False(await Build(["platform-admin"], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.manage"));
 
     [Fact]
-    public void Empty_roles_deny_all()
-        => Assert.False(Build([], MapWith("platform-admin", "authz.read")).HasPermission("authz.read"));
+    public async Task Empty_roles_deny_all()
+        => Assert.False(await Build([], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.read"));
 
     [Fact]
-    public void Role_match_is_case_insensitive()
-        => Assert.True(Build(["Platform-Admin"], MapWith("platform-admin", "authz.read")).HasPermission("authz.read"));
+    public async Task Role_match_is_case_insensitive()
+        => Assert.True(await Build(["Platform-Admin"], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.read"));
+
+    [Fact]
+    public async Task Resolves_once_and_memoizes()
+    {
+        var cache = new Mock<IPermissionMapCache>();
+        cache.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(MapWith("platform-admin", "authz.read"));
+        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Role, "platform-admin")], "test", ClaimTypes.Name, ClaimTypes.Role);
+        var accessor = new Mock<IHttpContextAccessor>();
+        accessor.Setup(a => a.HttpContext).Returns(new DefaultHttpContext { User = new ClaimsPrincipal(identity) });
+        var sut = new CurrentUserPermissions(cache.Object, accessor.Object);
+
+        await sut.HasPermissionAsync("authz.read");
+        await sut.HasPermissionAsync("authz.read");
+
+        cache.Verify(c => c.GetAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
 }
