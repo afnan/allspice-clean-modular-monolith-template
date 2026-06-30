@@ -58,6 +58,10 @@ public static class IdentityModuleExtensions
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
         builder.Services.AddScoped<IUserRepository, UserRepository>();
+        builder.Services.AddScoped<IPermissionRepository, PermissionRepository>();
+        builder.Services.AddScoped<IRoleRepository, RoleRepository>();
+        builder.Services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
+        builder.Services.AddScoped<IAuthzMapVersionRepository, AuthzMapVersionRepository>();
         builder.Services.AddScoped<IPermissionMapStore, PermissionMapStore>();
 
         // Permission map cache (singleton) + per-request permission resolver (scoped).
