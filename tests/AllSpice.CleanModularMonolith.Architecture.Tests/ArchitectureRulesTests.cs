@@ -17,6 +17,8 @@ public class ArchitectureRulesTests
     private static readonly Assembly SharedKernel = typeof(Entity).Assembly;
     private static readonly Assembly Identity =
         typeof(AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User.User).Assembly;
+    private static readonly Assembly IdentityAbstractions =
+        typeof(AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization.ICurrentUserPermissions).Assembly;
     private static readonly Assembly Notifications =
         typeof(AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates.Notification).Assembly;
 
@@ -122,6 +124,20 @@ public class ArchitectureRulesTests
 
             AssertSuccess(result, $"Domain events in {assembly.GetName().Name} must be sealed");
         }
+    }
+
+    [Fact]
+    public void Identity_Abstractions_has_no_dependency_on_Identity_Infrastructure()
+    {
+        // Identity.Abstractions is the contract library consumed by every module and the gateway.
+        // It must never import implementation details from the Identity module's Infrastructure layer,
+        // keeping the abstraction boundary clean (see ADR-0008).
+        var result = Types.InAssembly(IdentityAbstractions)
+            .ShouldNot()
+            .HaveDependencyOnAny($"{IdentityRoot}.Infrastructure")
+            .GetResult();
+
+        AssertSuccess(result, "Identity.Abstractions must not depend on Identity.Infrastructure");
     }
 
     private static void AssertSuccess(TestResult result, string because)

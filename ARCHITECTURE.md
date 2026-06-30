@@ -112,8 +112,13 @@ and same-module only.
 ## Identity module
 
 Keycloak integration with the client-credentials flow:
-- **Aggregates:** `User`. Authorization is **JWT-claim-based** via `ModuleRoleAuthorizationHandler`
-  (no role-assignment aggregates in the database).
+- **Aggregates:** `User`, `Permission`, `Role`, `RolePermission`, `AuthzMapVersion`. Authorization is
+  **permission-based** (app-owned catalog + role→permission map; see ADR-0008): Keycloak authenticates and
+  issues realm roles; the gateway flattens them to `ClaimTypes.Role`; the app resolves the role→permission map
+  per-request via `ICurrentUserPermissions` (scoped, lazy, cached). Layer 1 — declarative endpoint gate via
+  `[HasPermission("key")]` / `Policies(PermissionPolicy.For("key"))` backed by `PermissionAuthorizationHandler`;
+  Layer 2 — resource/ownership via `IResourceAuthorizer`. Contracts live in `Identity.Abstractions`; implementations
+  in this module. Runtime catalog management (admin endpoints, Keycloak role sync, cache eviction) is forthcoming.
 - **Keycloak:** `KeycloakTokenProvider` (singleton, `SemaphoreSlim`-cached) + `KeycloakTokenHandler`
   (auto Bearer injection); `KeycloakDirectoryClient` for the Admin REST API.
 - **Sync:** `KeycloakUserSyncJob` (Quartz) reconciles Keycloak users against the local `Users` table; an

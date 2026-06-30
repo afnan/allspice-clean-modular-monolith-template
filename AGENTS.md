@@ -96,6 +96,17 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
   `result.ExecuteFailureAsync(HttpContext)` (status → RFC7807 ProblemDetails) instead of hand-rolling the switch.
 - Register the endpoint assembly in `GatewayServiceCollectionExtensions` (auto-discovery is off).
 
+**Authorization** (contracts in `Identity.Abstractions`; implementations in `Identity`)
+- Gate an endpoint with `Policies(PermissionPolicy.For("module:area.action"))` (FastEndpoints) or
+  `[HasPermission("module:area.action")]`; `PermissionPolicyProvider` and `PermissionAuthorizationHandler`
+  are wired automatically — no per-endpoint boilerplate beyond the policy name.
+- Per-entity ownership, tenant, or status checks: call
+  `IResourceAuthorizer.AuthorizeAsync(entity, AuthorizationActions.X, ct)` inside the command/query handler
+  and map `Result.Forbidden()` → 403 via `result.ExecuteFailureAsync(HttpContext)`. Keep `HttpContext` out of
+  handlers — pass the entity and let the authorizer resolve context from DI.
+- Never re-introduce a second authorization mechanism (`[Authorize(Roles=...)]`, custom middleware, etc.).
+  One model; see ADR-0008.
+
 ---
 
 ## 4. DON'T — anti-patterns (these get rejected in review)
