@@ -1,4 +1,3 @@
-using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 using AllSpice.CleanModularMonolith.SharedKernel.Common;
 
 namespace AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization;
@@ -8,11 +7,11 @@ public sealed class Permission : AuditableEntity, IAggregateRoot
 {
     private Permission() { }
 
-    private Permission(string key, string description, bool isSystem)
+    private Permission(string key, string? description, bool isSystem)
     {
         Id = Guid.NewGuid();
         Key = key;
-        Description = description;
+        Description = description ?? string.Empty;
         IsSystem = isSystem;
     }
 
@@ -20,13 +19,13 @@ public sealed class Permission : AuditableEntity, IAggregateRoot
     public string Description { get; private set; } = default!;
     public bool IsSystem { get; private set; }
 
-    public static Permission Create(string key, string description, bool isSystem)
+    public static Permission Create(string key, string? description, bool isSystem)
     {
-        if (!Permissions.IsValidKey(key))
+        if (!PermissionKey.IsValid(key))
         {
             throw new ArgumentException($"Invalid permission key '{key}'.", nameof(key));
         }
 
-        return new Permission(key, description ?? string.Empty, isSystem);
+        return new Permission(key, description, isSystem);
     }
 }

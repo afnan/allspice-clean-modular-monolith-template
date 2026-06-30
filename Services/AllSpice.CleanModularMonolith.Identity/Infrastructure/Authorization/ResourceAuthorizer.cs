@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 using Ardalis.Result;
 using Microsoft.AspNetCore.Authorization;
@@ -18,7 +19,7 @@ public sealed class ResourceAuthorizer(IAuthorizationService authorizationServic
     public async Task<Result> AuthorizeAsync<TResource>(TResource resource, string action, CancellationToken cancellationToken)
         where TResource : notnull
     {
-        var user = _httpContextAccessor.HttpContext?.User ?? new System.Security.Claims.ClaimsPrincipal();
+        var user = _httpContextAccessor.HttpContext?.User ?? new ClaimsPrincipal();
         var requirement = new OperationAuthorizationRequirement { Name = action };
         var result = await _authorizationService.AuthorizeAsync(user, resource, requirement);
         return result.Succeeded ? Result.Success() : Result.Forbidden();

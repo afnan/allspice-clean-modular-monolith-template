@@ -12,7 +12,7 @@ public sealed class PermissionConfiguration : IEntityTypeConfiguration<Permissio
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Key).IsRequired().HasMaxLength(200);
         builder.Property(p => p.Description).IsRequired().HasMaxLength(500);
-        builder.Property(p => p.IsSystem).IsRequired();
+        builder.Property(p => p.IsSystem);
         builder.HasIndex(p => p.Key).IsUnique();
     }
 }

@@ -12,7 +12,8 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<Role>
         builder.HasKey(r => r.Id);
         builder.Property(r => r.Key).IsRequired().HasMaxLength(200);
         builder.Property(r => r.Description).HasMaxLength(500);
-        // Case-insensitive uniqueness mirrors the resolver's case-insensitive match (ADR-0008).
+        // Role.Key is normalized to lowercase in the domain (Role.Create), so the unique index enforces
+        // case-insensitive uniqueness without requiring a CI collation on the index itself (ADR-0008).
         builder.HasIndex(r => r.Key).IsUnique();
     }
 }

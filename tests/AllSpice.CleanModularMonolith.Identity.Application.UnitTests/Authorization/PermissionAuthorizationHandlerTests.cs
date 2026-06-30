@@ -1,7 +1,7 @@
+using System.Security.Claims;
 using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Moq;
-using Xunit;
 
 namespace AllSpice.CleanModularMonolith.Identity.Application.UnitTests.Authorization;
 
@@ -13,7 +13,7 @@ public sealed class PermissionAuthorizationHandlerTests
         perms.Setup(p => p.HasPermissionAsync("authz.read", It.IsAny<CancellationToken>())).ReturnsAsync(userHasIt);
         var handler = new PermissionAuthorizationHandler(perms.Object);
         var requirement = new PermissionRequirement("authz.read");
-        var context = new AuthorizationHandlerContext([requirement], user: new System.Security.Claims.ClaimsPrincipal(), resource: null);
+        var context = new AuthorizationHandlerContext([requirement], user: new ClaimsPrincipal(), resource: null);
         await handler.HandleAsync(context);
         return context.HasSucceeded;
     }

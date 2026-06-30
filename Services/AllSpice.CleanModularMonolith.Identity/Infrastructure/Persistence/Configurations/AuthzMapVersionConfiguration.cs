@@ -10,6 +10,6 @@ public sealed class AuthzMapVersionConfiguration : IEntityTypeConfiguration<Auth
     {
         builder.ToTable("authz_map_version");
         builder.HasKey(v => v.Id);
-        builder.Property(v => v.Version).IsRequired();
+        builder.Property(v => v.Version);
     }
 }

@@ -10,6 +10,13 @@ public sealed class PermissionMapStore(IdentityDbContext dbContext) : IPermissio
 
     public async Task<PermissionMap> GetMapAsync(CancellationToken cancellationToken)
     {
+        // Read the version FIRST so a concurrent mutation can only make the cached data newer than its
+        // version label, never the reverse — prevents caching stale-as-fresh.
+        var version = await _dbContext.AuthzMapVersions
+            .AsNoTracking()
+            .Select(v => v.Version)
+            .FirstOrDefaultAsync(cancellationToken);
+
         // roleKey -> set of permission keys, built from a single projection join.
         var rows = await (
             from rp in _dbContext.RolePermissions.AsNoTracking()
@@ -24,11 +31,6 @@ public sealed class PermissionMapStore(IdentityDbContext dbContext) : IPermissio
                 g => g.Key,
                 g => (IReadOnlySet<string>)g.Select(x => x.PermissionKey).ToHashSet(StringComparer.Ordinal),
                 StringComparer.OrdinalIgnoreCase);
-
-        var version = await _dbContext.AuthzMapVersions
-            .AsNoTracking()
-            .Select(v => v.Version)
-            .FirstOrDefaultAsync(cancellationToken);
 
         return new PermissionMap(version, map);
     }

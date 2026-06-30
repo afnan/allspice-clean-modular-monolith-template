@@ -9,7 +9,7 @@ namespace AllSpice.CleanModularMonolith.Identity.Application.UnitTests.Authoriza
 
 public sealed class CurrentUserPermissionsTests
 {
-    private static CurrentUserPermissions Build(string[] roles, PermissionMap map)
+    private static (CurrentUserPermissions sut, Mock<IPermissionMapCache> cache) Build(string[] roles, PermissionMap map)
     {
         var cache = new Mock<IPermissionMapCache>();
         cache.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(map);
@@ -18,7 +18,7 @@ public sealed class CurrentUserPermissionsTests
         var accessor = new Mock<IHttpContextAccessor>();
         accessor.Setup(a => a.HttpContext).Returns(new DefaultHttpContext { User = new ClaimsPrincipal(identity) });
 
-        return new CurrentUserPermissions(cache.Object, accessor.Object);
+        return (new CurrentUserPermissions(cache.Object, accessor.Object), cache);
     }
 
     private static PermissionMap MapWith(string role, params string[] perms)
@@ -29,29 +29,24 @@ public sealed class CurrentUserPermissionsTests
 
     [Fact]
     public async Task Grants_permission_from_role()
-        => Assert.True(await Build(["platform-admin"], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.read"));
+        => Assert.True(await Build(["platform-admin"], MapWith("platform-admin", "authz.read")).sut.HasPermissionAsync("authz.read"));
 
     [Fact]
     public async Task Denies_unmapped_permission()
-        => Assert.False(await Build(["platform-admin"], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.manage"));
+        => Assert.False(await Build(["platform-admin"], MapWith("platform-admin", "authz.read")).sut.HasPermissionAsync("authz.manage"));
 
     [Fact]
     public async Task Empty_roles_deny_all()
-        => Assert.False(await Build([], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.read"));
+        => Assert.False(await Build([], MapWith("platform-admin", "authz.read")).sut.HasPermissionAsync("authz.read"));
 
     [Fact]
     public async Task Role_match_is_case_insensitive()
-        => Assert.True(await Build(["Platform-Admin"], MapWith("platform-admin", "authz.read")).HasPermissionAsync("authz.read"));
+        => Assert.True(await Build(["Platform-Admin"], MapWith("platform-admin", "authz.read")).sut.HasPermissionAsync("authz.read"));
 
     [Fact]
     public async Task Resolves_once_and_memoizes()
     {
-        var cache = new Mock<IPermissionMapCache>();
-        cache.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(MapWith("platform-admin", "authz.read"));
-        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Role, "platform-admin")], "test", ClaimTypes.Name, ClaimTypes.Role);
-        var accessor = new Mock<IHttpContextAccessor>();
-        accessor.Setup(a => a.HttpContext).Returns(new DefaultHttpContext { User = new ClaimsPrincipal(identity) });
-        var sut = new CurrentUserPermissions(cache.Object, accessor.Object);
+        var (sut, cache) = Build(["platform-admin"], MapWith("platform-admin", "authz.read"));
 
         await sut.HasPermissionAsync("authz.read");
         await sut.HasPermissionAsync("authz.read");

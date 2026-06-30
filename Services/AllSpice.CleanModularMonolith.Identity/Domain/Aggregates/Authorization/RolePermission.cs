@@ -10,7 +10,6 @@ public sealed class RolePermission : Entity
 
     private RolePermission(Guid roleId, Guid permissionId)
     {
-        Id = Guid.NewGuid();
         RoleId = roleId;
         PermissionId = permissionId;
     }

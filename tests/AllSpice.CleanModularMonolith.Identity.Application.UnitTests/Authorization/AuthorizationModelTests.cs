@@ -28,4 +28,17 @@ public sealed class AuthorizationModelTests
     [Fact]
     public void RolePermission_is_mapped()
         => Assert.NotNull(NewContext().Model.FindEntityType(typeof(RolePermission)));
+
+    [Fact]
+    public void RolePermission_composite_has_a_unique_index()
+    {
+        using var ctx = NewContext();
+        var entity = ctx.Model.FindEntityType(typeof(RolePermission))!;
+        var roleIdProp = entity.FindProperty(nameof(RolePermission.RoleId))!;
+        var permissionIdProp = entity.FindProperty(nameof(RolePermission.PermissionId))!;
+        Assert.Contains(entity.GetIndexes(), i =>
+            i.IsUnique &&
+            i.Properties.Contains(roleIdProp) &&
+            i.Properties.Contains(permissionIdProp));
+    }
 }

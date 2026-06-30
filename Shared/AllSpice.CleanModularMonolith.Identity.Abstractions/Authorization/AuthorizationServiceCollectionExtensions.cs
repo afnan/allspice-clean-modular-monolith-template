@@ -13,6 +13,8 @@ public static class AuthorizationServiceCollectionExtensions
     public static IServiceCollection AddPermissionAuthorization(this IServiceCollection services)
     {
         services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+        // Scoped is correct: PermissionAuthorizationHandler depends on the scoped ICurrentUserPermissions,
+        // and the authorization middleware resolves handlers per request — this is not a captive dependency.
         services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
         return services;
     }

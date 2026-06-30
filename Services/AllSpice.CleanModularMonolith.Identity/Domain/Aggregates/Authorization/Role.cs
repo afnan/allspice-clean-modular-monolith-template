@@ -24,6 +24,6 @@ public sealed class Role : AuditableEntity, IAggregateRoot
             throw new ArgumentException("Role key is required.", nameof(key));
         }
 
-        return new Role(key.Trim(), description);
+        return new Role(key.Trim().ToLowerInvariant(), description);
     }
 }

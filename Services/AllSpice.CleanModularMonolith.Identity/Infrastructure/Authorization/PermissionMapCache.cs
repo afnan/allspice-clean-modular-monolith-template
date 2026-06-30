@@ -18,18 +18,25 @@ public sealed class PermissionMapCache(IServiceScopeFactory scopeFactory, IMemor
     private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(30);
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
     private readonly IMemoryCache _cache = cache;
+    private readonly SemaphoreSlim _lock = new(1, 1);
 
     public async ValueTask<PermissionMap> GetAsync(CancellationToken cancellationToken)
     {
         if (_cache.TryGetValue(CacheKey, out PermissionMap? cached) && cached is not null)
-        {
             return cached;
-        }
 
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<IPermissionMapStore>();
-        var map = await store.GetMapAsync(cancellationToken);
-        _cache.Set(CacheKey, map, Ttl);
-        return map;
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_cache.TryGetValue(CacheKey, out cached) && cached is not null)
+                return cached;
+
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var store = scope.ServiceProvider.GetRequiredService<IPermissionMapStore>();
+            var map = await store.GetMapAsync(cancellationToken);
+            _cache.Set(CacheKey, map, Ttl);
+            return map;
+        }
+        finally { _lock.Release(); }
     }
 }

@@ -6,11 +6,9 @@ namespace AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization
 /// to drive cache eviction. Seeded at version 0.</summary>
 public sealed class AuthzMapVersion : Entity, IAggregateRoot
 {
-    public const string SingletonKey = "authz-map";
-
     private AuthzMapVersion() { }
 
-    private AuthzMapVersion(long version) { Id = Guid.NewGuid(); Version = version; }
+    private AuthzMapVersion(long version) { Version = version; }
 
     public long Version { get; private set; }
 

@@ -23,5 +23,6 @@ public sealed class PermissionMapStoreTests
 
         Assert.True(map.RoleToPermissions.TryGetValue("platform-admin", out var perms));
         Assert.Contains("authz.manage", perms!);
+        Assert.Equal(0L, map.Version);
     }
 }

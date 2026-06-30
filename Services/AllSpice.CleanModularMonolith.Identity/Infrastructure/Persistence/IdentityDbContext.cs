@@ -1,3 +1,4 @@
+using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Entities;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
@@ -23,10 +24,10 @@ public sealed class IdentityDbContext : DbContext, IModuleDbContext
 
     public DbSet<User> Users => Set<User>();
 
-    public DbSet<AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.Permission> Permissions => Set<AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.Permission>();
-    public DbSet<AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.Role> Roles => Set<AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.Role>();
-    public DbSet<AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.RolePermission> RolePermissions => Set<AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.RolePermission>();
-    public DbSet<AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.AuthzMapVersion> AuthzMapVersions => Set<AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.AuthzMapVersion>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<AuthzMapVersion> AuthzMapVersions => Set<AuthzMapVersion>();
 
     public DbSet<IdentitySyncHistory> IdentitySyncHistories => Set<IdentitySyncHistory>();
 

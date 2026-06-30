@@ -140,6 +140,16 @@ public class ArchitectureRulesTests
         AssertSuccess(result, "Identity.Abstractions must not depend on Identity.Infrastructure");
     }
 
+    [Fact]
+    public void Identity_Domain_has_no_dependency_on_Identity_Abstractions()
+    {
+        var result = Types.InAssembly(Identity)
+            .That().ResideInNamespaceStartingWith($"{IdentityRoot}.Domain")
+            .ShouldNot().HaveDependencyOnAny($"{IdentityRoot}.Abstractions")
+            .GetResult();
+        AssertSuccess(result, "Identity.Domain must not depend on Identity.Abstractions");
+    }
+
     private static void AssertSuccess(TestResult result, string because)
     {
         Assert.True(
