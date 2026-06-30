@@ -11,7 +11,8 @@ public sealed class RoleRepository(IdentityDbContext dbContext)
 {
     private readonly IdentityDbContext _dbContext = dbContext;
 
-    // EF.Functions.ILike for case-insensitive match (Npgsql); the unique index is on Key.
+    // .ToLower() translates to SQL LOWER() — case-insensitive and provider-agnostic (works on SQLite tests + Postgres).
+    // Role.Key is already stored lowercase.
     public Task<Role?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
         => _dbContext.Roles.FirstOrDefaultAsync(r => r.Key.ToLower() == key.ToLower(), cancellationToken);
 }

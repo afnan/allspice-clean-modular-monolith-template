@@ -81,7 +81,7 @@ public static class IdentityModuleExtensions
         if (!string.IsNullOrEmpty(redisConnectionString))
         {
             var parsedRedis = redisConnectionString.StartsWith("redis://", StringComparison.OrdinalIgnoreCase)
-                ? redisConnectionString.Substring(8)
+                ? redisConnectionString["redis://".Length..]
                 : redisConnectionString;
             builder.Services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(parsedRedis));
             builder.Services.AddSingleton<IAuthzCacheInvalidator, RedisAuthzCacheInvalidator>();

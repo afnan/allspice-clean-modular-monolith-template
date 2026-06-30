@@ -57,6 +57,44 @@ public sealed class AuthorizationBootstrapperTests
     }
 
     /// <summary>
+    /// Regression: a mixed-case <c>BootstrapAdminRole</c> value (e.g. "Platform-Admin") must be
+    /// normalised to lowercase on first run and must NOT create a duplicate role on subsequent
+    /// runs (idempotency via case-insensitive lookup).
+    /// </summary>
+    [Fact]
+    public async Task Mixed_case_admin_role_normalises_and_deduplicates()
+    {
+        await using var ctx = await TestIdentityDbContextFactory.CreateAsync();
+
+        // Arrange – seed the two system permissions the bootstrapper will map to.
+        ctx.Permissions.Add(Permission.Create(Permissions.AuthzRead, "System permission authz.read", isSystem: true));
+        ctx.Permissions.Add(Permission.Create(Permissions.AuthzManage, "System permission authz.manage", isSystem: true));
+        ctx.AuthzMapVersions.Add(AuthzMapVersion.Initial());
+        await ctx.SaveChangesAsync();
+
+        // Use a mixed-case value — the bootstrapper must lowercase it before persisting.
+        var options = new OptionsWrapper<AuthorizationOptions>(new AuthorizationOptions { BootstrapAdminRole = "Platform-Admin" });
+        var bootstrapper = BuildBootstrapper(ctx, options);
+
+        // Act – run twice to prove the case-insensitive lookup prevents a duplicate role.
+        await bootstrapper.BootstrapAsync(default);
+        await ctx.SaveChangesAsync();
+
+        await bootstrapper.BootstrapAsync(default);
+        await ctx.SaveChangesAsync();
+
+        // Assert – exactly ONE role row with the lowercased key.
+        var roleCount = await ctx.Roles.CountAsync(r => r.Key == "platform-admin");
+        Assert.Equal(1, roleCount);
+
+        var role = await ctx.Roles.SingleAsync(r => r.Key == "platform-admin");
+
+        // Assert – exactly 2 RolePermission rows (one per authz permission), no duplicates.
+        var mappings = await ctx.RolePermissions.Where(rp => rp.RoleId == role.Id).ToListAsync();
+        Assert.Equal(2, mappings.Count);
+    }
+
+    /// <summary>
     /// Verifies that BootstrapAsync is a no-op when BootstrapAdminRole is null or empty,
     /// leaving the Roles table empty.
     /// </summary>

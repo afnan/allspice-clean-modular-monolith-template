@@ -4,12 +4,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization;
 
-public interface IPermissionMapCache
-{
-    ValueTask<PermissionMap> GetAsync(CancellationToken cancellationToken);
-    void Invalidate();
-}
-
 /// <summary>Caches the whole role→permission map in-process with a short TTL backstop. The map is small
 /// (roles × permissions), so one cached copy per replica is fine. Plan B adds version-checked + Redis
 /// pub-sub eviction for near-instant propagation.</summary>

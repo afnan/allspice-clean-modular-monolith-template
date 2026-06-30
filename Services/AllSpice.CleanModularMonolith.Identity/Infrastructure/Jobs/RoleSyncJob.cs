@@ -43,16 +43,18 @@ public sealed class RoleSyncJob(
         try
         {
             var realmRoles = await client.GetAllRealmRolesAsync(context.CancellationToken);
+            var addedCount = 0;
             foreach (var roleName in realmRoles)
             {
                 if (await roleRepo.GetByKeyAsync(roleName, context.CancellationToken) is null)
                 {
                     await roleRepo.AddAsync(Role.Create(roleName, null), context.CancellationToken);
+                    addedCount++;
                 }
             }
 
             await dbContext.SaveChangesAsync(context.CancellationToken);
-            _logger.LogInformation("Synced {Count} realm roles", realmRoles.Count);
+            _logger.LogInformation("Synced realm roles: {Added} new, {Total} total", addedCount, realmRoles.Count);
         }
         catch (Exception ex) when (ex is HttpRequestException or TimeoutException)
         {

@@ -32,6 +32,8 @@ public sealed class GetRolePermissionsQueryHandler(
         }
 
         var permissionIds = rolePermissions.Select(rp => rp.PermissionId).ToHashSet();
+        // TODO: replace with IPermissionRepository.ListByIdsAsync(permissionIds, ct) once added to avoid
+        // loading the full permission set just to filter in memory. The permission set is small so this is fine for now.
         var allPermissions = await _permissionRepository.ListAsync(cancellationToken);
 
         IReadOnlyList<string> keys = allPermissions

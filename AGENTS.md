@@ -112,6 +112,12 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
   in `Configure()` are runtime and not statically reflectable; covering them via the manifest is the
   convention. `[HasPermission("...")]` attributes on types are reflectable and are checked directly by the
   arch test — they also require a matching manifest entry.
+- **`Permissions` name collision inside FastEndpoints endpoints**: the static class
+  `Identity.Abstractions.Authorization.Permissions` (holding permission-key constants) shadows FastEndpoints'
+  inherited `Permissions(params string[])` method when referenced by its short name inside an endpoint's
+  `Configure()` method. Resolve with a using alias —
+  `using AuthzPermissions = AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization.Permissions;` —
+  or use a literal policy string via `PermissionPolicy.For("module:area.action")` instead.
 
 ---
 
