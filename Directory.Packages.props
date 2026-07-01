@@ -64,7 +64,7 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.16.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
-    <PackageVersion Include="PuppeteerSharp" Version="25.1.2" />
+    <PackageVersion Include="PuppeteerSharp" Version="25.2.1" />
     <PackageVersion Include="Quartz" Version="3.18.1" />
     <PackageVersion Include="Resend" Version="0.5.1" />
     <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.18.1" />
