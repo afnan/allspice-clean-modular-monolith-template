@@ -41,7 +41,12 @@ public sealed class NotificationContentBuilder(
         if (template is null)
         {
             _logger.LogWarning("Notification template '{TemplateKey}' not found; falling back to stored content.", notification.TemplateKey);
-            return Result.Success(new NotificationContent(SanitizeSubject(notification.Subject), notification.Body, true));
+            // The template row is missing, so treat the stored body exactly like the no-template path: wrap it
+            // in the branded HTML layout, which HTML-encodes the body. Returning notification.Body verbatim with
+            // isHtml=true (as this branch previously did) shipped un-encoded stored content into an HTML email —
+            // an injection/XSS vector inconsistent with the encoded no-template and template-found branches.
+            var fallbackBody = WrapInBrandedLayout(notification.Body, notification.GetMetadata());
+            return Result.Success(new NotificationContent(SanitizeSubject(notification.Subject), fallbackBody, true));
         }
 
         var metadata = notification.GetMetadata();

@@ -61,10 +61,19 @@ public static class NotificationsModuleExtensions
 
         builder.Services.AddValidatorsFromAssembly(typeof(AppAssemblyReference).Assembly);
 
-        // Email provider options
-        builder.Services.Configure<ResendOptions>(builder.Configuration.GetSection("Notifications:Resend"));
-        builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("Notifications:SendGrid"));
-        builder.Services.Configure<MailKitSmtpOptions>(builder.Configuration.GetSection("Notifications:Smtp"));
+        // Email provider options — standardized on AddOptions().Bind().ValidateOnStart() for uniform binding
+        // with the dispatcher options and the Identity module's convention (previously plain Configure<T> with
+        // no eager validation). These option classes carry no data annotations yet, so ValidateDataAnnotations
+        // is intentionally omitted; ValidateOnStart still forces the binding to resolve eagerly at startup.
+        builder.Services.AddOptions<ResendOptions>()
+            .Bind(builder.Configuration.GetSection("Notifications:Resend"))
+            .ValidateOnStart();
+        builder.Services.AddOptions<SendGridOptions>()
+            .Bind(builder.Configuration.GetSection("Notifications:SendGrid"))
+            .ValidateOnStart();
+        builder.Services.AddOptions<MailKitSmtpOptions>()
+            .Bind(builder.Configuration.GetSection("Notifications:Smtp"))
+            .ValidateOnStart();
 
         // Resend client (IResend)
         builder.Services.AddOptions<ResendClientOptions>()
@@ -76,7 +85,10 @@ public static class NotificationsModuleExtensions
 
         // Email senders
         builder.Services.AddScoped<ResendEmailSender>();
-        builder.Services.AddScoped<SendGridEmailSender>();
+        // SendGrid uses an IHttpClientFactory-managed (pooled) HttpClient rather than newing a
+        // SendGridClient(apiKey) — and therefore a fresh internal HttpClient/handler — on every send (which
+        // leaks sockets under load). AddHttpClient<T> registers the typed client and injects its HttpClient.
+        builder.Services.AddHttpClient<SendGridEmailSender>();
         builder.Services.AddScoped<MailKitEmailSender>();
         builder.Services.AddScoped<IEmailSender, EmailSenderDispatcher>();
 

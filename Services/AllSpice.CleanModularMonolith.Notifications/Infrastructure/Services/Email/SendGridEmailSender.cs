@@ -8,15 +8,21 @@ using SendGrid.Helpers.Mail;
 namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services.Email;
 
 public sealed class SendGridEmailSender(
+    HttpClient httpClient,
     IOptions<SendGridOptions> options,
     ILogger<SendGridEmailSender> logger) : IEmailSender
 {
+    private readonly HttpClient _httpClient = httpClient;
     private readonly SendGridOptions _options = options.Value;
     private readonly ILogger<SendGridEmailSender> _logger = logger;
 
     public async Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
-        var client = new SendGridClient(_options.ApiKey);
+        // Build the SendGrid client over the DI-managed HttpClient (registered via AddHttpClient in
+        // NotificationsModuleExtensions) rather than newing a SendGridClient(apiKey) per send — the latter
+        // creates a fresh internal HttpClient/handler every call, leaking sockets under load. The injected
+        // HttpClient's handler is pooled/rotated by IHttpClientFactory, so it is safe to reuse.
+        var client = new SendGridClient(_httpClient, _options.ApiKey);
 
         var envelope = EmailEnvelope.From(message, _options.FromAddress, _options.FromName, _options.ReplyToAddress);
 
