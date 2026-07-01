@@ -15,11 +15,13 @@ public sealed class IdentitySyncHealthCheck(
     IdentityDbContext dbContext,
     IOptions<IdentitySyncOptions> options,
     IOptions<KeycloakOptions> keycloakOptions,
+    TimeProvider timeProvider,
     ILogger<IdentitySyncHealthCheck> logger) : IHealthCheck
 {
     private readonly IdentityDbContext _dbContext = dbContext;
     private readonly IOptions<IdentitySyncOptions> _options = options;
     private readonly IOptions<KeycloakOptions> _keycloakOptions = keycloakOptions;
+    private readonly TimeProvider _timeProvider = timeProvider;
     private readonly ILogger<IdentitySyncHealthCheck> _logger = logger;
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
@@ -43,7 +45,7 @@ public sealed class IdentitySyncHealthCheck(
             return HealthCheckResult.Unhealthy(description);
         }
 
-        var age = DateTimeOffset.UtcNow - lastSuccess.FinishedUtc;
+        var age = _timeProvider.GetUtcNow() - lastSuccess.FinishedUtc;
         if (age > _options.Value.MaxSuccessAge)
         {
             var message = $"Last Keycloak sync succeeded {age:g} ago which exceeds the allowed threshold.";

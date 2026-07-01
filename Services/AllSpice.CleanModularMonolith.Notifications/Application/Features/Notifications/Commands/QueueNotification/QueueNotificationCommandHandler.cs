@@ -11,10 +11,13 @@ namespace AllSpice.CleanModularMonolith.Notifications.Application.Features.Notif
 /// <summary>
 /// Handles requests to queue notifications for asynchronous processing.
 /// </summary>
-public sealed class QueueNotificationCommandHandler(INotificationRepository notificationRepository)
+public sealed class QueueNotificationCommandHandler(
+    INotificationRepository notificationRepository,
+    TimeProvider timeProvider)
     : IRequestHandler<QueueNotificationCommand, Result<Guid>>
 {
     private readonly INotificationRepository _notificationRepository = Guard.Against.Null(notificationRepository);
+    private readonly TimeProvider _timeProvider = Guard.Against.Null(timeProvider);
 
     /// <inheritdoc />
     public async ValueTask<Result<Guid>> Handle(QueueNotificationCommand request, CancellationToken cancellationToken)
@@ -41,6 +44,7 @@ public sealed class QueueNotificationCommandHandler(INotificationRepository noti
             request.Body,
             request.TemplateKey,
             metadataJson,
+            _timeProvider.GetUtcNow(),
             request.ScheduledSendUtc,
             request.CorrelationId);
 

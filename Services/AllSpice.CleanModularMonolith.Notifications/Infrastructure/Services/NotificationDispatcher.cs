@@ -26,6 +26,7 @@ public sealed class NotificationDispatcher(
     INotificationContentBuilder contentBuilder,
     IDbContextOutbox outbox,
     IOptions<NotificationDispatcherOptions> options,
+    TimeProvider timeProvider,
     ILogger<NotificationDispatcher> logger) : INotificationDispatcher
 {
     private readonly INotificationRepository _notificationRepository = notificationRepository;
@@ -35,6 +36,7 @@ public sealed class NotificationDispatcher(
     private readonly INotificationContentBuilder _contentBuilder = contentBuilder;
     private readonly IDbContextOutbox _outbox = outbox;
     private readonly NotificationDispatcherOptions _options = options.Value;
+    private readonly TimeProvider _timeProvider = timeProvider;
     private readonly ILogger<NotificationDispatcher> _logger = logger;
 
     // The dispatcher runs in a BackgroundService scope, NOT through an ITransactional Mediator command,
@@ -78,7 +80,7 @@ public sealed class NotificationDispatcher(
     /// </remarks>
     public async Task<int> DispatchPendingAsync(CancellationToken cancellationToken = default)
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = _timeProvider.GetUtcNow();
         var reclaimBefore = utcNow.AddSeconds(-_options.ReclaimAfterSeconds);
         var specification = new DueNotificationsSpecification(utcNow, reclaimBefore);
         var pendingNotifications = await _notificationRepository.ListAsync(specification, cancellationToken);
@@ -102,7 +104,7 @@ public sealed class NotificationDispatcher(
             if (notification.Status == NotificationStatus.Dispatched &&
                 notification.AttemptCount >= Notification.MaxDeliveryAttempts)
             {
-                notification.HandleFailure("Stranded in Dispatched after exhausting delivery attempts.");
+                notification.HandleFailure("Stranded in Dispatched after exhausting delivery attempts.", utcNow);
                 if (await TryPersistAsync(notification, cancellationToken))
                 {
                     _logger.LogWarning("Notification {NotificationId} terminalized: stranded in Dispatched at max attempts.", notification.Id);
@@ -127,6 +129,8 @@ public sealed class NotificationDispatcher(
                 if (preference is not null && !preference.IsEnabled)
                 {
                     _logger.LogInformation("Notification {NotificationId} skipped due to user/channel preference.", notification.Id);
+                    notification.Cancel(utcNow, "User has opted out of this channel.");
+                    await TryPersistAsync(notification, cancellationToken);
                     continue;
                 }
             }
@@ -136,17 +140,17 @@ public sealed class NotificationDispatcher(
                     "Notification {NotificationId} has non-Guid Recipient.UserId '{UserId}'; cannot evaluate preferences — failing closed.",
                     notification.Id,
                     notification.Recipient.UserId);
-                notification.HandleFailure("Invalid Recipient.UserId format; cannot evaluate notification preferences.");
+                notification.HandleFailure("Invalid Recipient.UserId format; cannot evaluate notification preferences.", utcNow);
                 await TryPersistAsync(notification, cancellationToken);
                 continue;
             }
 
-            notification.RecordAttempt();
+            notification.RecordAttempt(utcNow);
 
             // Claim: mark Dispatched and persist BEFORE sending. This is the optimistic-concurrency claim —
             // if another replica already claimed/reclaimed this row, the persist loses the race and we skip
             // (no double dispatch).
-            notification.MarkDispatched();
+            notification.MarkDispatched(utcNow);
             if (!await TryPersistAsync(notification, cancellationToken))
             {
                 // Lost the claim to another replica — TryPersistAsync already logged the skip.
@@ -157,7 +161,7 @@ public sealed class NotificationDispatcher(
             if (!contentResult.IsSuccess)
             {
                 var errorDetail = contentResult.Errors.FirstOrDefault() ?? "Failed to build notification content.";
-                notification.HandleFailure(errorDetail);
+                notification.HandleFailure(errorDetail, utcNow);
                 await TryPersistAsync(notification, cancellationToken);
                 _logger.LogWarning("Notification {NotificationId} content build failed: {Error}", notification.Id, errorDetail);
                 continue;
@@ -167,7 +171,7 @@ public sealed class NotificationDispatcher(
 
             if (channelHandler is null)
             {
-                notification.HandleFailure($"No notification channel registered for '{notification.Channel.Name}'.");
+                notification.HandleFailure($"No notification channel registered for '{notification.Channel.Name}'.", utcNow);
                 await TryPersistAsync(notification, cancellationToken);
                 _logger.LogWarning("No channel handler for notification {NotificationId} ({Channel})", notification.Id, notification.Channel.Name);
                 continue;
@@ -186,13 +190,13 @@ public sealed class NotificationDispatcher(
                         notification.Recipient.UserId,
                         notification.CorrelationId,
                         notification.AttemptCount,
-                        DateTimeOffset.UtcNow);
+                        utcNow);
 
                     // Atomic: the Delivered status and the integration-event envelope commit in ONE
                     // transaction via the module's co-located outbox — no fire-and-forget. A crash can't
                     // deliver the event without persisting Delivered, or persist Delivered without the event.
                     await using var deliveredTx = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-                    notification.MarkDelivered();
+                    notification.MarkDelivered(utcNow);
                     await _notificationRepository.UpdateAsync(notification, cancellationToken);
                     _outbox.Enroll(_dbContext);
                     await _outbox.PublishAsync(deliveryEvent);
@@ -209,7 +213,7 @@ public sealed class NotificationDispatcher(
                 else
                 {
                     var errorDetail = sendResult.Errors.FirstOrDefault() ?? "Unknown delivery error";
-                    notification.HandleFailure(errorDetail);
+                    notification.HandleFailure(errorDetail, utcNow);
                     await TryPersistAsync(notification, cancellationToken);
                     _logger.LogWarning("Notification {NotificationId} failed via {Channel}: {Error}", notification.Id, notification.Channel.Name, errorDetail);
                 }
@@ -226,7 +230,7 @@ public sealed class NotificationDispatcher(
             }
             catch (Exception ex)
             {
-                notification.HandleFailure(ex.Message);
+                notification.HandleFailure(ex.Message, utcNow);
                 await TryPersistAsync(notification, cancellationToken);
                 _logger.LogError(ex, "Error dispatching notification {NotificationId}", notification.Id);
             }

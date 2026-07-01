@@ -18,6 +18,7 @@ public sealed class KeycloakUserSyncJob(
     IServiceScopeFactory scopeFactory,
     IOptions<IdentitySyncOptions> options,
     IOptions<KeycloakOptions> keycloakOptions,
+    TimeProvider timeProvider,
     ILogger<KeycloakUserSyncJob> logger) : IJob
 {
     public const string JobIdentity = "KeycloakUserSyncJob";
@@ -26,6 +27,7 @@ public sealed class KeycloakUserSyncJob(
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
     private readonly IOptions<IdentitySyncOptions> _options = options;
     private readonly IOptions<KeycloakOptions> _keycloakOptions = keycloakOptions;
+    private readonly TimeProvider _timeProvider = timeProvider;
     private readonly ILogger<KeycloakUserSyncJob> _logger = logger;
 
     public async Task Execute(IJobExecutionContext context)
@@ -49,7 +51,7 @@ public sealed class KeycloakUserSyncJob(
         var history = new IdentitySyncHistory
         {
             JobName = JobIdentity,
-            StartedUtc = DateTimeOffset.UtcNow,
+            StartedUtc = _timeProvider.GetUtcNow(),
             CorrelationId = Guid.NewGuid().ToString("N")
         };
 
@@ -66,11 +68,14 @@ public sealed class KeycloakUserSyncJob(
 
             history.OrphanCount = orphanCandidates.Count;
 
-            await PersistOrphansAsync(dbContext, orphanCandidates.Values, cancellationToken);
-            await ResolveSyncIssuesAsync(dbContext, cancellationToken);
+            var now = _timeProvider.GetUtcNow();
+            await PersistOrphansAsync(dbContext, orphanCandidates.Values, now, cancellationToken);
+            await ResolveSyncIssuesAsync(dbContext, now, cancellationToken);
 
             history.Succeeded = true;
-            history.FinishedUtc = DateTimeOffset.UtcNow;
+            // Stamp FinishedUtc AFTER processing completes so the timestamp reflects the true end of
+            // the sync run, not the start of the orphan/issue phase (which skews the staleness health check).
+            history.FinishedUtc = _timeProvider.GetUtcNow();
             dbContext.IdentitySyncHistories.Add(history);
 
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -85,7 +90,7 @@ public sealed class KeycloakUserSyncJob(
         {
             history.Succeeded = false;
             history.ErrorMessage = ex.Message;
-            history.FinishedUtc = DateTimeOffset.UtcNow;
+            history.FinishedUtc = _timeProvider.GetUtcNow();
 
             // Discard any uncommitted partial work so the failure record persists cleanly
             // alongside the issue row in a single SaveChanges.
@@ -93,7 +98,7 @@ public sealed class KeycloakUserSyncJob(
 
             // Persist with CancellationToken.None: if the failure stemmed from a slow/cancelled
             // token, we still want the failure record and issue row durably written.
-            await RecordSyncIssueAsync(dbContext, ex, CancellationToken.None);
+            await RecordSyncIssueAsync(dbContext, ex, _timeProvider.GetUtcNow(), CancellationToken.None);
             dbContext.IdentitySyncHistories.Add(history);
             await dbContext.SaveChangesAsync(CancellationToken.None);
 
@@ -179,9 +184,9 @@ public sealed class KeycloakUserSyncJob(
     private static async Task PersistOrphansAsync(
         IdentityDbContext dbContext,
         IEnumerable<OrphanCandidate> candidates,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
         var candidateMap = candidates.ToDictionary(c => c.UserId, StringComparer.OrdinalIgnoreCase);
 
         var existing = await dbContext.IdentityOrphanUsers.ToListAsync(cancellationToken);
@@ -219,7 +224,7 @@ public sealed class KeycloakUserSyncJob(
         }
     }
 
-    private static async Task ResolveSyncIssuesAsync(IdentityDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task ResolveSyncIssuesAsync(IdentityDbContext dbContext, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var unresolved = await dbContext.IdentitySyncIssues
             .Where(issue => issue.IssueType == IssueType && issue.ResolvedUtc == null)
@@ -230,20 +235,18 @@ public sealed class KeycloakUserSyncJob(
             return;
         }
 
-        var now = DateTimeOffset.UtcNow;
         foreach (var issue in unresolved)
         {
             issue.ResolvedUtc = now;
         }
     }
 
-    private static async Task RecordSyncIssueAsync(IdentityDbContext dbContext, Exception ex, CancellationToken cancellationToken)
+    private static async Task RecordSyncIssueAsync(IdentityDbContext dbContext, Exception ex, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var issue = await dbContext.IdentitySyncIssues
             .Where(i => i.IssueType == IssueType && i.ResolvedUtc == null)
             .FirstOrDefaultAsync(cancellationToken);
 
-        var now = DateTimeOffset.UtcNow;
         if (issue is null)
         {
             dbContext.IdentitySyncIssues.Add(new IdentitySyncIssue

@@ -155,3 +155,34 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   `PublicAccessType.None` will 403. `EnsureContainerExistsAsync` uses an unsynchronized `volatile bool` so
   concurrent first-uploads each call `CreateIfNotExistsAsync` (benign/idempotent). Add a SAS-URI generation
   method when a download-by-URL flow is needed.
+
+## Authorization (RBAC) — deferred (see ADR-0008, spec 2026-06-29-app-rbac-design)
+
+- [ ] **Post-commit cache invalidation (P2).** Admin write handlers call `IAuthzCacheInvalidator.InvalidateAsync`
+  INSIDE the handler, which fires just before `TransactionBehavior` commits — a reader racing that window can
+  re-cache pre-commit data for up to the 60s TTL. Move invalidation to a post-commit hook (e.g. via the
+  `IOutboxFlusher`-style post-commit seam or an integration event) so eviction happens only after the mutation
+  is durable. Also: `AuthzMapVersion.Bump()` is persisted but the read path doesn't compare it — wire
+  version-checking if push eviction is ever insufficient.
+- [ ] **Break-glass: protect the last `authz.manage` mapping (P2).** `IsSystem` protects the permission KEY
+  from deletion, but an admin can still `SetRolePermissions`/delete the last role→`authz.manage` mapping and
+  lock the whole org out of the admin surface. Add a guard that refuses to remove the final `authz.manage`
+  grant (or a config bootstrap re-grant on next start).
+- [ ] **Admin endpoint authorization HTTP test + `[HasPermission]` static-scan (P3).** The admin endpoints'
+  401/403/200 gating has no end-to-end HTTP test (no TestServer harness), and `Every_HasPermission_attribute_key_is_declared`
+  is vacuous because all gates use `Policies(PermissionPolicy.For(...))` (runtime, not statically reflectable).
+  Add a TestServer-based gate test and/or a source-scan of `Configure()` policy strings against the catalog.
+
+- [ ] **Per-user permission overrides (P3).** The model is role→permission only; a user's permissions come
+  entirely from their Keycloak roles. Add per-user grant/deny exceptions: extend the resolver to compute
+  `rolePerms ∪ userGrants \ userDenies`, backed by a `UserPermissionOverride(localUserId, permissionKey, mode)`
+  table keyed on the canonical local UUID (ADR-0005). Lets an operator grant one person an extra permission, or
+  deny a specific one, without inventing a role. Out of scope for the initial RBAC PR.
+- [ ] **Authz-change audit view (P3).** Role→permission mutations are already audit-stamped (the
+  `AuditableEntity` interceptor) and bump `AuthzMapVersion`, but there's no query surface to review who changed
+  which mapping when. Add a read endpoint over the audit columns when an admin needs change history. Small sibling
+  to per-user overrides.
+- [ ] **FK constraints on `authz_role_permissions` (P3, Plan B).** `RolePermissionConfiguration` defines only
+  indexes; the join table has no FKs to `authz_roles`/`authz_permissions`. Security is unaffected today (the
+  `PermissionMapStore` inner-joins, so orphan rows drop out and default-deny holds), but the Plan B mutation API
+  should add the FKs + cascade delete so orphan mappings can't accumulate. Surfaced by the Plan A whole-branch review.

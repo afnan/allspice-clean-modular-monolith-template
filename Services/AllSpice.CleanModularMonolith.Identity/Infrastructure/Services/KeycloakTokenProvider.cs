@@ -12,12 +12,14 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 public sealed class KeycloakTokenProvider(
     IOptions<KeycloakOptions> options,
     IHttpClientFactory httpClientFactory,
+    TimeProvider timeProvider,
     ILogger<KeycloakTokenProvider> logger) : IDisposable
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
     private readonly IOptions<KeycloakOptions> _options = options;
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+    private readonly TimeProvider _timeProvider = timeProvider;
     private readonly ILogger<KeycloakTokenProvider> _logger = logger;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
@@ -37,7 +39,7 @@ public sealed class KeycloakTokenProvider(
             return opts.ApiToken;
         }
 
-        if (_cachedToken is not null && DateTimeOffset.UtcNow.AddMinutes(5) < _tokenExpiry)
+        if (_cachedToken is not null && _timeProvider.GetUtcNow().AddMinutes(5) < _tokenExpiry)
         {
             return _cachedToken;
         }
@@ -45,7 +47,7 @@ public sealed class KeycloakTokenProvider(
         await _semaphore.WaitAsync(cancellationToken);
         try
         {
-            if (_cachedToken is not null && DateTimeOffset.UtcNow.AddMinutes(5) < _tokenExpiry)
+            if (_cachedToken is not null && _timeProvider.GetUtcNow().AddMinutes(5) < _tokenExpiry)
             {
                 return _cachedToken;
             }
@@ -100,7 +102,7 @@ public sealed class KeycloakTokenProvider(
                 : TimeSpan.FromMinutes(5);
 
             _cachedToken = accessToken;
-            _tokenExpiry = DateTimeOffset.UtcNow.Add(expiresIn);
+            _tokenExpiry = _timeProvider.GetUtcNow().Add(expiresIn);
 
             _logger.LogDebug("Keycloak access token refreshed, expires in {ExpiresIn}s", expiresIn.TotalSeconds);
 

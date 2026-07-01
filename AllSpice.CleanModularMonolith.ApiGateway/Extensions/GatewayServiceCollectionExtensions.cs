@@ -1,4 +1,6 @@
-﻿namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
+﻿using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
+
+namespace AllSpice.CleanModularMonolith.ApiGateway.Extensions;
 
 /// <summary>
 /// Provides extension methods that encapsulate all service registrations required by the gateway.
@@ -49,6 +51,7 @@ public static class GatewayServiceCollectionExtensions
         builder.Services.AddSingleton(new GatewayAuthenticationState(authenticationEnabled));
 
         builder.ConfigureAuthorization(authenticationEnabled);
+        builder.Services.AddPermissionAuthorization();
 
         builder.Services
             .AddReverseProxy()
@@ -110,6 +113,13 @@ public static class GatewayServiceCollectionExtensions
                 options.Configuration = redisConfig;
                 options.InstanceName = "{{ProjectName}}_";
             });
+        }
+        else
+        {
+            // No Redis configured (e.g. a minimal local run): fall back to an in-memory IDistributedCache so
+            // components that depend on it (idempotency, distributed cache reads) still resolve and work
+            // single-node. Multi-replica deployments must configure Redis for these to be shared.
+            builder.Services.AddDistributedMemoryCache();
         }
 
         builder.Services.AddOutputCache(options =>

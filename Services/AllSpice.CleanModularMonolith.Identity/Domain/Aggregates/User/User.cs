@@ -15,7 +15,7 @@ public sealed class User : AuditableEntity, IAggregateRoot
         Username = string.Empty;
     }
 
-    private User(ExternalUserId externalId, string username, string? email, string? firstName, string? lastName)
+    private User(ExternalUserId externalId, string username, string? email, string? firstName, string? lastName, DateTimeOffset nowUtc)
     {
         Id = Guid.NewGuid();
         ExternalId = externalId;
@@ -24,7 +24,7 @@ public sealed class User : AuditableEntity, IAggregateRoot
         FirstName = firstName;
         LastName = lastName;
         IsActive = true;
-        LastSyncedUtc = DateTimeOffset.UtcNow;
+        LastSyncedUtc = nowUtc;
     }
 
     public ExternalUserId ExternalId { get; private set; } = ExternalUserId.From(Guid.Empty.ToString());
@@ -46,15 +46,15 @@ public sealed class User : AuditableEntity, IAggregateRoot
             ? $"{FirstName} {LastName}".Trim()
             : Username;
 
-    public static User Create(ExternalUserId externalId, string username, string? email, string? firstName, string? lastName)
+    public static User Create(ExternalUserId externalId, string username, string? email, string? firstName, string? lastName, DateTimeOffset nowUtc)
     {
         Guard.Against.Null(externalId);
         Guard.Against.NullOrWhiteSpace(username);
 
-        return new User(externalId, username.Trim(), email?.Trim(), firstName?.Trim(), lastName?.Trim());
+        return new User(externalId, username.Trim(), email?.Trim(), firstName?.Trim(), lastName?.Trim(), nowUtc);
     }
 
-    public static User CreateFromExternalSync(ExternalUserId externalId, string email, string displayName)
+    public static User CreateFromExternalSync(ExternalUserId externalId, string email, string displayName, DateTimeOffset nowUtc)
     {
         Guard.Against.Null(externalId);
         Guard.Against.NullOrWhiteSpace(email);
@@ -65,7 +65,7 @@ public sealed class User : AuditableEntity, IAggregateRoot
         var firstName = nameParts.Length > 0 ? nameParts[0] : null;
         var lastName = nameParts.Length > 1 ? nameParts[1] : null;
 
-        return new User(externalId, trimmedEmail, trimmedEmail, firstName, lastName);
+        return new User(externalId, trimmedEmail, trimmedEmail, firstName, lastName, nowUtc);
     }
 
     public void UpdateName(string? firstName, string? lastName)
@@ -74,7 +74,7 @@ public sealed class User : AuditableEntity, IAggregateRoot
         LastName = lastName?.Trim();
     }
 
-    public void UpdateFromSync(string username, string? email, string? firstName, string? lastName, bool isActive)
+    public void UpdateFromSync(string username, string? email, string? firstName, string? lastName, bool isActive, DateTimeOffset nowUtc)
     {
         Guard.Against.NullOrWhiteSpace(username);
 
@@ -83,7 +83,7 @@ public sealed class User : AuditableEntity, IAggregateRoot
         FirstName = firstName?.Trim();
         LastName = lastName?.Trim();
         IsActive = isActive;
-        LastSyncedUtc = DateTimeOffset.UtcNow;
+        LastSyncedUtc = nowUtc;
     }
 
     public void Deactivate() => IsActive = false;

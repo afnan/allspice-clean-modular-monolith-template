@@ -13,9 +13,12 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
 /// rows by default. Registered as a singleton and discovered by EF Core from the application service provider,
 /// so it works with pooled DbContexts. Runs before the audit interceptor so the now-modified row is also stamped.
 /// </summary>
-public sealed class SoftDeleteInterceptor(ICurrentUserProvider currentUserProvider) : SaveChangesInterceptor
+public sealed class SoftDeleteInterceptor(
+    ICurrentUserProvider currentUserProvider,
+    TimeProvider timeProvider) : SaveChangesInterceptor
 {
     private readonly ICurrentUserProvider _currentUserProvider = currentUserProvider;
+    private readonly TimeProvider _timeProvider = timeProvider;
 
     public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
     {
@@ -40,6 +43,7 @@ public sealed class SoftDeleteInterceptor(ICurrentUserProvider currentUserProvid
         }
 
         var userId = _currentUserProvider.UserId;
+        var now = _timeProvider.GetUtcNow();
 
         foreach (var entry in context.ChangeTracker.Entries<ISoftDelete>())
         {
@@ -49,7 +53,7 @@ public sealed class SoftDeleteInterceptor(ICurrentUserProvider currentUserProvid
             }
 
             entry.State = EntityState.Modified;
-            entry.Entity.MarkDeleted(userId);
+            entry.Entity.MarkDeleted(userId, now);
         }
     }
 }

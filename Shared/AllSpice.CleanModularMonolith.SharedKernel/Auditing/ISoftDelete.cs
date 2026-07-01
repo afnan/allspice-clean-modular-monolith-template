@@ -6,7 +6,7 @@ public interface ISoftDelete
     DateTimeOffset? DeletedOnUtc { get; }
     string? DeletedBy { get; }
 
-    void MarkDeleted(string? userId);
+    void MarkDeleted(string? userId, DateTimeOffset deletedOnUtc);
     void Restore();
 }
 

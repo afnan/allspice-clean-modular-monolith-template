@@ -112,19 +112,23 @@ public static class Extensions
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        // Adding health checks endpoints to applications in non-development environments has security implications.
-        // See https://aka.ms/dotnet/aspire/healthchecks for details before enabling these endpoints in non-development environments.
-        if (app.Environment.IsDevelopment())
-        {
-            // All health checks must pass for app to be considered ready to accept traffic after starting
-            app.MapHealthChecks(HealthEndpointPath);
+        // Liveness/readiness probes must be reachable in EVERY environment — Kubernetes (and most
+        // orchestrators) call them in production to decide whether to restart the pod (/alive) or route
+        // traffic to it (/health). The default response writer emits only the aggregate status text
+        // ("Healthy"/"Unhealthy"), never per-check details, so nothing sensitive leaks.
+        //
+        // Security posture: keep these paths internal. Don't expose them through the public ingress —
+        // restrict to the cluster/probe network (NetworkPolicy, internal LB, or an ingress path block).
+        // If you must serve richer details, add an authenticated, separately-mapped diagnostics endpoint.
 
-            // Only health checks tagged with the "live" tag must pass for app to be considered alive
-            app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
-            {
-                Predicate = r => r.Tags.Contains("live")
-            });
-        }
+        // Readiness: ALL health checks must pass before the app accepts traffic.
+        app.MapHealthChecks(HealthEndpointPath);
+
+        // Liveness: only checks tagged "live" — the process is responsive (not hung).
+        app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
+        {
+            Predicate = r => r.Tags.Contains("live")
+        });
 
         return app;
     }

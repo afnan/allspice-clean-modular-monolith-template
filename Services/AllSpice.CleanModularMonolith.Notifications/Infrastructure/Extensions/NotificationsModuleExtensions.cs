@@ -1,3 +1,5 @@
+using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
+using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Authorization;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +25,9 @@ public static class NotificationsModuleExtensions
         this IHostApplicationBuilder builder,
         ILogger logger)
     {
+        // Declare the permission keys this module enforces; the reconciler seeds them as IsSystem records.
+        builder.Services.AddSingleton<IModulePermissionManifest, NotificationsPermissionManifest>();
+
         // Register the context with Wolverine's EF Core integration so this module's database hosts its
         // OWN durable outbox tables (see NotificationsDbContext.OnModelCreating + the gateway's ancillary-
         // store registration), giving a true transactional outbox. The (IServiceProvider, options) overload
@@ -116,16 +121,18 @@ public static class NotificationsModuleExtensions
     /// <returns>The application instance to support fluent configuration.</returns>
     public static async Task<WebApplication> EnsureNotificationsModuleDatabaseAsync(this WebApplication app)
     {
+        var nowUtc = app.Services.GetRequiredService<TimeProvider>().GetUtcNow();
+
         await MigrationRunner.RunForModuleAsync<NotificationsDbContext>(
             app.Services,
             app.Lifetime,
             loggerCategory: "NotificationsDatabase",
-            seedAsync: SeedNotificationTemplatesAsync);
+            seedAsync: (db, ct) => SeedNotificationTemplatesAsync(db, nowUtc, ct));
 
         return app;
     }
 
-    private static async Task SeedNotificationTemplatesAsync(DbContext db, CancellationToken ct)
+    private static async Task SeedNotificationTemplatesAsync(DbContext db, DateTimeOffset nowUtc, CancellationToken ct)
     {
         var context = (NotificationsDbContext)db;
 
@@ -145,11 +152,11 @@ public static class NotificationsModuleExtensions
 
             if (existing is null)
             {
-                context.NotificationTemplates.Add(NotificationTemplate.Create(key, subject, body, true));
+                context.NotificationTemplates.Add(NotificationTemplate.Create(key, subject, body, true, nowUtc));
             }
             else
             {
-                existing.UpdateContent(subject, body, true);
+                existing.UpdateContent(subject, body, true, nowUtc);
             }
         }
 

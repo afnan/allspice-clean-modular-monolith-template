@@ -16,15 +16,17 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Jobs;
 /// </summary>
 public sealed class StalePendingNotificationsMonitorJob(
     INotificationRepository notificationRepository,
+    TimeProvider timeProvider,
     ILogger<StalePendingNotificationsMonitorJob> logger) : IJob
 {
     private readonly INotificationRepository _notificationRepository = notificationRepository;
+    private readonly TimeProvider _timeProvider = timeProvider;
     private readonly ILogger<StalePendingNotificationsMonitorJob> _logger = logger;
 
     public async Task Execute(IJobExecutionContext context)
     {
         var cancellationToken = context.CancellationToken;
-        var cutoff = DateTimeOffset.UtcNow.AddDays(-1);
+        var cutoff = _timeProvider.GetUtcNow().AddDays(-1);
 
         var pendingSpec = new PendingNotificationsSpecification(cutoff);
         var pendingCount = await _notificationRepository.CountAsync(pendingSpec, cancellationToken);

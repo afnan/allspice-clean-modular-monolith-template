@@ -12,7 +12,7 @@ public class NotificationTemplateRepositoryIntegrationTests
         await using var database = await TestSqliteDatabase.CreateAsync();
         var repository = new NotificationTemplateRepository(database.Context);
 
-        var template = NotificationTemplate.Create("welcome", "Subject", "Body", isHtml: true);
+        var template = NotificationTemplate.Create("welcome", "Subject", "Body", isHtml: true, nowUtc: DateTimeOffset.UtcNow);
         await repository.AddAsync(template, CancellationToken.None);
         // Repositories stage only; flush via the context (TransactionBehavior owns this in production).
         await database.Context.SaveChangesAsync(CancellationToken.None);

@@ -96,6 +96,29 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
   `result.ExecuteFailureAsync(HttpContext)` (status → RFC7807 ProblemDetails) instead of hand-rolling the switch.
 - Register the endpoint assembly in `GatewayServiceCollectionExtensions` (auto-discovery is off).
 
+**Authorization** (contracts in `Identity.Abstractions`; implementations in `Identity`)
+- Gate an endpoint with `Policies(PermissionPolicy.For("module:area.action"))` (FastEndpoints) or
+  `[HasPermission("module:area.action")]`; `PermissionPolicyProvider` and `PermissionAuthorizationHandler`
+  are wired automatically — no per-endpoint boilerplate beyond the policy name.
+- Per-entity ownership, tenant, or status checks: call
+  `IResourceAuthorizer.AuthorizeAsync(entity, AuthorizationActions.X, ct)` inside the command/query handler
+  and map `Result.Forbidden()` → 403 via `result.ExecuteFailureAsync(HttpContext)`. Keep `HttpContext` out of
+  handlers — pass the entity and let the authorizer resolve context from DI.
+- Never re-introduce a second authorization mechanism (`[Authorize(Roles=...)]`, custom middleware, etc.).
+  One model; see ADR-0008.
+- **Every permission key a module enforces must be declared in its `IModulePermissionManifest`** — this is the
+  only way the reconciler seeds the key as `IsSystem` and the arch-fitness test
+  (`PermissionKeyConsistencyTests`) can verify it. FastEndpoints `Policies(PermissionPolicy.For(...))` calls
+  in `Configure()` are runtime and not statically reflectable; covering them via the manifest is the
+  convention. `[HasPermission("...")]` attributes on types are reflectable and are checked directly by the
+  arch test — they also require a matching manifest entry.
+- **`Permissions` name collision inside FastEndpoints endpoints**: the static class
+  `Identity.Abstractions.Authorization.Permissions` (holding permission-key constants) shadows FastEndpoints'
+  inherited `Permissions(params string[])` method when referenced by its short name inside an endpoint's
+  `Configure()` method. Resolve with a using alias —
+  `using AuthzPermissions = AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization.Permissions;` —
+  or use a literal policy string via `PermissionPolicy.For("module:area.action")` instead.
+
 ---
 
 ## 4. DON'T — anti-patterns (these get rejected in review)
@@ -111,7 +134,11 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 - ❌ Hardcoded passwords/secrets/connection strings (including design-time and AppHost dev defaults that leak
   to non-dev).
 - ❌ Pinning package versions in individual `.csproj` files — versions live in `Directory.Packages.props`.
-- ❌ MVC controllers, `DateTime.Now` (use `DateTimeOffset.UtcNow`), broad `catch`-and-swallow, blanket `NoWarn`.
+- ❌ MVC controllers, broad `catch`-and-swallow, blanket `NoWarn`.
+- ❌ Reading the clock directly (`DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.UtcNow`) in domain/application/
+  infrastructure code. Inject **`TimeProvider`** and call `GetUtcNow()`; in domain aggregates take an explicit
+  `nowUtc` timestamp parameter sourced from it (so time is deterministic and testable). The only literal
+  `TimeProvider.System` lives at the composition root (`AddSharedKernelInterceptors`).
 - ❌ Relying on EF Core to auto-discover DI-registered `IInterceptor`s — it does **not**; attach explicitly (§6).
 - ❌ Adding a Claude/AI `Co-Authored-By` trailer to commits.
 
@@ -135,6 +162,22 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 from inside an `ITransactional` command; consume it with a Wolverine handler in the target module. Put shared
 event DTOs in a `*.Contracts` library.
 
+**Model a rich aggregate (DDD checklist)** — the template ships only Identity + Notifications (deliberately no
+sample business domain). When you add your own aggregate, follow this shape:
+- **Identity:** base on `Entity`/`AuditableEntity`/`SoftDeletableEntity`; mark the root `IAggregateRoot`. For a
+  typed key, derive from `Entity<TId>` with a `readonly record struct XxxId(Guid Value)` and map it in EF with
+  `builder.Property(x => x.Id).HasConversion(id => id.Value, v => new XxxId(v))`.
+- **Encapsulation:** `private` ctor + static factory (e.g. `Order.CreateDraft(...)`); child entities held in a
+  `private readonly List<T>` exposed as `IReadOnlyCollection<T>`; mutate only through aggregate methods.
+- **Invariants:** enforce with `Ardalis.GuardClauses` in the factory/methods; throw a `DomainException` subtype
+  (`BusinessRuleViolationException`, `ConflictException`, …) for rule breaks — they map to the right HTTP status
+  + a machine-readable `code`.
+- **Value objects** derive from `ValueObject` (e.g. `Money`); **closed sets** use `Ardalis.SmartEnum`.
+- **Time:** aggregate methods take an explicit `nowUtc` (the handler passes `TimeProvider.GetUtcNow()`).
+- **Events:** raise an in-process domain event via `RegisterDomainEvent(...)` (pass `nowUtc`); a same-module
+  `IDomainEventHandler<T>` may translate it into a cross-module integration event via `IIntegrationEventPublisher`
+  (only inside an `ITransactional` command). Add a bespoke `IXxxRepository` + `Ardalis.Specification` queries.
+
 **Add a migration**
 ```bash
 EF_DESIGN_DB_PASSWORD=<local-pg-pw> dotnet ef migrations add <Name> \
@@ -156,6 +199,7 @@ EF_DESIGN_DB_PASSWORD=<local-pg-pw> dotnet ef migrations add <Name> \
 | Cross-module messaging | `IIntegrationEventPublisher` (durable Wolverine outbox) |
 | Local↔external id | `IUserExternalIdResolver` |
 | Current user for audit | `ICurrentUserProvider` (HttpContext/claims impl in the gateway) |
+| Current time / clock | injected `TimeProvider` (`GetUtcNow()`); domain methods take an explicit `nowUtc` |
 | Audit stamping | `AuditableEntityInterceptor` (auto-wired via `AddSharedKernelInterceptors`) |
 | Concurrency debugging | `ConcurrencyDiagnosticInterceptor` (auto-wired) |
 | DB connectivity health | `DbContextHealthCheck<TContext>` |

@@ -1,0 +1,51 @@
+{
+  "realm": "{{ProjectNameLower}}",
+  "enabled": true,
+  "displayName": "{{ProjectName}}",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "Identity.Admin",
+        "description": "Grants access to the Identity module admin endpoints (GET /api/identity/users)."
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "erp-portal",
+      "name": "{{ProjectName}} ERP Portal (SPA)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:7001/*", "https://localhost:7001/*"],
+      "webOrigins": ["+"]
+    },
+    {
+      "clientId": "main-website",
+      "name": "{{ProjectName}} Main Website (SPA)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:7002/*", "https://localhost:7002/*"],
+      "webOrigins": ["+"]
+    },
+    {
+      "clientId": "identity-admin",
+      "name": "{{ProjectName}} Identity Admin (service account)",
+      "description": "Confidential client used by the KeycloakUserSyncJob (client-credentials).",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "CHANGE_ME_dev_only",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    }
+  ]
+}

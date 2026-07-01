@@ -17,6 +17,18 @@
          Aspire's StreamJsonRpc in the AppHost. Applied via a direct PackageReference there (transitive
          pinning is disabled repo-wide). Same 2.5.x line as the transitive; not on the shipped runtime path. -->
     <PackageVersion Include="MessagePack" Version="2.5.302" />
+    <!-- Security-patch overrides for transitive vulnerabilities (GHSA-v5pm-xwqc-g5wc).
+         Microsoft.OpenApi 2.0.0–2.7.4 is vulnerable (circular schema ref / DoS). 2.8.0 is outside the
+         affected range. Microsoft.AspNetCore.OpenApi 10.0.9 specifies >= 2.0.0; 2.8.0 is compatible.
+         Applied via a direct PackageReference in ApiGateway (which also fixes the UnitTests project via
+         the ProjectReference chain). -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.8.0" />
+    <!-- Security-patch override for SQLitePCLRaw.lib.e_sqlite3 (GHSA-2m69-gcr7-jv3q). All 2.x versions
+         (<= 2.1.11) are vulnerable; 3.50.3 is the first version outside the affected range. Applied via a
+         direct PackageReference in the SQLite-backed test projects. NU1608 is already globally suppressed.
+         The native SQLite ABI is backward compatible; SQLitePCLRaw.core 2.1.11 loads the DLL by name and
+         the 3.50.3 package still ships e_sqlite3 natives under the same name. -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageVersion Include="FluentValidation" Version="12.1.1" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.4.6" />
@@ -39,6 +51,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageVersion>
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" Version="10.0.9" />
@@ -67,6 +80,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
     <PackageVersion Include="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.9" />
+    <PackageVersion Include="StackExchange.Redis" Version="2.7.27" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
@@ -75,6 +89,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageVersion>
     <PackageVersion Include="Moq" Version="4.20.72" />
+    <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.12.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

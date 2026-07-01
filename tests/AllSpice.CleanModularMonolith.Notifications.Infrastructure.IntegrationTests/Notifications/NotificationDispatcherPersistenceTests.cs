@@ -29,6 +29,69 @@ public sealed class NotificationDispatcherPersistenceTests
             => Task.FromResult(Result.Success());
     }
 
+    /// <summary>
+    /// Regression guard for the opted-out infinite loop: when a user has opted out of a channel,
+    /// the dispatcher must cancel the notification (not leave it Pending) so it is not re-selected
+    /// by <c>DueNotificationsSpecification</c> on the next cycle.
+    /// </summary>
+    [Fact]
+    public async Task DispatchPendingAsync_cancels_notification_when_user_has_opted_out()
+    {
+        await using var database = await TestSqliteDatabase.CreateAsync();
+        var repository = new NotificationRepository(database.Context);
+        var preferenceRepository = new NotificationPreferenceRepository(database.Context);
+
+        var userId = Guid.NewGuid();
+        var channel = NotificationChannel.Email;
+
+        // Seed a notification for a user who has opted out of the Email channel.
+        var notification = Notification.Queue(
+            channel,
+            NotificationRecipient.Create(userId.ToString(), "user@example.com", null),
+            "Subject",
+            "Body",
+            templateKey: null,
+            metadataJson: null,
+            nowUtc: DateTimeOffset.UtcNow,
+            scheduledSendUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
+            correlationId: "corr-optout");
+        await repository.AddAsync(notification, CancellationToken.None);
+
+        // Seed the opt-out preference (IsEnabled = false).
+        var preference = NotificationPreference.Create(userId, channel, isEnabled: false, DateTimeOffset.UtcNow);
+        await preferenceRepository.AddAsync(preference, CancellationToken.None);
+
+        await database.Context.SaveChangesAsync(CancellationToken.None);
+
+        var contentBuilder = new Mock<INotificationContentBuilder>();
+        var outbox = new Mock<IDbContextOutbox>();
+        var dispatcher = new NotificationDispatcher(
+            repository,
+            database.Context,
+            [],
+            preferenceRepository,
+            contentBuilder.Object,
+            outbox.Object,
+            Microsoft.Extensions.Options.Options.Create(new NotificationDispatcherOptions()),
+            TimeProvider.System,
+            NullLogger<NotificationDispatcher>.Instance);
+
+        var processed = await dispatcher.DispatchPendingAsync(CancellationToken.None);
+
+        // The opted-out notification is NOT counted as delivered.
+        Assert.Equal(0, processed);
+
+        // Force a reload from the database — proves Cancel was persisted, not just mutated in memory.
+        // If still Pending, DueNotificationsSpecification would re-select it every cycle (the bug).
+        database.Context.ChangeTracker.Clear();
+        var reloaded = await database.Context.Notifications.SingleAsync();
+        Assert.Equal(NotificationStatus.Cancelled, reloaded.Status);
+
+        // The content builder and outbox must not have been touched — no delivery attempt was made.
+        contentBuilder.Verify(b => b.BuildAsync(It.IsAny<Notification>(), It.IsAny<CancellationToken>()), Times.Never);
+        outbox.Verify(o => o.PublishAsync(It.IsAny<object>(), It.IsAny<Wolverine.DeliveryOptions?>()), Times.Never);
+    }
+
     [Fact]
     public async Task DispatchPendingAsync_persists_the_delivered_status()
     {
@@ -44,6 +107,7 @@ public sealed class NotificationDispatcherPersistenceTests
             "Body",
             templateKey: null,
             metadataJson: null,
+            nowUtc: DateTimeOffset.UtcNow,
             scheduledSendUtc: DateTimeOffset.UtcNow.AddMinutes(-1),
             correlationId: "corr-1");
         await repository.AddAsync(notification, CancellationToken.None);
@@ -63,6 +127,7 @@ public sealed class NotificationDispatcherPersistenceTests
             contentBuilder.Object,
             outbox.Object,
             Microsoft.Extensions.Options.Options.Create(new NotificationDispatcherOptions()),
+            TimeProvider.System,
             NullLogger<NotificationDispatcher>.Instance);
 
         var processed = await dispatcher.DispatchPendingAsync(CancellationToken.None);

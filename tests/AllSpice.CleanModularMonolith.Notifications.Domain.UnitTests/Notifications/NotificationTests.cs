@@ -8,23 +8,31 @@ namespace AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests.Notificat
 
 public class NotificationTests
 {
+    private static readonly DateTimeOffset Now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
     private static NotificationRecipient CreateRecipient() =>
         NotificationRecipient.Create("user-123", "user@example.com", null);
 
-    [Fact]
-    public void Queue_RaisesQueuedDomainEvent()
-    {
-        var notification = Notification.Queue(
+    private static Notification Queue(DateTimeOffset? scheduledSend = null) =>
+        Notification.Queue(
             NotificationChannel.Email,
             CreateRecipient(),
             "Subject",
             "Body",
             null,
-            null);
+            null,
+            Now,
+            scheduledSend);
+
+    [Fact]
+    public void Queue_RaisesQueuedDomainEvent()
+    {
+        var notification = Queue();
 
         var domainEvent = Assert.Single(notification.DomainEvents);
         var queuedEvent = Assert.IsType<NotificationQueuedDomainEvent>(domainEvent);
         Assert.Equal(notification.Id, queuedEvent.NotificationId);
+        Assert.Equal(Now, queuedEvent.OccurredOnUtc);
     }
 
     [Fact]
@@ -36,7 +44,8 @@ public class NotificationTests
             string.Empty,
             string.Empty,
             "welcome-email",
-            null);
+            null,
+            Now);
 
         Assert.Equal("welcome-email", notification.TemplateKey);
         Assert.Equal(string.Empty, notification.Subject);
@@ -49,63 +58,38 @@ public class NotificationTests
     [InlineData(0)]
     public void IsReadyToDispatch_ReturnsTrue_WhenDue(int minutesOffset)
     {
-        var scheduledSend = DateTimeOffset.UtcNow.AddMinutes(minutesOffset);
-        var notification = Notification.Queue(
-            NotificationChannel.Email,
-            CreateRecipient(),
-            "Subject",
-            "Body",
-            null,
-            null,
-            scheduledSend);
+        var scheduledSend = Now.AddMinutes(minutesOffset);
+        var notification = Queue(scheduledSend);
 
-        Assert.True(notification.IsReadyToDispatch(DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.True(notification.IsReadyToDispatch(Now.AddMinutes(1)));
     }
 
     [Fact]
     public void IsReadyToDispatch_ReturnsFalse_WhenStatusNotPending()
     {
-        var notification = Notification.Queue(
-            NotificationChannel.Email,
-            CreateRecipient(),
-            "Subject",
-            "Body",
-            null,
-            null);
+        var notification = Queue();
 
-        notification.MarkDispatched();
+        notification.MarkDispatched(Now);
 
-        Assert.False(notification.IsReadyToDispatch(DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.False(notification.IsReadyToDispatch(Now.AddMinutes(1)));
     }
 
     [Fact]
     public void RecordAttempt_IncrementsAttemptCountAndTimestamps()
     {
-        var notification = Notification.Queue(
-            NotificationChannel.Email,
-            CreateRecipient(),
-            "Subject",
-            "Body",
-            null,
-            null);
+        var notification = Queue();
 
-        notification.RecordAttempt();
+        notification.RecordAttempt(Now);
 
         Assert.Equal(1, notification.AttemptCount);
-        Assert.NotNull(notification.LastAttemptedUtc);
+        Assert.Equal(Now, notification.LastAttemptedUtc);
         Assert.Equal(notification.LastAttemptedUtc, notification.LastUpdatedUtc);
     }
 
     [Fact]
     public void HandleFailure_SetsFailedStatus_WhenMaxAttemptsReached()
     {
-        var notification = Notification.Queue(
-            NotificationChannel.Email,
-            CreateRecipient(),
-            "Subject",
-            "Body",
-            null,
-            null);
+        var notification = Queue();
 
         var maxAttemptsField = typeof(Notification)
             .GetField("MaxDeliveryAttempts", BindingFlags.NonPublic | BindingFlags.Static);
@@ -113,10 +97,10 @@ public class NotificationTests
 
         for (var i = 0; i < maxAttempts; i++)
         {
-            notification.RecordAttempt();
+            notification.RecordAttempt(Now);
         }
 
-        notification.HandleFailure("fatal");
+        notification.HandleFailure("fatal", Now);
 
         Assert.Equal(NotificationStatus.Failed, notification.Status);
         Assert.Null(notification.NextAttemptUtc);
@@ -126,45 +110,30 @@ public class NotificationTests
     [Fact]
     public void HandleFailure_SchedulesRetry_WhenAttemptsRemain()
     {
-        var notification = Notification.Queue(
-            NotificationChannel.Email,
-            CreateRecipient(),
-            "Subject",
-            "Body",
-            null,
-            null);
+        var notification = Queue();
 
-        notification.RecordAttempt();
-        var beforeFailure = DateTimeOffset.UtcNow;
+        notification.RecordAttempt(Now);
 
-        notification.HandleFailure("temporary");
+        notification.HandleFailure("temporary", Now);
 
         Assert.Equal(NotificationStatus.Pending, notification.Status);
         Assert.Equal("temporary", notification.LastError);
         Assert.NotNull(notification.NextAttemptUtc);
-        Assert.True(notification.NextAttemptUtc > beforeFailure);
+        Assert.True(notification.NextAttemptUtc > Now);
     }
 
     [Fact]
     public void MarkDelivered_ResetsErrorAndNextAttempt()
     {
-        var notification = Notification.Queue(
-            NotificationChannel.Email,
-            CreateRecipient(),
-            "Subject",
-            "Body",
-            null,
-            null);
+        var notification = Queue();
 
-        notification.RecordAttempt();
-        notification.HandleFailure("temporary");
+        notification.RecordAttempt(Now);
+        notification.HandleFailure("temporary", Now);
 
-        notification.MarkDelivered();
+        notification.MarkDelivered(Now);
 
         Assert.Equal(NotificationStatus.Delivered, notification.Status);
         Assert.Null(notification.LastError);
         Assert.Null(notification.NextAttemptUtc);
     }
 }
-
-

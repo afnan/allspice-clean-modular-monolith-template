@@ -24,7 +24,7 @@ public class KeycloakUserSyncJobTests
         var keycloakOptions = Options.Create(new KeycloakOptions { Realm = "demo" }); // no base, no credentials
 
         var job = new KeycloakUserSyncJob(
-            scopeFactory.Object, syncOptions, keycloakOptions, NullLogger<KeycloakUserSyncJob>.Instance);
+            scopeFactory.Object, syncOptions, keycloakOptions, TimeProvider.System, NullLogger<KeycloakUserSyncJob>.Instance);
 
         var context = new Mock<IJobExecutionContext>();
 

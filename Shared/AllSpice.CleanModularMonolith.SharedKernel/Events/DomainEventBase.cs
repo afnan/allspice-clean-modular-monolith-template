@@ -5,10 +5,15 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.Events;
 /// </summary>
 public abstract class DomainEventBase : IDomainEvent
 {
-    protected DomainEventBase()
+    /// <summary>
+    /// Creates the event stamped with an explicit occurrence time. Prefer this overload and pass a time
+    /// sourced from the injected <see cref="TimeProvider"/> (e.g. the aggregate method received a
+    /// <c>nowUtc</c> parameter) so event timing is deterministic and testable.
+    /// </summary>
+    protected DomainEventBase(DateTimeOffset occurredOnUtc)
     {
         Id = Guid.NewGuid();
-        OccurredOnUtc = DateTimeOffset.UtcNow;
+        OccurredOnUtc = occurredOnUtc;
     }
 
     public Guid Id { get; }

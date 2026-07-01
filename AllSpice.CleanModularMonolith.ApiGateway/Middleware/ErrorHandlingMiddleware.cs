@@ -64,6 +64,12 @@ public class ErrorHandlingMiddleware(
 
         var isIdentityError = exception is IdentityServerUnreachableException;
 
+        // Machine-readable error code for clients/agents: domain exceptions carry their own stable Code;
+        // everything else is derived from the mapped status.
+        var code = exception is DomainException domainException
+            ? domainException.Code
+            : CodeForStatus(statusCode);
+
         // RFC7807: members (incl. extensions like correlationId/errors) live at the ROOT object, matching
         // the validation-problem shape returned by the mediator/FastEndpoints path. We build a flat dictionary
         // rather than nesting under an "extensions" object (which the previous shape did, diverging from RFC7807).
@@ -81,7 +87,8 @@ public class ErrorHandlingMiddleware(
                 ? $"{exception.GetType().Name}: {exception.Message.Truncate(512)}"
                 : (isIdentityError ? "The identity provider is unreachable. Please try again later." : "An error occurred while processing your request."),
             ["instance"] = context.Request.Path.Value,
-            ["correlationId"] = correlationId
+            ["correlationId"] = correlationId,
+            ["code"] = code
         };
 
         // Surface field-level validation errors so clients get actionable 400s. This is the defensive
@@ -105,4 +112,17 @@ public class ErrorHandlingMiddleware(
         context.Response.StatusCode = (int)statusCode;
         return context.Response.WriteAsync(result);
     }
+
+    private static string CodeForStatus(HttpStatusCode statusCode) => statusCode switch
+    {
+        HttpStatusCode.NotFound => "not_found",
+        HttpStatusCode.BadRequest => "bad_request",
+        HttpStatusCode.Unauthorized => "unauthorized",
+        HttpStatusCode.Forbidden => "forbidden",
+        HttpStatusCode.Conflict => "conflict",
+        HttpStatusCode.UnprocessableEntity => "unprocessable_entity",
+        HttpStatusCode.RequestTimeout => "request_timeout",
+        HttpStatusCode.ServiceUnavailable => "service_unavailable",
+        _ => "internal_error"
+    };
 }

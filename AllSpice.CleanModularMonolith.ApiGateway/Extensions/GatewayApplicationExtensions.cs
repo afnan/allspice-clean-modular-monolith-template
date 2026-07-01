@@ -56,6 +56,10 @@ public static class GatewayApplicationExtensions
         // stamping records the local UUID. Must run after authentication populates HttpContext.User.
         app.UseMiddleware<CurrentUserResolutionMiddleware>();
 
+        // Opt-in HTTP idempotency for POST/PUT/PATCH carrying an Idempotency-Key header. Runs after auth so
+        // the cache key can be scoped to the subject; wraps endpoint execution to capture/replay the response.
+        app.UseMiddleware<IdempotencyMiddleware>();
+
         app.UseFastEndpoints();
     }
 

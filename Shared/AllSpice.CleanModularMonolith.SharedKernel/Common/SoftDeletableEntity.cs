@@ -15,7 +15,7 @@ public abstract class SoftDeletableEntity<TId> : AuditableEntity<TId>, ISoftDele
 
     public string? DeletedBy { get; private set; }
 
-    public void MarkDeleted(string? userId)
+    public void MarkDeleted(string? userId, DateTimeOffset deletedOnUtc)
     {
         if (IsDeleted)
         {
@@ -23,7 +23,7 @@ public abstract class SoftDeletableEntity<TId> : AuditableEntity<TId>, ISoftDele
         }
 
         IsDeleted = true;
-        DeletedOnUtc = DateTimeOffset.UtcNow;
+        DeletedOnUtc = deletedOnUtc;
         DeletedBy = userId;
     }
 

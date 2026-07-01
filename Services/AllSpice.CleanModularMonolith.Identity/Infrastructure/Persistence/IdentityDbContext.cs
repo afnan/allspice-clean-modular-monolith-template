@@ -1,3 +1,4 @@
+using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Entities;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
@@ -22,6 +23,11 @@ public sealed class IdentityDbContext : DbContext, IModuleDbContext
     DbContext IModuleDbContext.Instance => this;
 
     public DbSet<User> Users => Set<User>();
+
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<AuthzMapVersion> AuthzMapVersions => Set<AuthzMapVersion>();
 
     public DbSet<IdentitySyncHistory> IdentitySyncHistories => Set<IdentitySyncHistory>();
 

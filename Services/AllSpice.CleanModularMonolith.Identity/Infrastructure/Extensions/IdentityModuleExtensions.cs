@@ -1,7 +1,13 @@
 using System.Net.Http;
+using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
+using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Authorization;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using StackExchange.Redis;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Services;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Jobs;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
+using AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +24,10 @@ public static class IdentityModuleExtensions
 {
     private const string DatabaseResourceName = "identitydb";
     internal const string KeycloakHttpClientName = "keycloak-directory";
+
+    // FNV-1a-inspired stable 64-bit key: "AUTHZREC" in ASCII hex. Shared between the reconcile and bootstrap
+    // steps; held for the duration of both so concurrent replicas cannot race on unique-constrained rows.
+    private const long AdvisoryLockKey = 0x4155_5448_5A52_4543;
 
     /// <summary>
     /// Registers identity module services including persistence, external directory integration, and authorization helpers.
@@ -55,16 +65,55 @@ public static class IdentityModuleExtensions
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<IdentityDbContext>());
 
         builder.Services.AddScoped<IUserRepository, UserRepository>();
+        builder.Services.AddScoped<IPermissionRepository, PermissionRepository>();
+        builder.Services.AddScoped<IRoleRepository, RoleRepository>();
+        builder.Services.AddScoped<IRolePermissionRepository, RolePermissionRepository>();
+        builder.Services.AddScoped<IAuthzMapVersionRepository, AuthzMapVersionRepository>();
+        builder.Services.AddScoped<IPermissionMapStore, PermissionMapStore>();
+
+        // Permission map cache (singleton) + per-request permission resolver (scoped).
+        // AddHttpContextAccessor uses TryAdd — safe to call even if the gateway registered it already.
+        // AddMemoryCache also uses TryAdd — no double-registration risk.
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddMemoryCache();
+        builder.Services.AddSingleton<IPermissionMapCache, PermissionMapCache>();
+
+        // Register the best-effort cache invalidator. When a Redis connection string is present, publish a
+        // pub-sub nudge so EVERY replica drops its cached map near-instantly; otherwise, evict in-process
+        // only (single-node correctness). The 60s TTL on PermissionMapCache is the backstop in both cases.
+        var redisConnectionString = builder.Configuration.GetConnectionString("redis");
+        if (!string.IsNullOrEmpty(redisConnectionString))
+        {
+            var parsedRedis = redisConnectionString.StartsWith("redis://", StringComparison.OrdinalIgnoreCase)
+                ? redisConnectionString["redis://".Length..]
+                : redisConnectionString;
+            builder.Services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(parsedRedis));
+            builder.Services.AddSingleton<IAuthzCacheInvalidator, RedisAuthzCacheInvalidator>();
+            builder.Services.AddHostedService<AuthzCacheEvictionSubscriber>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IAuthzCacheInvalidator, InProcessAuthzCacheInvalidator>();
+        }
+
+        builder.Services.AddScoped<ICurrentUserPermissions, CurrentUserPermissions>();
+        builder.Services.AddScoped<IAuthorizationContext, AuthorizationContext>();
+        builder.Services.AddScoped<IResourceAuthorizer, ResourceAuthorizer>();
 
         // New services
         builder.Services.AddScoped<IUserLookupService, UserLookupService>();
         builder.Services.AddScoped<IUserAccessService, UserAccessService>();
         builder.Services.AddScoped<IUserExternalIdResolver, UserLookupService>();
+        builder.Services.AddScoped<AuthorizationCatalogReconciler>();
+        builder.Services.AddScoped<AuthorizationBootstrapper>();
+
+        builder.Services
+            .AddOptions<AuthorizationOptions>()
+            .Bind(builder.Configuration.GetSection(AuthorizationOptions.SectionName));
 
         builder.Services.AddMediator();
 
         builder.Services.AddValidatorsFromAssembly(AppAssemblyReference.Assembly);
-        builder.Services.AddModuleRoleAuthorization();
 
         builder.Services
             .AddOptions<KeycloakOptions>()
@@ -89,6 +138,10 @@ public static class IdentityModuleExtensions
             .ConfigurePrimaryHttpMessageHandler(CreateKeycloakHandler);
 
         builder.Services.AddHttpClient<KeycloakDirectoryClient>(ConfigureKeycloakClient)
+            .AddHttpMessageHandler<KeycloakTokenHandler>()
+            .ConfigurePrimaryHttpMessageHandler(CreateKeycloakHandler);
+
+        builder.Services.AddHttpClient<KeycloakRoleClient>(ConfigureKeycloakClient)
             .AddHttpMessageHandler<KeycloakTokenHandler>()
             .ConfigurePrimaryHttpMessageHandler(CreateKeycloakHandler);
 
@@ -122,8 +175,18 @@ public static class IdentityModuleExtensions
             q.AddTrigger(opts => opts
                 .ForJob(jobKey)
                 .WithIdentity($"{KeycloakUserSyncJob.JobIdentity}-trigger")
-                .WithCronSchedule(cronExpression, builder =>
-                    builder.InTimeZone(TimeZoneInfo.Utc)));
+                .WithCronSchedule(cronExpression, b =>
+                    b.InTimeZone(TimeZoneInfo.Utc)));
+
+            var roleSyncJobKey = new JobKey(RoleSyncJob.JobIdentity);
+
+            q.AddJob<RoleSyncJob>(opts => opts.WithIdentity(roleSyncJobKey));
+
+            q.AddTrigger(opts => opts
+                .ForJob(roleSyncJobKey)
+                .WithIdentity($"{RoleSyncJob.JobIdentity}-trigger")
+                .WithCronSchedule(cronExpression, b =>
+                    b.InTimeZone(TimeZoneInfo.Utc)));
         });
     }
 
@@ -176,6 +239,77 @@ public static class IdentityModuleExtensions
             app.Services,
             app.Lifetime,
             loggerCategory: "IdentityDatabase");
+
+        return app;
+    }
+
+    /// <summary>
+    /// Seeds any missing code-referenced permission keys as <c>IsSystem</c>, warns about
+    /// orphan system permissions, and bootstraps the platform-admin role. Idempotent; safe
+    /// to call on every startup. Must be invoked after
+    /// <see cref="EnsureIdentityModuleDatabaseAsync"/> so the schema exists.
+    /// </summary>
+    /// <remarks>
+    /// On PostgreSQL the entire reconcile + bootstrap sequence runs under a session-scoped
+    /// advisory lock (key <see cref="AdvisoryLockKey"/>) so concurrent replicas cold-starting
+    /// together cannot race on the unique indexes on <c>Permission.Key</c>, <c>Role.Key</c>,
+    /// or <c>RolePermission(RoleId, PermissionId)</c>. The lock is skipped on non-Npgsql
+    /// providers (e.g. SQLite in integration tests). The lock is released in a
+    /// <c>finally</c> block with <see cref="CancellationToken.None"/> so it is always
+    /// freed even when <c>ApplicationStopping</c> fires.
+    /// </remarks>
+    /// <param name="app">The web application instance.</param>
+    /// <returns>The application instance to continue fluent configuration.</returns>
+    public static async Task<WebApplication> ReconcileAuthorizationCatalogAsync(this WebApplication app)
+    {
+        var ct = app.Lifetime.ApplicationStopping;
+        await using var scope = app.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var reconciler = scope.ServiceProvider.GetRequiredService<AuthorizationCatalogReconciler>();
+        var bootstrapper = scope.ServiceProvider.GetRequiredService<AuthorizationBootstrapper>();
+
+        var isNpgsql = dbContext.Database.IsNpgsql();
+        // Track exactly what we opened/acquired so the finally only cleans up what actually succeeded.
+        // Otherwise, if OpenConnectionAsync throws (DB unreachable), an unconditional pg_advisory_unlock
+        // in the finally would reopen the connection, throw AGAIN, and mask the original startup exception.
+        var connectionOpened = false;
+        var lockAcquired = false;
+
+        try
+        {
+            // Open the connection and acquire the advisory lock INSIDE the try so a throw from either is
+            // caught and the finally still runs its (now guarded) cleanup.
+            if (isNpgsql)
+            {
+                await dbContext.Database.OpenConnectionAsync(ct);
+                connectionOpened = true;
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    $"SELECT pg_advisory_lock({AdvisoryLockKey})", ct);
+                lockAcquired = true;
+            }
+
+            // Reconciler saves first so the bootstrapper's GetByKeyAsync queries see the seeded permissions.
+            await reconciler.ReconcileAsync(ct);
+            await bootstrapper.BootstrapAsync(ct);
+            await dbContext.SaveChangesAsync(ct);
+        }
+        finally
+        {
+            // Release the lock with a non-cancellable token: cleanup in a finally must run even when the
+            // caller's token (ApplicationStopping) has fired, or the session-level advisory lock would stay
+            // held on the pooled connection past shutdown. Only unlock if we actually acquired it, and only
+            // close if we actually opened — so a connect failure propagates its real exception unmasked.
+            if (lockAcquired)
+            {
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    $"SELECT pg_advisory_unlock({AdvisoryLockKey})", CancellationToken.None);
+            }
+
+            if (connectionOpened)
+            {
+                await dbContext.Database.CloseConnectionAsync();
+            }
+        }
 
         return app;
     }

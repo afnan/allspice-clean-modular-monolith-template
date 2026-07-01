@@ -1,0 +1,25 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# IDE / tooling
+.vs/
+.vscode/
+.idea/
+.serena/
+
+# VCS
+.git/
+.gitignore
+
+# Maintainer-only (not needed in the image)
+docs/superpowers/
+TODOS.md
+CLAUDE.md
+
+# Local env / secrets
+**/*.user
+**/appsettings.*.local.json
+*.env

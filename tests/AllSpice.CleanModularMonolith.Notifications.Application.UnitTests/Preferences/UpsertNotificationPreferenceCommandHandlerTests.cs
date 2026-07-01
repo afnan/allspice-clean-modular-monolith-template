@@ -22,7 +22,7 @@ public class UpsertNotificationPreferenceCommandHandlerTests
             .Setup(repository => repository.UpdateAsync(It.IsAny<NotificationPreference>(), It.IsAny<CancellationToken>()))
             .Returns(Task.FromResult(1));
 
-        _handler = new UpsertNotificationPreferenceCommandHandler(_repositoryMock.Object);
+        _handler = new UpsertNotificationPreferenceCommandHandler(_repositoryMock.Object, TimeProvider.System);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class UpsertNotificationPreferenceCommandHandlerTests
     [Fact]
     public async Task Handle_UpdatesPreference_WhenExisting()
     {
-        var existing = NotificationPreference.Create(SampleUserId, NotificationChannel.Email, true);
+        var existing = NotificationPreference.Create(SampleUserId, NotificationChannel.Email, true, DateTimeOffset.UtcNow);
         _repositoryMock
             .Setup(repository => repository.GetByUserAndChannelAsync(existing.UserId, existing.Channel, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existing);

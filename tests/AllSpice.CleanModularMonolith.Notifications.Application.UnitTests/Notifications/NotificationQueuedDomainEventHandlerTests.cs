@@ -16,7 +16,7 @@ public class NotificationQueuedDomainEventHandlerTests
         var handler = new NotificationQueuedDomainEventHandler(loggerMock.Object);
 
         var notificationId = Guid.NewGuid();
-        var domainEvent = new NotificationQueuedDomainEvent(notificationId, "user-123", "Email");
+        var domainEvent = new NotificationQueuedDomainEvent(notificationId, "user-123", "Email", DateTimeOffset.UtcNow);
 
         await handler.Handle(domainEvent, CancellationToken.None);
 

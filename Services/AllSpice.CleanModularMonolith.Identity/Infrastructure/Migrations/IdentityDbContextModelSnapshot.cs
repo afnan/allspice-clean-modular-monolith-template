@@ -17,10 +17,123 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("Relational:MaxIdentifierLength", 63)
+                .HasAnnotation("WolverineEnabled", "true");
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.AuthzMapVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("authz_map_version", (string)null);
+                });
+
+            modelBuilder.Entity("AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.Permission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastModifiedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("authz_permissions", (string)null);
+                });
+
+            modelBuilder.Entity("AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.Role", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastModifiedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("authz_roles", (string)null);
+                });
+
+            modelBuilder.Entity("AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.RolePermission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PermissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PermissionId");
+
+                    b.HasIndex("RoleId");
+
+                    b.HasIndex("RoleId", "PermissionId")
+                        .IsUnique();
+
+                    b.ToTable("authz_role_permissions", (string)null);
+                });
 
             modelBuilder.Entity("AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User.User", b =>
                 {
@@ -183,6 +296,113 @@ namespace AllSpice.CleanModularMonolith.Identity.Infrastructure.Migrations
                     b.HasIndex("IssueType", "ResolvedUtc");
 
                     b.ToTable("IdentitySyncIssues", (string)null);
+                });
+
+            modelBuilder.Entity("Wolverine.EntityFrameworkCore.Internals.IncomingMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<byte[]>("Body")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset?>("ExecutionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("execution_time");
+
+                    b.Property<DateTimeOffset?>("KeepUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("keep_until");
+
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message_type");
+
+                    b.Property<int>("OwnerId")
+                        .HasColumnType("integer")
+                        .HasColumnName("owner_id");
+
+                    b.Property<string>("ReceivedAt")
+                        .HasColumnType("text")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("wolverine_incoming_envelopes", "wolverine", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("Wolverine.EntityFrameworkCore.Internals.OutgoingMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<byte[]>("Body")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset?>("DeliverBy")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deliver_by");
+
+                    b.Property<string>("Destination")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("destination");
+
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message_type");
+
+                    b.Property<int>("OwnerId")
+                        .HasColumnType("integer")
+                        .HasColumnName("owner_id");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("wolverine_outgoing_envelopes", "wolverine", t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.RolePermission", b =>
+                {
+                    b.HasOne("AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.Permission", null)
+                        .WithMany()
+                        .HasForeignKey("PermissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization.Role", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User.User", b =>

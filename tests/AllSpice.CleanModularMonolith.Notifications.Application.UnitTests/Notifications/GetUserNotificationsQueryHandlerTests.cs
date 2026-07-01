@@ -33,7 +33,8 @@ public class GetUserNotificationsQueryHandlerTests
             "Subject",
             "Body",
             null,
-            null);
+            null,
+            DateTimeOffset.UtcNow);
         notification.ClearDomainEvents();
         var notifications = new List<Notification> { notification };
 

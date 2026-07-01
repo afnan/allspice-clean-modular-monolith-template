@@ -17,7 +17,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.100-rc.2.25502.107
+          dotnet-version: 10.0.x
 
       - name: Restore
         run: dotnet restore AllSpice.CleanModularMonolith.slnx
@@ -25,7 +25,55 @@ jobs:
       - name: Build
         run: dotnet build AllSpice.CleanModularMonolith.slnx --no-restore --configuration Release
 
+      # Runs unit + integration (Testcontainers/Postgres works on GitHub-hosted runners) + the
+      # architecture-fitness tests, and collects coverage.
       - name: Test
-        run: dotnet test AllSpice.CleanModularMonolith.slnx --no-build --configuration Release
+        run: >
+          dotnet test AllSpice.CleanModularMonolith.slnx --no-build --configuration Release
+          --collect:"XPlat Code Coverage"
+          --results-directory ./TestResults
 
+      - name: Coverage report
+        if: always()
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          reportgenerator \
+            -reports:'./TestResults/**/coverage.cobertura.xml' \
+            -targetdir:./CoverageReport \
+            -reporttypes:'Html;TextSummary;MarkdownSummaryGithub'
+          cat ./CoverageReport/Summary.txt
+          if [ -f ./CoverageReport/SummaryGithub.md ]; then
+            cat ./CoverageReport/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./CoverageReport
+
+  security-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore AllSpice.CleanModularMonolith.slnx
+
+      # Fail the build on any KNOWN-vulnerable package (direct or transitive). Build-time NuGetAudit already
+      # warns (and warnings are errors), but this catches advisories published after the last build too.
+      - name: Audit vulnerable packages
+        run: |
+          dotnet list AllSpice.CleanModularMonolith.slnx package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+          if grep -q -E "Critical|High|Moderate|Low" vulnerable.txt; then
+            echo "::error::Vulnerable NuGet packages detected. See the log above."
+            exit 1
+          fi

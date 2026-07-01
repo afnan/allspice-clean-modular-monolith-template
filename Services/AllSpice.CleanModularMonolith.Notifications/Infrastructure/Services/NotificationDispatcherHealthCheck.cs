@@ -10,12 +10,14 @@ namespace AllSpice.CleanModularMonolith.Notifications.Infrastructure.Services;
 /// </summary>
 public sealed class NotificationDispatcherHealthCheck(
     NotificationDispatcherHealthState state,
-    IOptions<NotificationDispatcherOptions> options) : IHealthCheck
+    IOptions<NotificationDispatcherOptions> options,
+    TimeProvider timeProvider) : IHealthCheck
 {
     private const int StaleMultiplier = 3;
 
     private readonly NotificationDispatcherHealthState _state = state;
     private readonly IOptions<NotificationDispatcherOptions> _options = options;
+    private readonly TimeProvider _timeProvider = timeProvider;
 
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
@@ -40,7 +42,7 @@ public sealed class NotificationDispatcherHealthCheck(
                 data: data));
         }
 
-        var age = DateTimeOffset.UtcNow - snapshot.LastRunUtc.Value;
+        var age = _timeProvider.GetUtcNow() - snapshot.LastRunUtc.Value;
         if (age > staleAfter)
         {
             return Task.FromResult(HealthCheckResult.Unhealthy(
