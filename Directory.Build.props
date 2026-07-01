@@ -9,16 +9,16 @@
         <!-- Remove this to turn on warnings for missing XML Comments -->
     </PropertyGroup>
     <!--
-      Suppress NuGet audit advisories for transitive packages that are NOT on the shipped runtime path,
-      so `TreatWarningsAsErrors` doesn't fail the build on dependencies we don't control. Auditing stays
-      on for everything else. Revisit when an upstream fix ships, or pin a fixed version instead.
-        - GHSA-2m69-gcr7-jv3q  SQLitePCLRaw.lib.e_sqlite3: transitive via EF Core SQLite in the
-          integration-test project only (test-time).
-      MessagePack's advisories (also transitive via the Aspire AppHost's StreamJsonRpc) are handled by
+      MessagePack's advisories (transitive via the Aspire AppHost's StreamJsonRpc) are handled by
       PINNING MessagePack to a patched version in the AppHost — see that .csproj — not by suppression, so a
       future regression below the fix would be caught by the audit rather than silently masked.
+
+      SQLitePCLRaw.lib.e_sqlite3 (GHSA-2m69-gcr7-jv3q, <= 2.1.11 affected) was previously suppressed here.
+      It is now PINNED to 3.50.3 via direct PackageReferences in the SQLite-backed test projects and a
+      PackageVersion entry in Directory.Packages.props — NuGetAuditSuppress removed to keep the audit strict.
+
+      Microsoft.OpenApi (GHSA-v5pm-xwqc-g5wc, >= 2.0.0-preview11 and <= 2.7.4 affected) is PINNED to 2.8.0
+      via a direct PackageReference in ApiGateway.csproj — compatible with Microsoft.AspNetCore.OpenApi 10.0.9
+      which specifies a >= 2.0.0 minimum.
     -->
-    <ItemGroup>
-        <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
-    </ItemGroup>
 </Project>
