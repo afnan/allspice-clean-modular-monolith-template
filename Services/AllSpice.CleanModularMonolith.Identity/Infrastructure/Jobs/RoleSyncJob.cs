@@ -4,6 +4,8 @@ using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Options;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Services;
+using AllSpice.CleanModularMonolith.SharedKernel.Exceptions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -74,9 +76,15 @@ public sealed class RoleSyncJob(
             await dbContext.SaveChangesAsync(context.CancellationToken);
             _logger.LogInformation("Synced realm roles: {Added} new, {Total} total", addedCount, uniqueRoleNames.Count);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TimeoutException or JsonException or KeyNotFoundException)
+        catch (Exception ex) when (ex is HttpRequestException or TimeoutException or JsonException or KeyNotFoundException or IdentityServerUnreachableException)
         {
             _logger.LogWarning(ex, "Role sync failed transiently; will retry on next trigger.");
+        }
+        catch (DbUpdateException ex)
+        {
+            // Another node's scheduler inserted the same realm role concurrently (unique index on Role.Key).
+            // Benign: the role now exists, so the next trigger is a no-op. Don't fail the job.
+            _logger.LogWarning(ex, "Role sync hit a concurrent insert; treating as benign and retrying next trigger.");
         }
     }
 }

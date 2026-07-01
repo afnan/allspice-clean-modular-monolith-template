@@ -15,27 +15,20 @@ public sealed class UpsertNotificationPreferenceCommandHandler(
 
     public async ValueTask<Result> Handle(UpsertNotificationPreferenceCommand request, CancellationToken cancellationToken)
     {
-        try
-        {
-            var existing = await _preferenceRepository.GetByUserAndChannelAsync(request.UserId, request.Channel, cancellationToken);
+        var existing = await _preferenceRepository.GetByUserAndChannelAsync(request.UserId, request.Channel, cancellationToken);
 
-            if (existing is null)
-            {
-                var preference = NotificationPreference.Create(request.UserId, request.Channel, request.IsEnabled, _timeProvider.GetUtcNow());
-                await _preferenceRepository.AddAsync(preference, cancellationToken);
-            }
-            else
-            {
-                existing.Update(request.IsEnabled, _timeProvider.GetUtcNow());
-                await _preferenceRepository.UpdateAsync(existing, cancellationToken);
-            }
-
-            return Result.Success();
-        }
-        catch (Exception ex)
+        if (existing is null)
         {
-            return Result.Error(ex.Message);
+            var preference = NotificationPreference.Create(request.UserId, request.Channel, request.IsEnabled, _timeProvider.GetUtcNow());
+            await _preferenceRepository.AddAsync(preference, cancellationToken);
         }
+        else
+        {
+            existing.Update(request.IsEnabled, _timeProvider.GetUtcNow());
+            await _preferenceRepository.UpdateAsync(existing, cancellationToken);
+        }
+
+        return Result.Success();
     }
 }
 

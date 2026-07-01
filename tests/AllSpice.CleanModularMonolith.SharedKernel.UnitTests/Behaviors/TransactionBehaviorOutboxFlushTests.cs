@@ -78,7 +78,7 @@ public sealed class TransactionBehaviorOutboxFlushTests : IDisposable
     }
 
     private TransactionBehavior<FakeCommand, string> CreateBehavior(IOutboxFlusher flusher) =>
-        new([_db], Mock.Of<IDomainEventDispatcher>(), [flusher],
+        new([_db], Mock.Of<IDomainEventDispatcher>(), [flusher], new PostCommitActions(),
             NullLogger<TransactionBehavior<FakeCommand, string>>.Instance);
 
     private MessageHandlerDelegate<FakeCommand, string> StageARow(string name) =>

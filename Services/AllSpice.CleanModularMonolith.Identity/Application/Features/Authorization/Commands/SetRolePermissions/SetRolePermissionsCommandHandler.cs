@@ -1,6 +1,7 @@
 using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization;
+using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 using Ardalis.Result;
 using Mediator;
 
@@ -11,7 +12,8 @@ public sealed class SetRolePermissionsCommandHandler(
     IRolePermissionRepository rolePermissionRepository,
     IPermissionRepository permissionRepository,
     IAuthzMapVersionRepository versionRepository,
-    IAuthzCacheInvalidator cacheInvalidator)
+    IAuthzCacheInvalidator cacheInvalidator,
+    IPostCommitActions postCommitActions)
     : IRequestHandler<SetRolePermissionsCommand, Result>
 {
     private readonly IRoleRepository _roleRepository = roleRepository;
@@ -19,6 +21,7 @@ public sealed class SetRolePermissionsCommandHandler(
     private readonly IPermissionRepository _permissionRepository = permissionRepository;
     private readonly IAuthzMapVersionRepository _versionRepository = versionRepository;
     private readonly IAuthzCacheInvalidator _cacheInvalidator = cacheInvalidator;
+    private readonly IPostCommitActions _postCommitActions = postCommitActions;
 
     public async ValueTask<Result> Handle(SetRolePermissionsCommand command, CancellationToken cancellationToken)
     {
@@ -53,7 +56,7 @@ public sealed class SetRolePermissionsCommandHandler(
         var existingPermissionIds = existing.Select(rp => rp.PermissionId).ToHashSet();
 
         var toRemove = existing.Where(rp => !desiredPermissionIds.Contains(rp.PermissionId)).ToList();
-        var toAdd = newMappings.Where(m => !existingPermissionIds.Contains(m.PermissionId)).ToList();
+        var toAdd = newMappings.Where(m => !existingPermissionIds.Contains(m.PermissionId)).DistinctBy(m => m.PermissionId).ToList();
 
         if (toRemove.Count == 0 && toAdd.Count == 0)
         {
@@ -67,7 +70,10 @@ public sealed class SetRolePermissionsCommandHandler(
         }
 
         (await _versionRepository.GetTrackedAsync(cancellationToken)).Bump();
-        await _cacheInvalidator.InvalidateAsync(cancellationToken);
+        // Evict AFTER the transaction commits (TransactionBehavior drains this) — invalidating inline would
+        // publish the eviction before the version bump + rows are durable, letting a concurrent read re-cache
+        // the stale map until the TTL backstop.
+        _postCommitActions.Enqueue(ct => _cacheInvalidator.InvalidateAsync(ct));
         return Result.Success();
     }
 }

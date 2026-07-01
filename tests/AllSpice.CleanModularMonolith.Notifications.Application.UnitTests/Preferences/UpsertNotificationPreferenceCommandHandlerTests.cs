@@ -73,17 +73,18 @@ public class UpsertNotificationPreferenceCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_ReturnsError_WhenRepositoryThrows()
+    public async Task Handle_PropagatesException_WhenRepositoryThrows()
     {
+        // The handler no longer swallows exceptions into a client-facing Result.Error — that leaked raw
+        // exception text and turned transient DB faults into permanent 400s. Faults must propagate so the
+        // pipeline behaviors classify them (consistent with QueueNotificationCommandHandler).
         _repositoryMock
             .Setup(repository => repository.GetByUserAndChannelAsync(It.IsAny<Guid>(), It.IsAny<NotificationChannel>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("database down"));
 
         var command = new UpsertNotificationPreferenceCommand(SampleUserId, NotificationChannel.Email, true);
 
-        var result = await _handler.Handle(command, CancellationToken.None);
-
-        Assert.Equal(ResultStatus.Error, result.Status);
-        Assert.Contains("database down", result.Errors.Single());
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _handler.Handle(command, CancellationToken.None).AsTask());
     }
 }

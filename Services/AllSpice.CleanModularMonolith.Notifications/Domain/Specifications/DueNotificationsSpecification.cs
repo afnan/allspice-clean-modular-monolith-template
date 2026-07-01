@@ -30,6 +30,7 @@ public sealed class DueNotificationsSpecification : Specification<Notification>
                  notification.LastUpdatedUtc != null &&
                  notification.LastUpdatedUtc <= reclaimBefore))
              .OrderBy(notification => notification.CreatedUtc)
+             .ThenBy(notification => notification.Id)
              .Take(take);
     }
 }

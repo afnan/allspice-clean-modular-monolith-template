@@ -2,10 +2,30 @@
 
 A production-ready .NET 10 modular monolith template (`dotnet new allspice-modular`) using Clean Architecture, CQRS, and event-driven patterns. Ships with full Keycloak integration, multi-provider email delivery, PuppeteerSharp PDF generation, and a complete Identity + Notifications module stack.
 
+## Why this template
+
+Most starters give you folders. This one encodes the decisions **and enforces them**:
+
+- **0-warning builds, enforced.** `TreatWarningsAsErrors=true` plus **architecture-fitness tests** (NetArchTest)
+  that fail the build when a module reaches across a boundary or a permission key drifts from its registry. The
+  golden rules are executable, not aspirational.
+- **Correct-by-construction cross-module messaging.** A **co-located transactional outbox** per module (Wolverine)
+  publishes an integration event only if its transaction commits — no dual-write races, no lost events.
+- **Deterministic and testable.** `TimeProvider`-based clock everywhere (no hidden `DateTime.UtcNow`), so time is
+  injectable and tests don't flake on the wall clock.
+- **Safe by default at the edges.** HTTP idempotency (`Idempotency-Key`) for retry-safe writes, RFC7807 problem
+  responses with machine-readable `code`s, and PII-safe logging (`[SensitiveData]` redaction in the pipeline).
+- **Boots without its dependencies.** Keycloak, Redis, and email providers are optional at startup — the app comes
+  up `Degraded` rather than dead and self-heals when they appear, so a freshly generated project runs on
+  `dotnet run` before you've wired anything.
+- **Decisions are written down.** Every non-obvious choice has an **ADR** under `docs/adr/`; the prescriptive agent
+  rules (`AGENTS.md`) and architecture reference (`ARCHITECTURE.md`) ship with each generated project.
+
 ## Features
 
 - **API Gateway with YARP** for routing, Redis output caching, and JWT validation
 - **Identity module** with Keycloak Admin API integration — user sync/mirroring, role management, client credentials token caching (auth-agnostic: the IdP provisions users via direct admin or SSO/SAML)
+- **Permission-based authorization (RBAC)** — app-owned permission catalog + role→permission map. Declarative `[HasPermission("key")]` endpoint gates (dynamic `IAuthorizationPolicyProvider`), plus an `IResourceAuthorizer` facade for ownership/tenant/status rules that keeps `HttpContext` out of handlers. Roles sync from Keycloak; mappings are admin-editable at runtime and propagate across replicas via a Redis pub-sub eviction nudge (60s TTL backstop + in-process fallback). Code-referenced keys are seeded `IsSystem` (deletion-protected) so an admin can never lock everyone out — see [ADR-0008](docs/adr/0008-in-app-permission-based-authorization.md)
 - **Notifications module** with Resend/SendGrid providers (MailKit/Papercut for local dev), HTML email templates (embedded resources), SignalR in-app delivery, Quartz stale-pending monitor
 - **PuppeteerSharp PDF library** — headless Chromium, A4 output, reusable theme CSS, header/footer page-frame
 - **Realtime hub** sharing SignalR infrastructure across modules with automatic user groups
@@ -59,7 +79,7 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 |- Shared/{{ProjectName}}.Pdf/           -- PuppeteerSharp PDF generation, theme CSS, footer builder
 |- Shared/{{ProjectName}}.RealTime/      -- SignalR hub, IRealtimePublisher
 |- Shared/{{ProjectName}}.Notifications.Contracts/ -- Integration event DTOs
-|- Shared/{{ProjectName}}.Identity.Abstractions/   -- Portal-aware JWT, claims, module-role auth
+|- Shared/{{ProjectName}}.Identity.Abstractions/   -- Portal-aware JWT, claims, permission-based authorization primitives
 |- Shared/{{ProjectName}}.Web/           -- Ardalis.Result HTTP extensions
 \- Directory.Packages.props              -- Central NuGet version management
 ```
@@ -68,7 +88,7 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 
 | Module | Highlights |
 | --- | --- |
-| **Identity** | User aggregate, `KeycloakTokenProvider` (client credentials flow), `KeycloakDirectoryClient` (Admin REST API), `KeycloakUserSyncJob` (mirrors IdP users locally), module role assignments/templates, health checks |
+| **Identity** | User aggregate, `KeycloakTokenProvider` (client credentials flow), `KeycloakDirectoryClient` (Admin REST API), `KeycloakUserSyncJob` (mirrors IdP users locally), `KeycloakRoleClient` + `RoleSyncJob` (mirrors realm roles), permission-based RBAC (catalog + role→permission map, `[HasPermission]` gates, admin CRUD endpoints), health checks |
 | **Notifications** | Email (Resend/SendGrid; MailKit dev-only), InApp (SignalR), HTML templates (embedded resources + DB seeding), `NotificationContentBuilder` with `{{token}}` replacement, Quartz stale-pending monitor, Wolverine consumer |
 | **ApiGateway** | FastEndpoints (explicit assembly discovery), YARP reverse proxy, SignalR hub mapping, Redis output caching, centralized Wolverine durable outbox registration |
 | **AppHost** | Aspire orchestrator: PostgreSQL, Redis, Keycloak (dev + prod modes), Papercut SMTP |
@@ -76,11 +96,35 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 ## Identity & Authentication
 
 - **Keycloak** acts as the identity provider with client credentials flow for server-to-server API calls
-- `KeycloakTokenProvider` caches tokens with SemaphoreSlim thread safety, refreshes 5 minutes before expiry
+- `KeycloakTokenProvider` caches tokens with SemaphoreSlim thread safety, refreshing shortly before expiry (30s margin)
 - `KeycloakTokenHandler` (DelegatingHandler) auto-injects Bearer tokens into HTTP clients
 - `KeycloakDirectoryClient` provides full Admin REST API: create users, manage roles, reset passwords, paginated user listing
 - `KeycloakUserSyncJob` (Quartz) periodically syncs Keycloak users to local User table
 - **Auth-agnostic by design:** users are provisioned in the IdP (Keycloak directly, or federated via SSO/SAML) and mirrored locally by the sync job. The template intentionally ships no in-app "invite user" / password-creation flow, so it works unchanged whether you use Keycloak-local accounts or external SSO/SAML.
+
+## Authorization
+
+Authentication (who you are) is Keycloak's job; **authorization (what you can do) is owned by the app** as a
+permission-based model (see [ADR-0008](docs/adr/0008-in-app-permission-based-authorization.md)). Keycloak issues
+realm roles in the JWT; the app owns the permission catalog, the role→permission map, and per-resource rules.
+
+- **Two enforcement layers.** A declarative endpoint gate — `[HasPermission("notifications:preferences.manage")]` /
+  `Policies(PermissionPolicy.For("key"))` — materialized on demand by a dynamic `IAuthorizationPolicyProvider`
+  (which delegates unknown policies to the default provider), plus a thin `IResourceAuthorizer` facade over
+  ASP.NET's `AuthorizationHandler<TRequirement, TResource>` for ownership / tenant / status checks. The facade
+  sources identity from `ICurrentUserContext`, so mediator handlers stay `HttpContext`-free.
+- **Module-scoped permissions.** Each module self-declares its keys via an `IModulePermissionManifest`; a coarse
+  `{module}.access` permission gates the module's endpoint group, with fine-grained `{module}:{action}` keys inside.
+- **Dynamic, with guardrails.** The catalog and mappings are admin-editable at runtime via CRUD endpoints. A
+  startup reconciler (idempotent, guarded by `pg_advisory_lock`) seeds every manifest + `[HasPermission]` key as
+  `IsSystem` (deletion-protected); an architecture-fitness test pins every literal permission string to the
+  `Permissions` registry so drift fails the build.
+- **Resolved per request, cached, propagated.** Roles→permissions resolve server-side on each request (so grants
+  take effect without re-login), cached in-memory. A mapping change bumps a durable `AuthzMapVersion` in the same
+  transaction and fires a best-effort Redis pub-sub nudge so every replica evicts its map near-instantly; a 60s TTL
+  backstop and an in-process fallback (when Redis is absent) keep it correct.
+- **First-admin bootstrap** is config-driven (`Authorization:BootstrapAdminRole` → `authz.manage` / `authz.read`,
+  re-applied idempotently on startup) — no hardcoded role name baked into the template.
 
 ## Email Delivery
 

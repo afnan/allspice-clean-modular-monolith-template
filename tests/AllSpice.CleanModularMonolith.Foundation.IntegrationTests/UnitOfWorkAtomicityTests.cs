@@ -32,6 +32,7 @@ public sealed class UnitOfWorkAtomicityTests(PostgresFixture pg)
                 sp.GetServices<IModuleDbContext>(),
                 sp.GetRequiredService<IDomainEventDispatcher>(),
                 sp.GetServices<IOutboxFlusher>(), // none registered here — empty set, so the flush step is a no-op
+                new PostCommitActions(),
                 NullLogger<TransactionBehavior<AtomicityTestCommand, Result>>.Instance);
 
             var users = sp.GetRequiredService<IUserRepository>();

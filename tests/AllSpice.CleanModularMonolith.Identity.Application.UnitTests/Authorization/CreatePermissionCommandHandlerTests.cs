@@ -2,6 +2,7 @@ using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Application.Features.Authorization.Commands.CreatePermission;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization;
+using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 using Ardalis.Result;
 
 namespace AllSpice.CleanModularMonolith.Identity.Application.UnitTests.Authorization;
@@ -20,7 +21,7 @@ public sealed class CreatePermissionCommandHandlerTests
         var versionRepo = new Mock<IAuthzMapVersionRepository>();
         var cacheInvalidator = new Mock<IAuthzCacheInvalidator>();
 
-        var handler = new CreatePermissionCommandHandler(permRepo.Object, versionRepo.Object, cacheInvalidator.Object);
+        var handler = new CreatePermissionCommandHandler(permRepo.Object, versionRepo.Object, cacheInvalidator.Object, new PostCommitActions());
 
         var result = await handler.Handle(
             new CreatePermissionCommand("authz.manage", "Duplicate key"), CancellationToken.None);
@@ -50,7 +51,8 @@ public sealed class CreatePermissionCommandHandlerTests
         cacheInvalidator.Setup(r => r.InvalidateAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
-        var handler = new CreatePermissionCommandHandler(permRepo.Object, versionRepo.Object, cacheInvalidator.Object);
+        var postCommit = new PostCommitActions();
+        var handler = new CreatePermissionCommandHandler(permRepo.Object, versionRepo.Object, cacheInvalidator.Object, postCommit);
 
         var result = await handler.Handle(
             new CreatePermissionCommand("cms.write", "Write CMS content"), CancellationToken.None);
@@ -58,6 +60,13 @@ public sealed class CreatePermissionCommandHandlerTests
         Assert.Equal(ResultStatus.Ok, result.Status);
         Assert.Equal(1, version.Version);
         permRepo.Verify(r => r.AddAsync(It.IsAny<Permission>(), It.IsAny<CancellationToken>()), Times.Once);
+
+        // Eviction is deferred to a post-commit action, not fired during Handle.
+        cacheInvalidator.Verify(r => r.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
+        foreach (var action in postCommit.Drain())
+        {
+            await action(CancellationToken.None);
+        }
         cacheInvalidator.Verify(r => r.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 }

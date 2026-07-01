@@ -26,12 +26,14 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
     IEnumerable<IModuleDbContext> dbContexts,
     IDomainEventDispatcher dispatcher,
     IEnumerable<IOutboxFlusher> outboxFlushers,
+    IPostCommitActions postCommitActions,
     ILogger<TransactionBehavior<TRequest, TResponse>> logger) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : class, IMessage, ITransactional
 {
     private readonly IEnumerable<IModuleDbContext> _dbContexts = dbContexts;
     private readonly IDomainEventDispatcher _dispatcher = dispatcher;
     private readonly IEnumerable<IOutboxFlusher> _outboxFlushers = outboxFlushers;
+    private readonly IPostCommitActions _postCommitActions = postCommitActions;
     private readonly ILogger<TransactionBehavior<TRequest, TResponse>> _logger = logger;
 
     public async ValueTask<TResponse> Handle(
@@ -132,7 +134,34 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
         // recovery sweep (seconds of latency). Reached only on a successful commit — the catch above rethrows.
         await FlushOutboxAsync(cancellationToken).ConfigureAwait(false);
 
+        // Run post-commit side effects the handler deferred (e.g. authz cache-eviction nudges). These MUST
+        // run after commit: firing them from inside the handler would evict/publish before the write is
+        // durable, so a concurrent read could re-cache stale data. Reached only after a successful commit.
+        await RunPostCommitActionsAsync(cancellationToken).ConfigureAwait(false);
+
         return response;
+    }
+
+    /// <summary>
+    /// Runs actions queued via <see cref="IPostCommitActions"/> after a successful commit. Best-effort: a
+    /// failure is logged and swallowed because the command is already committed — failing it now would be
+    /// wrong, and cache-eviction actions are self-healing via their TTL backstop.
+    /// </summary>
+    private async ValueTask RunPostCommitActionsAsync(CancellationToken cancellationToken)
+    {
+        foreach (var action in _postCommitActions.Drain())
+        {
+            try
+            {
+                await action(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Post-commit action failed for {RequestType}; the command is already committed.",
+                    typeof(TRequest).Name);
+            }
+        }
     }
 
     /// <summary>
