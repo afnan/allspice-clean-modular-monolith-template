@@ -34,6 +34,23 @@ public sealed class DomainEventDispatchInterceptor(IServiceScopeFactory serviceS
         return await base.SavedChangesAsync(eventData, result, cancellationToken);
     }
 
+    /// <summary>
+    /// Mirrors <see cref="SavedChangesAsync"/> for consumers that opt into the SYNCHRONOUS
+    /// <see cref="DbContext.SaveChanges()"/> path. Without this override, domain events raised on a
+    /// synchronous save would be silently dropped (the async override never runs). Dispatch is async-only, so
+    /// we block on it here — synchronous <c>SaveChanges</c> is a rare/opt-in path — and the fresh DI scope plus
+    /// <see cref="CancellationToken.None"/> keep behaviour identical to the async override.
+    /// </summary>
+    public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
+    {
+        if (eventData.Context is not null)
+        {
+            DispatchEventsAsync(eventData.Context).GetAwaiter().GetResult();
+        }
+
+        return base.SavedChanges(eventData, result);
+    }
+
     private async Task DispatchEventsAsync(DbContext context)
     {
         var entitiesWithEvents = context.ChangeTracker.Entries<IHasDomainEvents>()

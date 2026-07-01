@@ -90,47 +90,49 @@ public class ErrorHandlingMiddleware(
             ? domainException.Code
             : CodeForStatus(statusCode);
 
-        // RFC7807: members (incl. extensions like correlationId/errors) live at the ROOT object, matching
-        // the validation-problem shape returned by the mediator/FastEndpoints path. We build a flat dictionary
-        // rather than nesting under an "extensions" object (which the previous shape did, diverging from RFC7807).
-        var problem = new Dictionary<string, object?>(StringComparer.Ordinal)
+        var title = isIdentityError
+            ? "Identity service is temporarily unavailable."
+            : "An error occurred while processing your request.";
+
+        // Keep the development Detail short — exception.ToString() can include connection strings, JWTs,
+        // and other secrets in inner-exception messages. The full exception is already in the structured
+        // log (LogError above); dev consumers can correlate via the correlationId member.
+        var detail = _environment.IsDevelopment()
+            ? $"{exception.GetType().Name}: {exception.Message.Truncate(512)}"
+            : (isIdentityError ? "The identity provider is unreachable. Please try again later." : "An error occurred while processing your request.");
+
+        // RFC7807: members (incl. extensions like instance/correlationId/errors) live at the ROOT object. The
+        // shared ProblemJsonWriter emits type/title/status/detail + correlationId + code; the extras below are
+        // merged as additional root-level extension members (NOT nested under an "extensions" node).
+        var extensions = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
-            ["type"] = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
-            ["title"] = isIdentityError
-                ? "Identity service is temporarily unavailable."
-                : "An error occurred while processing your request.",
-            ["status"] = (int)statusCode,
-            // Keep the development Detail short — exception.ToString() can include connection strings, JWTs,
-            // and other secrets in inner-exception messages. The full exception is already in the structured
-            // log (LogError above); dev consumers can correlate via the correlationId member.
-            ["detail"] = _environment.IsDevelopment()
-                ? $"{exception.GetType().Name}: {exception.Message.Truncate(512)}"
-                : (isIdentityError ? "The identity provider is unreachable. Please try again later." : "An error occurred while processing your request."),
             ["instance"] = context.Request.Path.Value,
-            ["correlationId"] = correlationId,
-            ["code"] = code
         };
 
         // Surface field-level validation errors so clients get actionable 400s. This is the defensive
         // net: the Mediator pipeline normally maps ValidationException to Result.Invalid first.
         if (exception is FluentValidation.ValidationException validationException)
         {
-            problem["errors"] = validationException.Errors
+            extensions["errors"] = validationException.Errors
                 .GroupBy(e => e.PropertyName)
                 .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
         }
 
         if (_environment.IsDevelopment())
         {
-            problem["exception"] = exception.GetType().Name;
-            problem["stackTrace"] = exception.StackTrace;
+            extensions["exception"] = exception.GetType().Name;
+            extensions["stackTrace"] = exception.StackTrace;
         }
 
-        var result = JsonSerializer.Serialize(problem);
-
-        context.Response.ContentType = "application/problem+json";
-        context.Response.StatusCode = (int)statusCode;
-        return context.Response.WriteAsync(result);
+        return ProblemJsonWriter.WriteAsync(
+            context,
+            (int)statusCode,
+            title,
+            detail,
+            type: "https://tools.ietf.org/html/rfc7231#section-6.6.1",
+            code: code,
+            correlationId: correlationId,
+            extensions: extensions);
     }
 
     private static string CodeForStatus(HttpStatusCode statusCode) => statusCode switch

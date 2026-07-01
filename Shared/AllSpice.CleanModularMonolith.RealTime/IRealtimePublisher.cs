@@ -8,12 +8,14 @@ public interface IRealtimePublisher
     /// <summary>
     /// Sends an event payload to the group associated with the specified user.
     /// </summary>
-    Task PublishToUserAsync(string userId, string topic, object payload, CancellationToken cancellationToken = default);
+    /// <param name="externalUserId">The external (Keycloak) subject id — the same id AppHub joins its per-user group by.</param>
+    Task PublishToUserAsync(string externalUserId, string topic, object payload, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sends a strongly-typed notification payload to a user.
     /// </summary>
-    Task PublishNotificationAsync(string userId, NotificationRealtimeDto notification, CancellationToken cancellationToken = default);
+    /// <param name="externalUserId">The external (Keycloak) subject id — the same id AppHub joins its per-user group by.</param>
+    Task PublishNotificationAsync(string externalUserId, NotificationRealtimeDto notification, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Broadcasts an event payload to the given SignalR group.

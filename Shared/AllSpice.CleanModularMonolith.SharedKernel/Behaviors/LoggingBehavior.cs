@@ -14,20 +14,28 @@ public sealed class LoggingBehavior<TRequest, TResponse>(ILogger<LoggingBehavior
     {
         Guard.Against.Null(request);
 
+        // At Information level, log only the request TYPE NAME — never property VALUES. Request payloads can
+        // carry PII/secrets that no [SensitiveData] annotation is guaranteed to cover, which is the same reason
+        // the response is deliberately never logged (see below). Full request values are emitted only at
+        // Debug/Trace for local diagnostics, still redacting [SensitiveData]-annotated properties.
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("Handling {RequestName}", typeof(TRequest).Name);
+        }
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
             foreach (var prop in request.GetType().GetProperties())
             {
                 // Redact anything marked [SensitiveData] (passwords/tokens/PII) so it never reaches the log sink.
                 if (prop.IsDefined(typeof(SensitiveDataAttribute), inherit: true))
                 {
-                    _logger.LogInformation("Property {Property} : ***", prop.Name);
+                    _logger.LogDebug("Property {Property} : ***", prop.Name);
                     continue;
                 }
 
                 var value = prop.GetValue(request, null);
-                _logger.LogInformation("Property {Property} : {@Value}", prop.Name, value);
+                _logger.LogDebug("Property {Property} : {@Value}", prop.Name, value);
             }
         }
 

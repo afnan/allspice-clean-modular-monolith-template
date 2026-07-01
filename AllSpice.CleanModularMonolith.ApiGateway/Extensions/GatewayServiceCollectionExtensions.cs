@@ -170,8 +170,14 @@ public static class GatewayServiceCollectionExtensions
         {
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
             {
+                // Partition authenticated users by the immutable NameIdentifier/sub claim (matching the
+                // IdempotencyMiddleware key), NOT the mutable preferred_username exposed via Identity.Name.
+                // Fall back to the remote IP (then a stable constant) for unauthenticated callers.
                 var identifier = context.User.Identity?.IsAuthenticated == true
-                    ? context.User.Identity!.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous"
+                    ? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                        ?? context.User.FindFirst("sub")?.Value
+                        ?? context.Connection.RemoteIpAddress?.ToString()
+                        ?? "anonymous"
                     : context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
 
                 return RateLimitPartition.GetFixedWindowLimiter(
@@ -195,15 +201,16 @@ public static class GatewayServiceCollectionExtensions
                     : 60;
                 response.Headers.RetryAfter = retryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-                // Match the gateway's RFC7807 error contract instead of the previous plain-text body.
-                var problem = new
-                {
-                    type = "https://tools.ietf.org/html/rfc6585#section-4",
-                    title = "Too Many Requests",
-                    status = StatusCodes.Status429TooManyRequests,
-                    detail = $"Rate limit exceeded. Please try again after {retryAfterSeconds} seconds."
-                };
-                await response.WriteAsJsonAsync(problem, options: null, contentType: "application/problem+json", cancellationToken: token);
+                // Match the gateway's RFC7807 error contract via the shared writer so the envelope (incl.
+                // correlationId/code) is identical to every other gateway error site.
+                await ProblemJsonWriter.WriteAsync(
+                    context.HttpContext,
+                    StatusCodes.Status429TooManyRequests,
+                    title: "Too Many Requests",
+                    detail: $"Rate limit exceeded. Please try again after {retryAfterSeconds} seconds.",
+                    type: "https://tools.ietf.org/html/rfc6585#section-4",
+                    code: "too_many_requests",
+                    cancellationToken: token);
             };
         });
 

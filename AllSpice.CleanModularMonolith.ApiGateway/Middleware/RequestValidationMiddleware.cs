@@ -55,17 +55,13 @@ public class RequestValidationMiddleware(RequestDelegate next, ILogger<RequestVa
     /// Writes a 413 as RFC7807 <c>application/problem+json</c>, matching the gateway's error contract used by
     /// <see cref="ErrorHandlingMiddleware"/> and the mediator/FastEndpoints path (instead of a bare string).
     /// </summary>
-    private static Task WritePayloadTooLargeAsync(HttpContext context)
-    {
-        context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
-        var problem = new
-        {
-            type = "https://tools.ietf.org/html/rfc9110#section-15.5.14",
-            title = "Payload too large",
-            status = StatusCodes.Status413PayloadTooLarge,
-            detail = "Request payload too large. Maximum size is 10 MB."
-        };
-        return context.Response.WriteAsJsonAsync(
-            problem, options: null, contentType: "application/problem+json", cancellationToken: context.RequestAborted);
-    }
+    private static Task WritePayloadTooLargeAsync(HttpContext context) =>
+        ProblemJsonWriter.WriteAsync(
+            context,
+            StatusCodes.Status413PayloadTooLarge,
+            title: "Payload too large",
+            detail: "Request payload too large. Maximum size is 10 MB.",
+            type: "https://tools.ietf.org/html/rfc9110#section-15.5.14",
+            code: "payload_too_large",
+            cancellationToken: context.RequestAborted);
 }
