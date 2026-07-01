@@ -5,8 +5,11 @@
         <TargetFramework>net10.0</TargetFramework>
     </PropertyGroup>
     <PropertyGroup>
-        <NoWarn>1591;NU1608</NoWarn>
-        <!-- Remove this to turn on warnings for missing XML Comments -->
+        <NoWarn>1591</NoWarn>
+        <!-- 1591 = missing XML doc comments; remove to turn those warnings back on. NU1608 is deliberately
+             NOT suppressed globally (it would mask version-conflict warnings solution-wide under
+             TreatWarningsAsErrors); it is scoped to the SQLite-backed test projects that pin
+             SQLitePCLRaw.lib.e_sqlite3 above EF Core Sqlite's constraint — see the comment below. -->
     </PropertyGroup>
     <!--
       MessagePack's advisories (transitive via the Aspire AppHost's StreamJsonRpc) are handled by
@@ -16,6 +19,10 @@
       SQLitePCLRaw.lib.e_sqlite3 (GHSA-2m69-gcr7-jv3q, <= 2.1.11 affected) was previously suppressed here.
       It is now PINNED to 3.50.3 via direct PackageReferences in the SQLite-backed test projects and a
       PackageVersion entry in Directory.Packages.props — NuGetAuditSuppress removed to keep the audit strict.
+      Because that pin sits above the version EF Core Sqlite asks for, those (and only those) test projects
+      emit NU1608 (detected package version outside of dependency constraint); NU1608 is therefore added to
+      $(NoWarn) in each SQLite-backed test .csproj rather than globally here, so version conflicts elsewhere
+      in the solution still surface as errors.
 
       Microsoft.OpenApi (GHSA-v5pm-xwqc-g5wc, >= 2.0.0-preview11 and <= 2.7.4 affected) is PINNED to 2.8.0
       via a direct PackageReference in ApiGateway.csproj — compatible with Microsoft.AspNetCore.OpenApi 10.0.9

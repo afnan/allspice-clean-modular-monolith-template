@@ -72,8 +72,22 @@ jobs:
       # warns (and warnings are errors), but this catches advisories published after the last build too.
       - name: Audit vulnerable packages
         run: |
-          dotnet list AllSpice.CleanModularMonolith.slnx package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+          # Write the report to a file instead of piping to tee: a pipe hides dotnet's real exit code, so a
+          # restore/tooling failure (which prints no severity words) would pass this gate as a false negative.
+          # Fail hard if the command itself errors.
+          if ! dotnet list AllSpice.CleanModularMonolith.slnx package --vulnerable --include-transitive > vulnerable.txt 2>&1; then
+            cat vulnerable.txt
+            echo "::error::'dotnet list package --vulnerable' failed to run (restore/tooling error) — failing to avoid a false negative."
+            exit 1
+          fi
+          cat vulnerable.txt
           if grep -q -E "Critical|High|Moderate|Low" vulnerable.txt; then
             echo "::error::Vulnerable NuGet packages detected. See the log above."
+            exit 1
+          fi
+          # Backstop: require the explicit "no vulnerable packages" sentinel so a silently empty or garbled
+          # report cannot be mistaken for a clean audit.
+          if ! grep -q "no vulnerable packages" vulnerable.txt; then
+            echo "::error::Audit output did not contain the expected 'no vulnerable packages' confirmation — treating as a failure."
             exit 1
           fi

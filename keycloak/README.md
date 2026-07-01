@@ -1,7 +1,7 @@
 # Keycloak realm import
 
 `realm-import.json` is an **optional shortcut** for local setup — it creates the realm, an `Identity.Admin`
-realm role, two public SPA portal clients (`erp-portal`, `main-website`), and a confidential
+realm role, two public SPA portal clients (`erp-portal`, `{{ProjectNameLower}}-public`), and a confidential
 `identity-admin` service-account client used by the `KeycloakUserSyncJob`. It is a **starting point**: review
 redirect URIs, secrets, and flows before any non-local use.
 

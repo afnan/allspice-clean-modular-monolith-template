@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Pinning SQLitePCLRaw.lib.e_sqlite3 above EF Core Sqlite's constraint emits NU1608; scoped here
+         (not globally in Directory.Build.props) so version conflicts elsewhere still fail the build. -->
+    <NoWarn>$(NoWarn);NU1608</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

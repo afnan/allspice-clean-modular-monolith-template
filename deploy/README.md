@@ -7,7 +7,7 @@ Azurite as dev containers and is not a production deployment artifact.
 ## Build the image
 
 ```bash
-docker build -t allspice-gateway:latest .
+docker build -t gateway:latest .
 ```
 
 (The build context is the repo root; see `Dockerfile`.)
@@ -19,7 +19,7 @@ docker run --rm -p 8080:8080 \
   -e ConnectionStrings__identitydb="Host=...;Database=identitydb;Username=...;Password=..." \
   -e ConnectionStrings__notificationsdb="Host=...;Database=notificationsdb;Username=...;Password=..." \
   -e ConnectionStrings__messagingdb="Host=...;Database=messagingdb;Username=...;Password=..." \
-  allspice-gateway:latest
+  gateway:latest
 ```
 
 Health probes: `GET /alive` (liveness) and `GET /health` (readiness — fails until DB connectivity +
@@ -29,10 +29,10 @@ migrations are healthy).
 
 `deploy/k8s/gateway.yaml` is a starting-point Deployment + Service with liveness/readiness probes,
 non-root/read-only-root security context, and resource requests/limits. Supply runtime config
-(connection strings, Keycloak, Redis, mail keys, blob storage) via the `allspice-gateway-secrets` Secret:
+(connection strings, Keycloak, Redis, mail keys, blob storage) via the `gateway-secrets` Secret:
 
 ```bash
-kubectl create secret generic allspice-gateway-secrets \
+kubectl create secret generic gateway-secrets \
   --from-literal=ConnectionStrings__identitydb='...' \
   --from-literal=ConnectionStrings__notificationsdb='...' \
   --from-literal=ConnectionStrings__messagingdb='...'

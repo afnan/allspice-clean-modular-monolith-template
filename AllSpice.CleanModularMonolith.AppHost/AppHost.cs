@@ -41,7 +41,7 @@ var postgresPasswordValue = GetSecret("postgres-password", developmentDefault: "
 
 var keycloakAdminUser = GetParameter(parameters, "keycloak-admin-user", "admin");
 var keycloakAdminPassword = GetSecret("keycloak-admin-password", developmentDefault: "admin");
-var keycloakRealmValue = GetParameter(parameters, "keycloak-realm", "allspice-cleanmodularmonolith");
+var keycloakRealmValue = GetParameter(parameters, "keycloak-realm", "{{ProjectNameLower}}");
 var keycloakApiToken = GetSecret("keycloak-api-token", developmentDefault: "");
 var smtpUsername = GetParameter(parameters, "smtp-username");
 var smtpPassword = GetSecret("smtp-password", developmentDefault: "");
@@ -223,7 +223,7 @@ var keycloakEndpoint = keycloak.GetEndpoint("http");
 #endregion
 
 #region API Gateway
-var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGateway>("allspice-cleanmodularmonolith-apigateway")
+var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGateway>("apigateway")
     .WithReference(notificationsDatabase)
     .WithReference(identityDatabase)
     .WithReference(messagingDatabase)
