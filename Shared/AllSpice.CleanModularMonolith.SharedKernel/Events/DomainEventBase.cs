@@ -16,15 +16,6 @@ public abstract class DomainEventBase : IDomainEvent
         OccurredOnUtc = occurredOnUtc;
     }
 
-    /// <summary>
-    /// Convenience overload that stamps <see cref="OccurredOnUtc"/> from the system clock. Use only where no
-    /// clock is reachable; the explicit-timestamp overload is preferred for testability.
-    /// </summary>
-    protected DomainEventBase()
-        : this(TimeProvider.System.GetUtcNow())
-    {
-    }
-
     public Guid Id { get; }
 
     public DateTimeOffset OccurredOnUtc { get; }

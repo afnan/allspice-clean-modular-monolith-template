@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -17,6 +18,14 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 /// key from different users/endpoints never collides. Only 2xx responses are cached; non-success responses
 /// are not, so the client can retry them fresh. Complements the durable outbox (which dedupes *messages*);
 /// this dedupes *HTTP commands*.
+/// <para>
+/// <b>TOCTOU caveat (best-effort):</b> at-most-once is guaranteed only for retries after the in-progress
+/// marker has been written; two simultaneous first requests with the same key can both pass the null-check
+/// before either sets the marker. The implementation prioritises simplicity over strict deduplication of the
+/// very first request.
+/// <!-- TODO: upgrade to atomic Redis SET key val NX (via IDistributedLockFactory or raw StackExchange.Redis)
+///      for strict first-request de-dup, eliminating the TOCTOU window entirely. -->
+/// </para>
 /// </remarks>
 public sealed class IdempotencyMiddleware(
     RequestDelegate next,
@@ -44,9 +53,11 @@ public sealed class IdempotencyMiddleware(
             return;
         }
 
-        var subject = context.User.Identity?.IsAuthenticated == true
-            ? context.User.Identity!.Name ?? "anonymous"
-            : "anonymous";
+        // Use the stable, unique identity claim (not the display name, which can be null even for authenticated
+        // users and would cause two authenticated users to share the "anonymous" key namespace).
+        var subject = context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? context.User.FindFirstValue("sub")
+            ?? "anonymous";
         var cacheKey = BuildKey(method, context.Request.Path, subject, keyValues.ToString());
 
         var existingBytes = await cache.GetAsync(cacheKey, context.RequestAborted);
@@ -65,6 +76,7 @@ public sealed class IdempotencyMiddleware(
         }
 
         // Best-effort in-flight marker so a concurrent retry gets 409 rather than double-processing.
+        // See TOCTOU caveat in the class remarks — two simultaneous first requests can both pass this check.
         await cache.SetAsync(
             cacheKey,
             Serialize(new CachedResponse { InProgress = true }),
@@ -75,6 +87,12 @@ public sealed class IdempotencyMiddleware(
         using var buffer = new MemoryStream();
         context.Response.Body = buffer;
 
+        // Tracks whether a completed 2xx response was written to the cache. Used in the catch block to
+        // determine whether to remove the cache entry: we only remove the in-progress marker, never a
+        // completed cached response (removing a completed entry would force the next retry to re-execute
+        // the command even though it already succeeded).
+        var completedStored = false;
+
         try
         {
             await next(context);
@@ -83,11 +101,24 @@ public sealed class IdempotencyMiddleware(
 
             if (context.Response.StatusCode is >= 200 and < 300)
             {
+                // Capture response headers, excluding hop-by-hop / recomputed headers so they are
+                // not double-applied when the response is replayed (Content-Type is restored via
+                // the ContentType property; Content-Length and Transfer-Encoding are recomputed).
+                var headers = context.Response.Headers
+                    .Where(kv => !string.IsNullOrEmpty(kv.Key) &&
+                                 !kv.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase) &&
+                                 !kv.Key.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase))
+                    .ToDictionary(
+                        kv => kv.Key,
+                        kv => kv.Value.Where(v => v is not null).Select(v => v!).ToArray(),
+                        StringComparer.OrdinalIgnoreCase);
+
                 var stored = new CachedResponse
                 {
                     StatusCode = context.Response.StatusCode,
                     ContentType = context.Response.ContentType,
                     Body = bodyBytes,
+                    Headers = headers,
                     InProgress = false
                 };
                 await cache.SetAsync(
@@ -95,6 +126,7 @@ public sealed class IdempotencyMiddleware(
                     Serialize(stored),
                     new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CompletedTtl },
                     context.RequestAborted);
+                completedStored = true;
             }
             else
             {
@@ -107,8 +139,13 @@ public sealed class IdempotencyMiddleware(
         }
         catch
         {
-            // Release the in-flight marker so the failed command can be retried.
-            await cache.RemoveAsync(cacheKey, CancellationToken.None);
+            // Only remove the in-progress marker, not a completed cached response. A client disconnect
+            // after a 2xx was stored but before the body write completes must not invalidate the cache;
+            // the next retry will receive a clean replay of the completed response.
+            if (!completedStored)
+            {
+                await cache.RemoveAsync(cacheKey, CancellationToken.None);
+            }
             context.Response.Body = originalBody;
             throw;
         }
@@ -130,6 +167,21 @@ public sealed class IdempotencyMiddleware(
         context.Response.StatusCode = stored.StatusCode;
         context.Response.ContentType = stored.ContentType ?? "application/json";
         context.Response.Headers[ReplayedHeader] = "true";
+
+        // Restore cached response headers (Content-Length/Transfer-Encoding were excluded on capture and
+        // are recomputed by the response writer; headers already set above — ContentType, ReplayedHeader —
+        // are skipped via ContainsKey so they are not overwritten).
+        if (stored.Headers is not null)
+        {
+            foreach (var (name, values) in stored.Headers)
+            {
+                if (!context.Response.Headers.ContainsKey(name))
+                {
+                    context.Response.Headers[name] = values;
+                }
+            }
+        }
+
         if (stored.Body is { Length: > 0 })
         {
             await context.Response.Body.WriteAsync(stored.Body, context.RequestAborted);
@@ -162,5 +214,11 @@ public sealed class IdempotencyMiddleware(
         public int StatusCode { get; init; }
         public string? ContentType { get; init; }
         public byte[]? Body { get; init; }
+
+        /// <summary>
+        /// Response headers captured on first execution, excluding hop-by-hop headers
+        /// (<c>Content-Length</c>, <c>Transfer-Encoding</c>) that are recomputed on replay.
+        /// </summary>
+        public Dictionary<string, string[]>? Headers { get; init; }
     }
 }

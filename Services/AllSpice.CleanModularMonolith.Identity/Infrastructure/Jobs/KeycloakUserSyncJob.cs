@@ -73,7 +73,9 @@ public sealed class KeycloakUserSyncJob(
             await ResolveSyncIssuesAsync(dbContext, now, cancellationToken);
 
             history.Succeeded = true;
-            history.FinishedUtc = now;
+            // Stamp FinishedUtc AFTER processing completes so the timestamp reflects the true end of
+            // the sync run, not the start of the orphan/issue phase (which skews the staleness health check).
+            history.FinishedUtc = _timeProvider.GetUtcNow();
             dbContext.IdentitySyncHistories.Add(history);
 
             await dbContext.SaveChangesAsync(cancellationToken);

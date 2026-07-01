@@ -33,10 +33,12 @@ public sealed class UpsertNotificationPreferenceEndpoint(IMediator mediator)
     {
         if (!NotificationChannel.TryFromName(req.Channel, ignoreCase: true, out var channel))
         {
-            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await HttpContext.Response.WriteAsJsonAsync(
-                new { errors = new[] { $"Unknown notification channel '{req.Channel}'." } },
-                cancellationToken: ct);
+            await TypedResults.ValidationProblem(
+                    new Dictionary<string, string[]>
+                    {
+                        ["Channel"] = [$"Unknown notification channel '{req.Channel}'."]
+                    })
+                .ExecuteAsync(HttpContext);
             return;
         }
 
@@ -49,9 +51,9 @@ public sealed class UpsertNotificationPreferenceEndpoint(IMediator mediator)
             return;
         }
 
-        HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-        await HttpContext.Response.WriteAsJsonAsync(
-            new { errors = result.Errors.ToArray() },
-            cancellationToken: ct);
+        await TypedResults.Problem(
+                detail: result.Errors.FirstOrDefault(),
+                statusCode: StatusCodes.Status400BadRequest)
+            .ExecuteAsync(HttpContext);
     }
 }

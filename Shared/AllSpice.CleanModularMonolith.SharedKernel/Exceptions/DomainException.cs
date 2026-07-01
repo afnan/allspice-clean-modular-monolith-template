@@ -34,7 +34,17 @@ public abstract class DomainException : Exception
         for (var i = 0; i < typeName.Length; i++)
         {
             var c = typeName[i];
-            if (char.IsUpper(c) && i > 0)
+
+            // Insert '_' only at the START of a new word, not inside an acronym run.
+            // A new word begins at an uppercase char when either:
+            //   - the previous char is lowercase (e.g. "Not" + "Found" → "not_found"), OR
+            //   - the previous char is uppercase AND the next char is lowercase, i.e. the end of an
+            //     acronym run transitioning into a word (e.g. "HTTP" + "Not" → "http_not").
+            // This correctly converts "APIValidation" → "api_validation" (not "a_p_i_validation")
+            // while keeping "BusinessRuleViolation" → "business_rule_violation" unchanged.
+            if (char.IsUpper(c) && i > 0 &&
+                (!char.IsUpper(typeName[i - 1]) ||
+                 (i + 1 < typeName.Length && char.IsLower(typeName[i + 1]))))
             {
                 builder.Append('_');
             }

@@ -269,15 +269,21 @@ public static class IdentityModuleExtensions
         var bootstrapper = scope.ServiceProvider.GetRequiredService<AuthorizationBootstrapper>();
 
         var isNpgsql = dbContext.Database.IsNpgsql();
-        if (isNpgsql)
-        {
-            await dbContext.Database.OpenConnectionAsync(ct);
-            await dbContext.Database.ExecuteSqlRawAsync(
-                $"SELECT pg_advisory_lock({AdvisoryLockKey})", ct);
-        }
 
         try
         {
+            // Open the connection and acquire the advisory lock INSIDE the try so that any exception
+            // thrown by OpenConnectionAsync or pg_advisory_lock is caught and the finally still runs.
+            // pg_advisory_unlock on a connection where the lock was never acquired is a harmless no-op,
+            // and CloseConnectionAsync on a closed/not-yet-opened connection is also a no-op — so
+            // unconditional cleanup in the finally is safe.
+            if (isNpgsql)
+            {
+                await dbContext.Database.OpenConnectionAsync(ct);
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    $"SELECT pg_advisory_lock({AdvisoryLockKey})", ct);
+            }
+
             // Reconciler saves first so the bootstrapper's GetByKeyAsync queries see the seeded permissions.
             await reconciler.ReconcileAsync(ct);
             await bootstrapper.BootstrapAsync(ct);

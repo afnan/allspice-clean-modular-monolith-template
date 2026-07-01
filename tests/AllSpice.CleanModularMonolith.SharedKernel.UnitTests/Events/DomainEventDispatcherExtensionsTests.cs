@@ -29,6 +29,8 @@ public class DomainEventDispatcherExtensionsTests
 
     private sealed class SampleDomainEvent : DomainEventBase
     {
+        // Must call the explicit base ctor; the parameterless ctor was removed (ADR-0006 / AGENTS.md §4).
+        public SampleDomainEvent() : base(DateTimeOffset.UtcNow) { }
     }
 
     private sealed class CapturingDispatcher : IDomainEventDispatcher

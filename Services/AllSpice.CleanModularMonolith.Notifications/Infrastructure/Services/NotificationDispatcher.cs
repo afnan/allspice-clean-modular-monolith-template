@@ -129,6 +129,8 @@ public sealed class NotificationDispatcher(
                 if (preference is not null && !preference.IsEnabled)
                 {
                     _logger.LogInformation("Notification {NotificationId} skipped due to user/channel preference.", notification.Id);
+                    notification.Cancel(utcNow, "User has opted out of this channel.");
+                    await TryPersistAsync(notification, cancellationToken);
                     continue;
                 }
             }
