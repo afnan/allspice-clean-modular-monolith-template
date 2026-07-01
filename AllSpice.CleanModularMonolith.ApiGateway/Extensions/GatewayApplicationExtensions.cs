@@ -26,7 +26,6 @@ public static class GatewayApplicationExtensions
             app.UseHttpsRedirection();
         }
 
-        app.UseRateLimiter();
         app.UseOutputCache();
         app.UseRequestBuffering();
 
@@ -35,6 +34,12 @@ public static class GatewayApplicationExtensions
         {
             app.UseAuthentication();
         }
+
+        // Rate limiting runs AFTER authentication so the per-user partition key (User.Identity.Name) is
+        // populated. Before authentication runs, HttpContext.User is the unauthenticated default, so the
+        // limiter's "authenticated ? user : IP" partition always fell back to remote IP — every authenticated
+        // user behind a shared NAT/proxy/egress IP would share one bucket instead of getting a per-user limit.
+        app.UseRateLimiter();
 
         if (app.Environment.IsDevelopment())
         {

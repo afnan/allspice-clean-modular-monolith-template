@@ -86,6 +86,17 @@ public sealed class KeycloakUserSyncJob(
             // an issue row (a false positive on the dashboard) or trying to persist on a cancelled token.
             throw;
         }
+        catch (DbUpdateException ex)
+        {
+            // Another replica's scheduler inserted the same orphan row concurrently (unique index on
+            // IdentityOrphanUsers.UserId). Quartz's in-memory store + [DisallowConcurrentExecution] only
+            // serialize within a single node, so under multi-replica scheduling both nodes can enumerate the
+            // same orphans and race the insert. Benign — the row now exists and the next cycle reconciles — so
+            // treat it as a no-op instead of recording a false sync-failure/issue row (mirrors RoleSyncJob).
+            _logger.LogWarning(ex,
+                "Keycloak user sync hit a concurrent insert (correlation id {CorrelationId}); treating as benign.",
+                history.CorrelationId);
+        }
         catch (Exception ex)
         {
             history.Succeeded = false;

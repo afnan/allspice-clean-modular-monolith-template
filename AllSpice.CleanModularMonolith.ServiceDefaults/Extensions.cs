@@ -121,14 +121,22 @@ public static class Extensions
         // restrict to the cluster/probe network (NetworkPolicy, internal LB, or an ingress path block).
         // If you must serve richer details, add an authenticated, separately-mapped diagnostics endpoint.
 
+        // AllowAnonymous is REQUIRED on both probes: when authentication is configured the gateway sets a
+        // fallback authorization policy (RequireAuthenticatedUser) that ASP.NET Core applies to every endpoint
+        // lacking authorization metadata. Without this opt-out the probes would demand a JWT — a credential-less
+        // Kubernetes kubelet would then get 401 on /alive (pod restart loop) and /health (never Ready → no
+        // traffic). Explicit anonymous metadata suppresses the fallback while keeping the paths internal-only.
+
         // Readiness: ALL health checks must pass before the app accepts traffic.
-        app.MapHealthChecks(HealthEndpointPath);
+        app.MapHealthChecks(HealthEndpointPath)
+            .AllowAnonymous();
 
         // Liveness: only checks tagged "live" — the process is responsive (not hung).
         app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
         {
             Predicate = r => r.Tags.Contains("live")
-        });
+        })
+            .AllowAnonymous();
 
         return app;
     }

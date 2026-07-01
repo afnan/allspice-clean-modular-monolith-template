@@ -77,6 +77,14 @@ public sealed class KeycloakOptions
     /// CurrentUserResolutionMiddleware, including anonymous <c>/health</c>. No call is made while unlinked
     /// (the Keycloak-dependent health checks short-circuit on <see cref="IsAdminConfigured"/> and the sync
     /// job is idle), so the missing base address is harmless until the IdP is configured.
+    /// <para>
+    /// The <b>trailing slash is required</b>: the admin clients issue relative request URIs without a
+    /// leading slash (e.g. <c>"users?first=0&amp;max=100"</c>, <c>"roles"</c>). Per RFC 3986, a base of
+    /// <c>.../admin/realms/{realm}</c> (no trailing slash) would resolve those to <c>.../admin/realms/users</c>
+    /// — silently dropping the realm segment and 404-ing every admin call once Keycloak is linked. With the
+    /// trailing slash they correctly resolve under <c>.../admin/realms/{realm}/</c>. Absolute (leading-slash)
+    /// paths such as the one from <c>UserLookupTemplate</c> continue to work regardless.
+    /// </para>
     /// </summary>
     public Uri? AdminApiBaseAddress
     {
@@ -89,12 +97,12 @@ public sealed class KeycloakOptions
 
             if (!string.IsNullOrWhiteSpace(ServiceName))
             {
-                return new Uri($"http://{ServiceName}/admin/realms/{Realm}", UriKind.Absolute);
+                return new Uri($"http://{ServiceName}/admin/realms/{Realm}/", UriKind.Absolute);
             }
 
             return string.IsNullOrWhiteSpace(BaseUrl)
                 ? null
-                : new Uri($"{BaseUrl.TrimEnd('/')}/admin/realms/{Realm}", UriKind.Absolute);
+                : new Uri($"{BaseUrl.TrimEnd('/')}/admin/realms/{Realm}/", UriKind.Absolute);
         }
     }
 }

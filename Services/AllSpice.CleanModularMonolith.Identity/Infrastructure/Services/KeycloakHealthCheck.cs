@@ -21,7 +21,11 @@ public sealed class KeycloakHealthCheck(
     private readonly IOptions<KeycloakOptions> _options = options;
     private readonly ILogger<KeycloakHealthCheck> _logger = logger;
 
-    private static readonly Uri HealthEndpoint = new("/users?max=1", UriKind.Relative);
+    // Relative path WITHOUT a leading slash so it resolves under the admin client's realm-scoped base
+    // (".../admin/realms/{realm}/" + "users?max=1"). A leading slash would resolve to the host root
+    // ("http://{keycloak}/users?max=1"), which doesn't exist and would report Unhealthy even when Keycloak
+    // is reachable. See KeycloakOptions.AdminApiBaseAddress (trailing-slash contract).
+    private static readonly Uri HealthEndpoint = new("users?max=1", UriKind.Relative);
 
     /// <inheritdoc />
     public async Task<HealthCheckResult> CheckHealthAsync(

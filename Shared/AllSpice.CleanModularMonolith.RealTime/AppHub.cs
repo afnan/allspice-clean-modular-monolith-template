@@ -50,37 +50,14 @@ public sealed class AppHub : Hub<IAppHubClient>
         await base.OnDisconnectedAsync(exception);
     }
 
-    /// <summary>
-    /// Adds the current connection to the specified user's group.
-    /// </summary>
-    public async Task JoinUser(string userId)
-    {
-        await Groups.AddToGroupAsync(Context.ConnectionId, BuildUserGroup(userId));
-    }
-
-    /// <summary>
-    /// Removes the current connection from the specified user's group.
-    /// </summary>
-    public async Task LeaveUser(string userId)
-    {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, BuildUserGroup(userId));
-    }
-
-    /// <summary>
-    /// Adds the current connection to an arbitrary group.
-    /// </summary>
-    public async Task JoinGroup(string groupName)
-    {
-        await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
-    }
-
-    /// <summary>
-    /// Removes the current connection from an arbitrary group.
-    /// </summary>
-    public async Task LeaveGroup(string groupName)
-    {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
-    }
+    // NOTE: There are deliberately NO client-invokable Join/Leave methods. A connection is bound to its own
+    // "user:{subjectId}" group automatically in OnConnectedAsync from the authenticated claims — the caller
+    // never supplies the target id. Previous JoinUser(userId)/JoinGroup(groupName) methods took a
+    // caller-supplied identifier and added the connection to ANY group with no ownership check, letting any
+    // authenticated client subscribe to another user's (or an arbitrary) notification stream (broken access
+    // control / IDOR). If a project needs additional group memberships (e.g. tenant/role channels), add hub
+    // methods that authorize the requested group server-side (verify it belongs to Context.User) before
+    // calling Groups.AddToGroupAsync — never trust the client-supplied name.
 
     /// <summary>
     /// Resolves the external subject id from the connection's claims (the SignalR/JWT boundary, where the

@@ -5,9 +5,10 @@ using Microsoft.Extensions.Logging;
 namespace AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
 
 /// <summary>
-/// Diagnostic interceptor that, on a <see cref="DbUpdateConcurrencyException"/>, logs the full
-/// change-tracker state (entity type, state, primary key, and modified properties with their
-/// original-vs-current values) so the conflicting entity and operation are easy to pinpoint.
+/// Diagnostic interceptor that, on a <see cref="DbUpdateConcurrencyException"/>, logs the
+/// change-tracker state (entity type, state, primary key, and the NAMES of the modified properties) so the
+/// conflicting entity and operation are easy to pinpoint. Property values are deliberately NOT logged — they
+/// can contain PII or secrets and this runs outside the <c>[SensitiveData]</c>-aware LoggingBehavior redaction.
 /// Registered as a singleton and discovered by EF Core from the application service provider.
 /// </summary>
 public sealed class ConcurrencyDiagnosticInterceptor(ILogger<ConcurrencyDiagnosticInterceptor> logger) : SaveChangesInterceptor
@@ -47,13 +48,17 @@ public sealed class ConcurrencyDiagnosticInterceptor(ILogger<ConcurrencyDiagnost
                     .Where(p => p.Metadata.IsPrimaryKey())
                     .Select(p => $"{p.Metadata.Name}={p.CurrentValue}")));
 
-            foreach (var prop in entry.Properties.Where(p => p.IsModified))
+            // Log the NAMES of modified properties only — never their values. Values may hold PII or secrets
+            // (emails, tokens, hashes) and this interceptor bypasses the [SensitiveData] redaction applied by
+            // LoggingBehavior. The property names plus the primary key above are enough to pinpoint the conflict.
+            var modifiedProperties = entry.Properties
+                .Where(p => p.IsModified)
+                .Select(p => p.Metadata.Name)
+                .ToList();
+
+            if (modifiedProperties.Count > 0)
             {
-                _logger.LogError(
-                    "  Modified: {Property} = {CurrentValue} (original: {OriginalValue})",
-                    prop.Metadata.Name,
-                    prop.CurrentValue,
-                    prop.OriginalValue);
+                _logger.LogError("  Modified properties: {ModifiedProperties}", string.Join(", ", modifiedProperties));
             }
         }
     }

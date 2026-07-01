@@ -60,7 +60,21 @@ public sealed class IdempotencyMiddleware(
             ?? "anonymous";
         var cacheKey = BuildKey(method, context.Request.Path, subject, keyValues.ToString());
 
-        var existingBytes = await cache.GetAsync(cacheKey, context.RequestAborted);
+        // The distributed cache (Redis in production) is a best-effort dependency, not a hard one: if it is
+        // unavailable, DEGRADE to processing the request without idempotency rather than 500-ing every keyed
+        // mutation. A cache outage must not take down all POST/PUT/PATCH traffic.
+        byte[]? existingBytes;
+        try
+        {
+            existingBytes = await cache.GetAsync(cacheKey, context.RequestAborted);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Idempotency cache read failed for key {Key}; processing without idempotency.", cacheKey);
+            await next(context);
+            return;
+        }
+
         if (existingBytes is not null)
         {
             var existing = Deserialize(existingBytes);
@@ -77,11 +91,20 @@ public sealed class IdempotencyMiddleware(
 
         // Best-effort in-flight marker so a concurrent retry gets 409 rather than double-processing.
         // See TOCTOU caveat in the class remarks — two simultaneous first requests can both pass this check.
-        await cache.SetAsync(
-            cacheKey,
-            Serialize(new CachedResponse { InProgress = true }),
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = InProgressTtl },
-            context.RequestAborted);
+        try
+        {
+            await cache.SetAsync(
+                cacheKey,
+                Serialize(new CachedResponse { InProgress = true }),
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = InProgressTtl },
+                context.RequestAborted);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Idempotency marker write failed for key {Key}; processing without idempotency.", cacheKey);
+            await next(context);
+            return;
+        }
 
         var originalBody = context.Response.Body;
         using var buffer = new MemoryStream();
@@ -121,17 +144,26 @@ public sealed class IdempotencyMiddleware(
                     Headers = headers,
                     InProgress = false
                 };
-                await cache.SetAsync(
-                    cacheKey,
-                    Serialize(stored),
-                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CompletedTtl },
-                    context.RequestAborted);
-                completedStored = true;
+                // Best-effort: if the completed-response write fails, still return the response — the client
+                // just loses replay for this key and the InProgress marker expires via its TTL.
+                try
+                {
+                    await cache.SetAsync(
+                        cacheKey,
+                        Serialize(stored),
+                        new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CompletedTtl },
+                        context.RequestAborted);
+                    completedStored = true;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Idempotency completed-response write failed for key {Key}.", cacheKey);
+                }
             }
             else
             {
-                // Don't cache failures — let the client retry fresh.
-                await cache.RemoveAsync(cacheKey, context.RequestAborted);
+                // Don't cache failures — let the client retry fresh. Best-effort cleanup.
+                await TryRemoveAsync(cacheKey, context.RequestAborted);
             }
 
             context.Response.Body = originalBody;
@@ -144,7 +176,7 @@ public sealed class IdempotencyMiddleware(
             // the next retry will receive a clean replay of the completed response.
             if (!completedStored)
             {
-                await cache.RemoveAsync(cacheKey, CancellationToken.None);
+                await TryRemoveAsync(cacheKey, CancellationToken.None);
             }
             context.Response.Body = originalBody;
             throw;
@@ -152,6 +184,22 @@ public sealed class IdempotencyMiddleware(
         finally
         {
             context.Response.Body = originalBody;
+        }
+    }
+
+    /// <summary>
+    /// Removes a cache entry, swallowing (and logging) any cache failure. Cleanup must never mask the
+    /// original outcome — a Redis outage during cleanup leaves the InProgress marker to expire via its TTL.
+    /// </summary>
+    private async Task TryRemoveAsync(string cacheKey, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await cache.RemoveAsync(cacheKey, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Idempotency cache cleanup failed for key {Key}; the marker will expire via its TTL.", cacheKey);
         }
     }
 

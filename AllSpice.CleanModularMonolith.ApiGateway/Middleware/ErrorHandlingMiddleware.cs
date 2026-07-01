@@ -26,7 +26,12 @@ public class ErrorHandlingMiddleware(
         {
             _logger.LogDebug("Request cancelled by client: {Method} {Path}",
                 context.Request.Method, context.Request.Path);
-            context.Response.StatusCode = 499; // nginx-style "Client Closed Request"
+
+            // Only set the status if nothing has been written yet — mutating a started response throws.
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = 499; // nginx-style "Client Closed Request"
+            }
         }
         catch (Exception ex)
         {
@@ -38,6 +43,18 @@ public class ErrorHandlingMiddleware(
                 correlationId,
                 context.Request.Path,
                 context.Request.Method);
+
+            // If the response has already started (e.g. a streaming or proxied endpoint threw mid-write) the
+            // status and headers are read-only; attempting to write the problem+json body would throw an
+            // InvalidOperationException that masks the real exception and corrupts the response. Let the
+            // original exception propagate so the host aborts the connection cleanly instead.
+            if (context.Response.HasStarted)
+            {
+                _logger.LogWarning(
+                    "Response for {Method} {Path} had already started; cannot write an RFC7807 problem body.",
+                    context.Request.Method, context.Request.Path);
+                throw;
+            }
 
             await HandleExceptionAsync(context, ex, correlationId);
         }
@@ -59,6 +76,9 @@ public class ErrorHandlingMiddleware(
             ArgumentException => HttpStatusCode.BadRequest,
             KeyNotFoundException => HttpStatusCode.NotFound,
             TimeoutException => HttpStatusCode.RequestTimeout,
+            // Kestrel throws this (StatusCode 413) when a request body exceeds the per-request
+            // MaxRequestBodySize set by RequestValidationMiddleware, or 400 for a malformed request line.
+            Microsoft.AspNetCore.Http.BadHttpRequestException badHttpRequest => (HttpStatusCode)badHttpRequest.StatusCode,
             _ => HttpStatusCode.InternalServerError
         };
 
