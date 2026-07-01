@@ -269,19 +269,23 @@ public static class IdentityModuleExtensions
         var bootstrapper = scope.ServiceProvider.GetRequiredService<AuthorizationBootstrapper>();
 
         var isNpgsql = dbContext.Database.IsNpgsql();
+        // Track exactly what we opened/acquired so the finally only cleans up what actually succeeded.
+        // Otherwise, if OpenConnectionAsync throws (DB unreachable), an unconditional pg_advisory_unlock
+        // in the finally would reopen the connection, throw AGAIN, and mask the original startup exception.
+        var connectionOpened = false;
+        var lockAcquired = false;
 
         try
         {
-            // Open the connection and acquire the advisory lock INSIDE the try so that any exception
-            // thrown by OpenConnectionAsync or pg_advisory_lock is caught and the finally still runs.
-            // pg_advisory_unlock on a connection where the lock was never acquired is a harmless no-op,
-            // and CloseConnectionAsync on a closed/not-yet-opened connection is also a no-op — so
-            // unconditional cleanup in the finally is safe.
+            // Open the connection and acquire the advisory lock INSIDE the try so a throw from either is
+            // caught and the finally still runs its (now guarded) cleanup.
             if (isNpgsql)
             {
                 await dbContext.Database.OpenConnectionAsync(ct);
+                connectionOpened = true;
                 await dbContext.Database.ExecuteSqlRawAsync(
                     $"SELECT pg_advisory_lock({AdvisoryLockKey})", ct);
+                lockAcquired = true;
             }
 
             // Reconciler saves first so the bootstrapper's GetByKeyAsync queries see the seeded permissions.
@@ -291,13 +295,18 @@ public static class IdentityModuleExtensions
         }
         finally
         {
-            if (isNpgsql)
+            // Release the lock with a non-cancellable token: cleanup in a finally must run even when the
+            // caller's token (ApplicationStopping) has fired, or the session-level advisory lock would stay
+            // held on the pooled connection past shutdown. Only unlock if we actually acquired it, and only
+            // close if we actually opened — so a connect failure propagates its real exception unmasked.
+            if (lockAcquired)
             {
-                // Release with a non-cancellable token: cleanup in a finally must run even when the caller's
-                // token (ApplicationStopping) has fired, or the session-level advisory lock would stay held
-                // on the pooled connection past shutdown.
                 await dbContext.Database.ExecuteSqlRawAsync(
                     $"SELECT pg_advisory_unlock({AdvisoryLockKey})", CancellationToken.None);
+            }
+
+            if (connectionOpened)
+            {
                 await dbContext.Database.CloseConnectionAsync();
             }
         }
