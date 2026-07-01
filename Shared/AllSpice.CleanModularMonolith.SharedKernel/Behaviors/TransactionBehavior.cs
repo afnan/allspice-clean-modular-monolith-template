@@ -1,6 +1,7 @@
 using AllSpice.CleanModularMonolith.SharedKernel.Events;
 using AllSpice.CleanModularMonolith.SharedKernel.Messaging;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
+using Ardalis.Result;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -54,6 +55,25 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
         if (dirtyContexts.Count == 0)
         {
             return response; // nothing staged — no transaction needed
+        }
+
+        // Failure must not mutate state. If the handler staged writes but signalled failure by RETURNING a
+        // failure Result (instead of throwing), discard the staged changes rather than committing them — the
+        // same "failure => no state change" guarantee the throw path already gives (a throw short-circuits
+        // before the transaction is opened). The staged changes are never flushed and are dropped when the
+        // scoped DbContext is disposed; no domain events dispatch and no outbox envelope is enrolled. Success
+        // is ResultStatus.Ok here (Created/NoContent are applied at the endpoint layer), so treating any other
+        // status as a non-committing failure is safe.
+        if (response is IResult result &&
+            result.Status is not (ResultStatus.Ok or ResultStatus.Created or ResultStatus.NoContent))
+        {
+            _logger.LogWarning(
+                "{RequestType} returned a failure Result ({Status}) after staging writes to {DbContext}; " +
+                "discarding the staged changes without committing.",
+                typeof(TRequest).Name,
+                result.Status,
+                dirtyContexts[0].Instance.GetType().Name);
+            return response;
         }
 
         if (dirtyContexts.Count > 1)
