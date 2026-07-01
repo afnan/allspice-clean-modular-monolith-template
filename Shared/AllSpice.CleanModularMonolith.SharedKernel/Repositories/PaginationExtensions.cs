@@ -34,6 +34,10 @@ public static class PaginationExtensions
             throw new ArgumentOutOfRangeException(nameof(pageSize));
         }
 
+        // Clamp identically to ApplyPaging so the returned page metadata (TotalPages/HasNextPage) reflects
+        // the page size the specification actually applied.
+        pageSize = Math.Min(pageSize, SpecificationBuilderExtensions.MaxPageSize);
+
         var totalCount = await repository.CountAsync(pagedSpecification, cancellationToken);
         var items = await repository.ListAsync(pagedSpecification, cancellationToken);
         return new PaginationResult<T>(items, totalCount, pageNumber, pageSize);

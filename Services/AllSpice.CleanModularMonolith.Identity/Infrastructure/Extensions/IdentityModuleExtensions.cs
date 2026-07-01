@@ -87,7 +87,16 @@ public static class IdentityModuleExtensions
             var parsedRedis = redisConnectionString.StartsWith("redis://", StringComparison.OrdinalIgnoreCase)
                 ? redisConnectionString["redis://".Length..]
                 : redisConnectionString;
-            builder.Services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(parsedRedis));
+            builder.Services.TryAddSingleton<IConnectionMultiplexer>(_ =>
+            {
+                // AbortOnConnectFail=false so a configured-but-unreachable Redis at boot does NOT throw here.
+                // This factory runs during hosted-service (AuthzCacheEvictionSubscriber) construction, before
+                // StartAsync — a synchronous Connect() throw would crash startup. The host must still come up
+                // Degraded and reconnect in the background, matching the template's optional-infra design.
+                var redisConfig = ConfigurationOptions.Parse(parsedRedis);
+                redisConfig.AbortOnConnectFail = false;
+                return ConnectionMultiplexer.Connect(redisConfig);
+            });
             builder.Services.AddSingleton<IAuthzCacheInvalidator, RedisAuthzCacheInvalidator>();
             builder.Services.AddHostedService<AuthzCacheEvictionSubscriber>();
         }
@@ -301,8 +310,16 @@ public static class IdentityModuleExtensions
             // close if we actually opened — so a connect failure propagates its real exception unmasked.
             if (lockAcquired)
             {
-                await dbContext.Database.ExecuteSqlRawAsync(
-                    $"SELECT pg_advisory_unlock({AdvisoryLockKey})", CancellationToken.None);
+                try
+                {
+                    await dbContext.Database.ExecuteSqlRawAsync(
+                        $"SELECT pg_advisory_unlock({AdvisoryLockKey})", CancellationToken.None);
+                }
+                catch
+                {
+                    // Never let an unlock failure mask the original startup exception. The session-scoped
+                    // advisory lock is released anyway when the pooled connection is closed/reset below.
+                }
             }
 
             if (connectionOpened)

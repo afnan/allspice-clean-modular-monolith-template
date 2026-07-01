@@ -3,6 +3,7 @@ using AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.Messaging;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consumers;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
+using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 using AllSpice.CleanModularMonolith.SharedKernel.Events;
 using AllSpice.CleanModularMonolith.SharedKernel.Identity;
 using AllSpice.CleanModularMonolith.SharedKernel.Interceptors;
@@ -30,6 +31,9 @@ public static class GatewayModuleRegistrationExtensions
         var logger = loggerFactory.CreateLogger("Program");
 
         builder.Services.AddScoped<IDomainEventDispatcher, MediatorDomainEventDispatcher>();
+        // Scoped queue drained by TransactionBehavior after commit — lets handlers defer best-effort side
+        // effects (e.g. authz cache eviction) until the write is durable instead of firing them pre-commit.
+        builder.Services.AddScoped<IPostCommitActions, PostCommitActions>();
 
         // Current-user provider for audit stamping + cross-cutting EF Core save interceptors
         // (concurrency diagnostics, audit-user stamping). AddSharedKernelInterceptors registers them

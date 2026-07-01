@@ -17,6 +17,10 @@ public sealed class KeycloakTokenProvider(
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
+    // Refresh slightly before expiry. Deliberately small (not 5 minutes): Keycloak's default access-token
+    // lifespan is 5 minutes, so a 5-minute margin would refresh on every call and never reuse the cache.
+    private static readonly TimeSpan RefreshMargin = TimeSpan.FromSeconds(30);
+
     private readonly IOptions<KeycloakOptions> _options = options;
     private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
     private readonly TimeProvider _timeProvider = timeProvider;
@@ -39,7 +43,7 @@ public sealed class KeycloakTokenProvider(
             return opts.ApiToken;
         }
 
-        if (_cachedToken is not null && _timeProvider.GetUtcNow().AddMinutes(5) < _tokenExpiry)
+        if (_cachedToken is not null && _timeProvider.GetUtcNow().Add(RefreshMargin) < _tokenExpiry)
         {
             return _cachedToken;
         }
@@ -47,7 +51,7 @@ public sealed class KeycloakTokenProvider(
         await _semaphore.WaitAsync(cancellationToken);
         try
         {
-            if (_cachedToken is not null && _timeProvider.GetUtcNow().AddMinutes(5) < _tokenExpiry)
+            if (_cachedToken is not null && _timeProvider.GetUtcNow().Add(RefreshMargin) < _tokenExpiry)
             {
                 return _cachedToken;
             }
@@ -92,7 +96,7 @@ public sealed class KeycloakTokenProvider(
             response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
-            var doc = await JsonDocument.ParseAsync(stream, cancellationToken: timeoutCts.Token);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: timeoutCts.Token);
 
             var accessToken = doc.RootElement.GetProperty("access_token").GetString()
                 ?? throw new InvalidOperationException("Keycloak token response missing access_token.");

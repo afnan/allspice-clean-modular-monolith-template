@@ -114,7 +114,8 @@ public sealed class SetRolePermissionsIntegrationTests
             new RolePermissionRepository(ctx),
             new PermissionRepository(ctx),
             new AuthzMapVersionRepository(ctx),
-            new NoOpCacheInvalidator());
+            new NoOpCacheInvalidator(),
+            new AllSpice.CleanModularMonolith.SharedKernel.Behaviors.PostCommitActions());
 
     /// <summary>No-op invalidator: integration tests do not need Redis.</summary>
     private sealed class NoOpCacheInvalidator : IAuthzCacheInvalidator

@@ -89,7 +89,7 @@ Services/{Module}/
   `IFileStorageService`, `SoftDeleteQueryFilterConvention`, `MigrationRunner`.
 - **Notifications.Contracts** — integration-event DTOs consumed by other modules.
 - **RealTime** — `AppHub` SignalR hub + `IRealtimePublisher`.
-- **Identity.Abstractions** — portal-aware JWT (`AddIdentityPortals`), claims utilities, module-role authorization.
+- **Identity.Abstractions** — portal-aware JWT (`AddIdentityPortals`), claims utilities, permission-based authorization primitives (`[HasPermission]`, policy provider, `IResourceAuthorizer`).
 - **Web** — `Ardalis.Result` HTTP mapping (incl. `ExecuteFailureAsync`), `ClaimsPrincipalExtensions`.
 - **Pdf** — `PdfGeneratorBase`, `PdfTheme`, `PdfFooterBuilder`.
 

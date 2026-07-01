@@ -2,6 +2,7 @@ using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 using AllSpice.CleanModularMonolith.Identity.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Identity.Application.Features.Authorization.Commands.SetRolePermissions;
 using AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.Authorization;
+using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
 using Ardalis.Result;
 
 namespace AllSpice.CleanModularMonolith.Identity.Application.UnitTests.Authorization;
@@ -37,8 +38,9 @@ public sealed class SetRolePermissionsCommandHandlerTests
         cacheInvalidator.Setup(r => r.InvalidateAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
+        var postCommit = new PostCommitActions();
         var handler = new SetRolePermissionsCommandHandler(
-            roleRepo.Object, rolePermRepo.Object, permRepo.Object, versionRepo.Object, cacheInvalidator.Object);
+            roleRepo.Object, rolePermRepo.Object, permRepo.Object, versionRepo.Object, cacheInvalidator.Object, postCommit);
 
         var result = await handler.Handle(
             new SetRolePermissionsCommand("admin", ["authz.manage"]), CancellationToken.None);
@@ -51,6 +53,15 @@ public sealed class SetRolePermissionsCommandHandlerTests
         rolePermRepo.Verify(
             r => r.Add(It.Is<RolePermission>(rp => rp.RoleId == role.Id && rp.PermissionId == newPerm.Id)),
             Times.Once);
+        // The handler defers eviction to a post-commit action — nothing is invalidated during Handle itself.
+        cacheInvalidator.Verify(r => r.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Never);
+
+        // Draining the queue (as TransactionBehavior does after commit) performs the eviction.
+        foreach (var action in postCommit.Drain())
+        {
+            await action(CancellationToken.None);
+        }
+
         cacheInvalidator.Verify(r => r.InvalidateAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -66,7 +77,8 @@ public sealed class SetRolePermissionsCommandHandlerTests
             new Mock<IRolePermissionRepository>().Object,
             new Mock<IPermissionRepository>().Object,
             new Mock<IAuthzMapVersionRepository>().Object,
-            new Mock<IAuthzCacheInvalidator>().Object);
+            new Mock<IAuthzCacheInvalidator>().Object,
+            new PostCommitActions());
 
         var result = await handler.Handle(
             new SetRolePermissionsCommand("nonexistent", ["authz.read"]), CancellationToken.None);
@@ -97,7 +109,8 @@ public sealed class SetRolePermissionsCommandHandlerTests
             rolePermRepo.Object,
             permRepo.Object,
             versionRepo.Object,
-            cacheInvalidator.Object);
+            cacheInvalidator.Object,
+            new PostCommitActions());
 
         var result = await handler.Handle(
             new SetRolePermissionsCommand("admin", ["unknown.key"]), CancellationToken.None);

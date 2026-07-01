@@ -202,13 +202,23 @@ public sealed class NotificationDispatcher(
                     await _outbox.PublishAsync(deliveryEvent);
                     await _dbContext.SaveChangesAsync(cancellationToken);
                     await deliveredTx.CommitAsync(cancellationToken);
-
-                    // Deliver promptly rather than waiting for Wolverine's recovery sweep, and reset the
-                    // outbox's in-memory outstanding list so it doesn't accumulate across the batch.
-                    await _outbox.FlushOutgoingMessagesAsync();
                     processed++;
-
                     _logger.LogInformation("Notification {NotificationId} delivered via {Channel}", notification.Id, notification.Channel.Name);
+
+                    // The Delivered row and its outbox envelope are already durably committed. Flushing to
+                    // send promptly is best-effort ONLY: a transport blip here must NOT fall through to the
+                    // outer catch, which would call HandleFailure and revert an already-delivered row (a
+                    // duplicate send). Wolverine's recovery sweep delivers the envelope if this flush fails.
+                    try
+                    {
+                        await _outbox.FlushOutgoingMessagesAsync();
+                    }
+                    catch (Exception flushEx)
+                    {
+                        _logger.LogWarning(flushEx,
+                            "Post-commit outbox flush failed for notification {NotificationId}; the durable recovery loop will deliver it.",
+                            notification.Id);
+                    }
                 }
                 else
                 {
