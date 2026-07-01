@@ -18,7 +18,7 @@ dotnet test tests/AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests -
 ```bash
 dotnet new install .
 dotnet new allspice-modular -n Contoso.Erp
-dotnet new uninstall .
+dotnet new uninstall AllSpice.CleanModularMonolith
 ```
 
 ## System (Windows with bash shell)

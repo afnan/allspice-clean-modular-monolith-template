@@ -23,7 +23,7 @@ but call out the conflict.
    and the JWT/SignalR boundary. Resolve between them with `IUserExternalIdResolver`. Don't store or compare
    external IDs where a local `Guid` is expected.
 4. **Bespoke repository per aggregate.** Define `IXxxRepository` (extending Ardalis `IRepository<T>`/
-   `IReadRepository<T>`) and `XxxRepository : RepositoryBase<T>`. Handlers depend on the **bespoke** interface,
+   `IReadRepository<T>`) and `XxxRepository : EfRepository<TContext, T>`. Handlers depend on the **bespoke** interface,
    never on a raw `IRepository<T>` at the call site.
 5. **No secrets in source.** Use the AppHost `GetSecret(...)` helper (throws in non-Development) and
    `dotnet user-secrets` / env vars / `--parameter`. Design-time factories read `EF_DESIGN_*` and fail fast.
@@ -43,7 +43,7 @@ but call out the conflict.
   `Domain / Application / Infrastructure / Api`.
 - **Flow:** FastEndpoint → `IMediator.Send(Command/Query)` → Handler (pipeline behaviors) → bespoke
   Repository (Ardalis.Specification) → module `DbContext`.
-- **Pipeline order:** Logging → Performance → Validation → Transaction → DomainException.
+- **Pipeline order:** Logging → DomainException → Performance → Validation → Transaction.
 - Full detail lives in [`ARCHITECTURE.md`](./ARCHITECTURE.md). Read it before designing anything non-trivial.
 
 ---

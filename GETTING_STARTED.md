@@ -29,6 +29,7 @@ This automatically provisions:
 - **Redis** — output caching and distributed cache
 - **Keycloak** — identity provider (admin UI at `http://localhost:8080`)
 - **Papercut SMTP** — email testing (UI at `http://localhost:37408`)
+- **Azurite** — Azure Storage emulator (blob storage)
 
 The API Gateway runs at `https://localhost:7113` (or `http://localhost:5120`).
 
@@ -115,7 +116,7 @@ In development, all emails go to Papercut SMTP (no config needed). For productio
 | `Notifications:SendGrid:ApiKey` | [SendGrid](https://sendgrid.com) API key (fallback provider) |
 | `Notifications:SendGrid:FromAddress` | Verified sender email for SendGrid |
 
-The email fallback chain is: **Resend** → **SendGrid** → **MailKit** (SMTP).
+The production email fallback chain is: **Resend** → **SendGrid**. MailKit (SMTP) is dev-only — never a production fallback.
 
 ### Optional — CORS Origins
 
