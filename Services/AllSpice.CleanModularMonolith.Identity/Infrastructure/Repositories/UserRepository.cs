@@ -13,6 +13,7 @@ public sealed class UserRepository(IdentityDbContext dbContext) : EfRepository<I
 
     public Task<User?> GetByExternalIdAsync(string externalId, CancellationToken cancellationToken = default) =>
         _dbContext.Users
+            .AsNoTracking()
             .FirstOrDefaultAsync(u => u.ExternalId.Value == externalId, cancellationToken);
 
     public Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default)
@@ -26,6 +27,7 @@ public sealed class UserRepository(IdentityDbContext dbContext) : EfRepository<I
 
     public Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         _dbContext.Users
+            .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
 
     public async Task<IReadOnlyList<User>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
@@ -46,13 +48,14 @@ public sealed class UserRepository(IdentityDbContext dbContext) : EfRepository<I
 
     public async Task<IReadOnlyList<User>> ListActiveAsync(CancellationToken cancellationToken = default) =>
         await _dbContext.Users
+            .AsNoTracking()
             .Where(u => u.IsActive)
             .OrderBy(u => u.Username)
             .ToListAsync(cancellationToken);
 
     public async Task<(IReadOnlyList<User> Items, int TotalCount)> ListActivePagedAsync(int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var query = _dbContext.Users.Where(u => u.IsActive).OrderBy(u => u.Username);
+        var query = _dbContext.Users.AsNoTracking().Where(u => u.IsActive).OrderBy(u => u.Username);
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         return (items, totalCount);
@@ -60,5 +63,6 @@ public sealed class UserRepository(IdentityDbContext dbContext) : EfRepository<I
 
     public async Task<Dictionary<string, User>> GetAllIndexedByExternalIdAsync(CancellationToken cancellationToken = default) =>
         await _dbContext.Users
+            .AsNoTracking()
             .ToDictionaryAsync(u => u.ExternalId.Value, cancellationToken);
 }

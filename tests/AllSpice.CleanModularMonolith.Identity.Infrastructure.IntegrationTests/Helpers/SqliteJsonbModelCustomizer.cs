@@ -40,6 +40,16 @@ internal sealed class SqliteJsonbModelCustomizer : RelationalModelCustomizer
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
+            // Npgsql's UseXminAsConcurrencyToken (see AuthzMapVersionConfiguration) maps PostgreSQL's
+            // system 'xmin' column (type 'xid', store-generated) as an optimistic-concurrency token.
+            // SQLite has no such system column, and a store-generated NOT NULL column breaks inserts,
+            // so drop the shadow property here. The concurrency guarantee is a Postgres runtime concern
+            // not exercised by these SQLite-backed tests.
+            if (entityType.FindProperty("xmin") is { } xminProperty && xminProperty.IsShadowProperty())
+            {
+                entityType.RemoveProperty(xminProperty.Name);
+            }
+
             foreach (var property in entityType.GetProperties())
             {
                 if (string.Equals(property.GetColumnType(), "jsonb", StringComparison.OrdinalIgnoreCase))

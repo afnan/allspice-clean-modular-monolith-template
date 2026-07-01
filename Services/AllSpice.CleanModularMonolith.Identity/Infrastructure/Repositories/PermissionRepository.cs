@@ -13,4 +13,17 @@ public sealed class PermissionRepository(IdentityDbContext dbContext)
 
     public Task<Permission?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
         => _dbContext.Permissions.FirstOrDefaultAsync(p => p.Key == key, cancellationToken);
+
+    public async Task<IReadOnlyList<Permission>> ListByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default)
+    {
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        return await _dbContext.Permissions
+            .AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+    }
 }
