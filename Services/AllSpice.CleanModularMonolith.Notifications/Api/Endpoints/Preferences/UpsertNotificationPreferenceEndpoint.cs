@@ -1,6 +1,7 @@
 using AllSpice.CleanModularMonolith.Identity.Abstractions.Authorization;
 using AllSpice.CleanModularMonolith.Notifications.Application.Features.Preferences.Commands.UpsertNotificationPreference;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Enums;
+using AllSpice.CleanModularMonolith.Web;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 
@@ -51,9 +52,6 @@ public sealed class UpsertNotificationPreferenceEndpoint(IMediator mediator)
             return;
         }
 
-        await TypedResults.Problem(
-                detail: result.Errors.FirstOrDefault(),
-                statusCode: StatusCodes.Status400BadRequest)
-            .ExecuteAsync(HttpContext);
+        await result.ExecuteFailureAsync(HttpContext);
     }
 }

@@ -35,6 +35,7 @@ public sealed class CreatePermissionEndpoint(IMediator mediator)
         {
             ResultStatus.Ok => TypedResults.Created(),
             ResultStatus.Invalid => result.ToProblem(StatusCodes.Status400BadRequest),
+            ResultStatus.Conflict => result.ToProblem(StatusCodes.Status409Conflict),
             _ => result.ToProblem()
         };
     }

@@ -41,6 +41,7 @@ public sealed class ListUsersEndpoint(IMediator mediator) : EndpointWithoutReque
                 result.Value.PageSize,
                 result.Value.TotalCount,
                 result.Value.TotalPages)),
+            ResultStatus.Invalid => result.ToProblem(StatusCodes.Status400BadRequest),
             _ => result.ToProblem()
         };
     }
