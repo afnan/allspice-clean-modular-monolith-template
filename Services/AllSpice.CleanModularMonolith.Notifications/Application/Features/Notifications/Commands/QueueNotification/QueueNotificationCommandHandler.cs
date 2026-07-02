@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Ardalis.GuardClauses;
 using Ardalis.Result;
 using AllSpice.CleanModularMonolith.Notifications.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates;
@@ -16,8 +15,8 @@ public sealed class QueueNotificationCommandHandler(
     TimeProvider timeProvider)
     : IRequestHandler<QueueNotificationCommand, Result<Guid>>
 {
-    private readonly INotificationRepository _notificationRepository = Guard.Against.Null(notificationRepository);
-    private readonly TimeProvider _timeProvider = Guard.Against.Null(timeProvider);
+    private readonly INotificationRepository _notificationRepository = notificationRepository;
+    private readonly TimeProvider _timeProvider = timeProvider;
 
     /// <inheritdoc />
     public async ValueTask<Result<Guid>> Handle(QueueNotificationCommand request, CancellationToken cancellationToken)

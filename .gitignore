@@ -25,16 +25,6 @@ Release/
 dist/
 publish/
 
-# Static Web Assets
-src/Handel360.Frontend/Handel360.Frontend.Shared/wwwroot/css/tailwind.css
-**/wwwroot/css/tailwind.css
-
-wwwroot/**/*.map
-wwwroot/**/*.gz
-wwwroot/**/*.br
-src/Handel360.ApiService/wwwroot/uploads/
-src/Handel360.ApiService/**.txt
-
 # Node.js Dependencies
 node_modules/
 npm-debug.log*
@@ -88,25 +78,18 @@ packages/
 *.env
 *.local.settings.json
 
-# # Tailwind and PostCSS
-# tailwind.config.js
-# postcss.config.js
-
 # Cache Files
 .cache/
 npm-cache/
 yarn-cache/
 
 # Docs and Workflow Outputs
-docs/
+# Keep ADRs and any markdown docs tracked; only ignore generated (non-markdown) doc output.
+docs/*
+!docs/**/
+!docs/**/*.md
 
-# Compiled Razor Views
-scopedcss/
-staticwebassets/
-
-# Specific to Blazor and WASM Projects
-**/wwwroot/_framework/
-**/wwwroot/_content/
+# Azure
 .azure
 
 # Custom

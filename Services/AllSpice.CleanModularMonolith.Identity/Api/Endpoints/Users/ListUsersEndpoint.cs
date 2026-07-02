@@ -37,10 +37,11 @@ public sealed class ListUsersEndpoint(IMediator mediator) : EndpointWithoutReque
         {
             ResultStatus.Ok => TypedResults.Ok(new PagedResponse<UserResponse>(
                 result.Value.Items.Select(UserMapper.ToResponse).ToList(),
-                result.Value.Page,
+                result.Value.PageNumber,
                 result.Value.PageSize,
                 result.Value.TotalCount,
                 result.Value.TotalPages)),
+            ResultStatus.Invalid => result.ToProblem(StatusCodes.Status400BadRequest),
             _ => result.ToProblem()
         };
     }

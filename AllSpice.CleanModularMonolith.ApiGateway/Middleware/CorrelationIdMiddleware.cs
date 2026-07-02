@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Serilog.Context;
 
 namespace AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 
@@ -31,7 +32,13 @@ public class CorrelationIdMiddleware(RequestDelegate next)
         context.Items[HttpHeaderNames.CorrelationId] = correlationId;
         context.Response.Headers[HttpHeaderNames.CorrelationId] = correlationId;
 
-        await _next(context);
+        // Push the correlation id into Serilog's LogContext so every downstream pipeline/handler log line is
+        // enriched with it (Program.cs configures Enrich.FromLogContext()). Without this, only context.Items
+        // and the response header carry the id, and structured logs emitted downstream would omit CorrelationId.
+        using (LogContext.PushProperty("CorrelationId", correlationId))
+        {
+            await _next(context);
+        }
     }
 
     private static bool IsValid(string value)

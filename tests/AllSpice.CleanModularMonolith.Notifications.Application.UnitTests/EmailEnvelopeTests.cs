@@ -29,12 +29,16 @@ public class EmailEnvelopeTests
     }
 
     [Fact]
-    public void Html_message_sets_html_body_only()
+    public void Html_message_sets_html_body_and_generated_plain_text_alternative()
     {
-        var envelope = EmailEnvelope.From(Message(isHtml: true), "d@example.com", null, null);
+        var message = new EmailMessage("to@example.com", "Subject", "<p>Hello <b>World</b></p>", IsHtml: true, From: null);
 
-        Assert.Equal("BODY", envelope.HtmlBody);
-        Assert.Null(envelope.TextBody);
+        var envelope = EmailEnvelope.From(message, "d@example.com", null, null);
+
+        // HTML part is preserved verbatim; a tag-stripped/entity-decoded plain-text alternative is generated
+        // so the outbound message is a proper multipart/alternative (missing text/plain hurts deliverability).
+        Assert.Equal("<p>Hello <b>World</b></p>", envelope.HtmlBody);
+        Assert.Equal("Hello World", envelope.TextBody);
     }
 
     [Fact]

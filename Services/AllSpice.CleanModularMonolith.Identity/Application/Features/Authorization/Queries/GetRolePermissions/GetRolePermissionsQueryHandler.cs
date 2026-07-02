@@ -31,13 +31,10 @@ public sealed class GetRolePermissionsQueryHandler(
             return Result<IReadOnlyList<string>>.Success([]);
         }
 
-        var permissionIds = rolePermissions.Select(rp => rp.PermissionId).ToHashSet();
-        // TODO: replace with IPermissionRepository.ListByIdsAsync(permissionIds, ct) once added to avoid
-        // loading the full permission set just to filter in memory. The permission set is small so this is fine for now.
-        var allPermissions = await _permissionRepository.ListAsync(cancellationToken);
+        var permissionIds = rolePermissions.Select(rp => rp.PermissionId).ToList();
+        var permissions = await _permissionRepository.ListByIdsAsync(permissionIds, cancellationToken);
 
-        IReadOnlyList<string> keys = allPermissions
-            .Where(p => permissionIds.Contains(p.Id))
+        IReadOnlyList<string> keys = permissions
             .OrderBy(p => p.Key, StringComparer.Ordinal)
             .Select(p => p.Key)
             .ToList();

@@ -31,7 +31,7 @@ Most starters give you folders. This one encodes the decisions **and enforces th
 - **Realtime hub** sharing SignalR infrastructure across modules with automatic user groups
 - **Wolverine messaging** with PostgreSQL durable outbox for reliable event-driven cross-module communication
 - **Quartz.NET scheduling** with per-module jobs (Keycloak user sync, stale-pending notifications monitor)
-- **Aspire AppHost** to spin up PostgreSQL, Redis, Keycloak, and Papercut SMTP in one command
+- **Aspire AppHost** to spin up PostgreSQL, Redis, Keycloak, Papercut SMTP, and Azurite in one command
 - **Central package management** with .NET 10, Clean Architecture patterns powered by Ardalis libraries
 - **FastEndpoints** with explicit assembly discovery (not controllers)
 - **Serilog + OpenTelemetry** logging and tracing (PII-safe: `[SensitiveData]` redaction in the logging pipeline)
@@ -64,14 +64,14 @@ dotnet build Contoso.Erp.slnx
 dotnet run --project Contoso.Erp.AppHost/Contoso.Erp.AppHost.csproj
 ```
 
-Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
+Spins up PostgreSQL, Redis, Keycloak, Papercut SMTP, and Azurite (dev only).
 
 ## Project Layout
 
 ```
 {{ProjectName}}/
 |- {{ProjectName}}.ApiGateway/           -- Sole runnable host, YARP, FastEndpoints, SignalR
-|- {{ProjectName}}.AppHost/              -- Aspire orchestrator (Postgres, Redis, Keycloak, Papercut)
+|- {{ProjectName}}.AppHost/              -- Aspire orchestrator (Postgres, Redis, Keycloak, Papercut, Azurite)
 |- {{ProjectName}}.ServiceDefaults/      -- OpenTelemetry, resilience, service discovery, Quartz hosting
 |- Services/{{ProjectName}}.Identity/    -- User aggregate, Keycloak sync, RBAC
 |- Services/{{ProjectName}}.Notifications/ -- Multi-channel delivery, templates, preferences
@@ -80,6 +80,7 @@ Spins up PostgreSQL, Redis, Keycloak, and Papercut SMTP (dev only).
 |- Shared/{{ProjectName}}.RealTime/      -- SignalR hub, IRealtimePublisher
 |- Shared/{{ProjectName}}.Notifications.Contracts/ -- Integration event DTOs
 |- Shared/{{ProjectName}}.Identity.Abstractions/   -- Portal-aware JWT, claims, permission-based authorization primitives
+|- Shared/{{ProjectName}}.ApiContracts/  -- Response DTOs shared by endpoints
 |- Shared/{{ProjectName}}.Web/           -- Ardalis.Result HTTP extensions
 \- Directory.Packages.props              -- Central NuGet version management
 ```

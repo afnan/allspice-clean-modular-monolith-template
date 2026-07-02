@@ -84,12 +84,13 @@ Services/{Module}/
 ## Shared libraries
 
 - **SharedKernel** — base entities (`Entity`, `AuditableEntity`, `SoftDeletableEntity`) + the `IAggregateRoot` marker,
-  domain events, `EfRepository<T>`, value objects, Mediator pipeline behaviors, `IIntegrationEventPublisher`,
+  domain events, `EfRepository<TContext, TAggregate>`, value objects, Mediator pipeline behaviors, `IIntegrationEventPublisher`,
   `IUserExternalIdResolver`, `ICurrentUserProvider`, `IModuleDbContext`, EF interceptors, `DbContextHealthCheck`,
   `IFileStorageService`, `SoftDeleteQueryFilterConvention`, `MigrationRunner`.
 - **Notifications.Contracts** — integration-event DTOs consumed by other modules.
 - **RealTime** — `AppHub` SignalR hub + `IRealtimePublisher`.
 - **Identity.Abstractions** — portal-aware JWT (`AddIdentityPortals`), claims utilities, permission-based authorization primitives (`[HasPermission]`, policy provider, `IResourceAuthorizer`).
+- **ApiContracts** — response DTOs returned by endpoints (shared request/response shapes).
 - **Web** — `Ardalis.Result` HTTP mapping (incl. `ExecuteFailureAsync`), `ClaimsPrincipalExtensions`.
 - **Pdf** — `PdfGeneratorBase`, `PdfTheme`, `PdfFooterBuilder`.
 
@@ -98,7 +99,7 @@ Services/{Module}/
 `FastEndpoint` → `IMediator.Send(Command/Query)` → `Handler` (pipeline behaviors) → bespoke `Repository`
 (Ardalis.Specification) → `DbContext`.
 
-**Pipeline order (outer → inner):** Logging → Performance → Validation → Transaction → DomainException.
+**Pipeline order (outer → inner):** Logging → DomainException → Performance → Validation → Transaction.
 
 Commands implement `ITransactional` for automatic transaction wrapping: `TransactionBehavior` opens a DB
 transaction on the module's DbContext, runs the handler, dispatches domain events (drain loop for
@@ -118,7 +119,7 @@ Keycloak integration with the client-credentials flow:
   per-request via `ICurrentUserPermissions` (scoped, lazy, cached). Layer 1 — declarative endpoint gate via
   `[HasPermission("key")]` / `Policies(PermissionPolicy.For("key"))` backed by `PermissionAuthorizationHandler`;
   Layer 2 — resource/ownership via `IResourceAuthorizer`. Contracts live in `Identity.Abstractions`; implementations
-  in this module. Runtime catalog management (admin endpoints, Keycloak role sync, cache eviction) is forthcoming.
+  in this module. Runtime catalog management (admin endpoints, Keycloak role sync, cache eviction) is implemented.
 - **Keycloak:** `KeycloakTokenProvider` (singleton, `SemaphoreSlim`-cached) + `KeycloakTokenHandler`
   (auto Bearer injection); `KeycloakDirectoryClient` for the Admin REST API.
 - **Sync:** `KeycloakUserSyncJob` (Quartz) reconciles Keycloak users against the local `Users` table; an
@@ -126,12 +127,15 @@ Keycloak integration with the client-credentials flow:
 - **User provisioning is the IdP's responsibility.** This template is auth-mechanism-agnostic: users are
   provisioned in Keycloak (directly, or via SSO/SAML federation), then mirrored locally by the sync job. The
   app does not create users or manage passwords — there is intentionally no in-app "invite user" flow.
-- **Endpoints:** `GET /api/identity/users/{externalId}`, `GET /api/identity/users`.
+- **Endpoints:** `GET /api/identity/users/{externalId}`, `GET /api/identity/users`. **Authorization admin:**
+  `GET /api/identity/authz/permissions`, `POST /api/identity/authz/permissions`,
+  `DELETE /api/identity/authz/permissions/{id}`, `GET /api/identity/authz/roles`,
+  `GET /api/identity/authz/roles/{key}/permissions`, `PUT /api/identity/authz/roles/{key}/permissions`.
 
 ## Notifications module
 
 Email with provider fallback + in-app channel:
-- **Dev:** always MailKit (Papercut SMTP via Aspire). **Prod:** Resend → SendGrid → MailKit via `EmailSenderDispatcher`.
+- **Dev:** always MailKit (Papercut SMTP via Aspire). **Prod:** Resend → SendGrid via `EmailSenderDispatcher`; MailKit is dev-only (never a prod fallback).
 - **Templates:** embedded resources in `Infrastructure/Templates/`, merged with `_Layout.html`, seeded on startup.
 - **Channels:** Email, InApp (SignalR; `Recipient.UserId` MUST be a local `Guid`, resolved to external ID for SignalR).
 - **Identity:** `NotificationPreference.UserId` is a local `Guid`; the dispatcher fails closed on a non-Guid recipient.

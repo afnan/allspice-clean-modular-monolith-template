@@ -15,6 +15,15 @@ public sealed class NotificationDispatcherHealthCheck(
 {
     private const int StaleMultiplier = 3;
 
+    // A single dispatch cycle sends its whole batch (up to 20 notifications — see DueNotificationsSpecification)
+    // SYNCHRONOUSLY before it records another "last run". A slow provider can make that batch take far longer
+    // than the poll interval, so the stale threshold must budget for the worst-case batch send time on top of
+    // the poll cadence; otherwise a normal (if slow) cycle is misreported as Unhealthy and can flap the node.
+    // The budget stays comfortably below ReclaimAfterSeconds (300s) so a genuinely dead loop is still detected.
+    private const int MaxBatchSize = 20;                                        // mirrors the spec's default take
+    private const int PerNotificationSendBudgetSeconds = 10;                    // generous per-send allowance
+    private const int BatchSendBudgetSeconds = MaxBatchSize * PerNotificationSendBudgetSeconds;
+
     private readonly NotificationDispatcherHealthState _state = state;
     private readonly IOptions<NotificationDispatcherOptions> _options = options;
     private readonly TimeProvider _timeProvider = timeProvider;
@@ -23,7 +32,8 @@ public sealed class NotificationDispatcherHealthCheck(
     {
         var snapshot = _state.Snapshot();
         var pollSeconds = Math.Max(1, _options.Value.PollIntervalSeconds);
-        var staleAfter = TimeSpan.FromSeconds(pollSeconds * StaleMultiplier);
+        // poll cadence margin (pollSeconds * StaleMultiplier) PLUS a synchronous-batch send budget.
+        var staleAfter = TimeSpan.FromSeconds((pollSeconds * StaleMultiplier) + BatchSendBudgetSeconds);
 
         var data = new Dictionary<string, object>
         {

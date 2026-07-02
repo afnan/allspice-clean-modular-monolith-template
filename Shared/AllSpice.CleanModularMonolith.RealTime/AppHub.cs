@@ -29,10 +29,10 @@ public sealed class AppHub : Hub<IAppHubClient>
     /// <inheritdoc />
     public override async Task OnConnectedAsync()
     {
-        var userId = GetUserId();
-        if (!string.IsNullOrWhiteSpace(userId))
+        var externalUserId = GetUserId();
+        if (!string.IsNullOrWhiteSpace(externalUserId))
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, BuildUserGroup(userId));
+            await Groups.AddToGroupAsync(Context.ConnectionId, BuildUserGroup(externalUserId));
         }
 
         await base.OnConnectedAsync();
@@ -41,10 +41,10 @@ public sealed class AppHub : Hub<IAppHubClient>
     /// <inheritdoc />
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var userId = GetUserId();
-        if (!string.IsNullOrWhiteSpace(userId))
+        var externalUserId = GetUserId();
+        if (!string.IsNullOrWhiteSpace(externalUserId))
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, BuildUserGroup(userId));
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, BuildUserGroup(externalUserId));
         }
 
         await base.OnDisconnectedAsync(exception);
@@ -66,14 +66,18 @@ public sealed class AppHub : Hub<IAppHubClient>
     private string? GetUserId() => Context.User?.GetSubjectId();
 
     /// <summary>
-    /// Builds the normalized user group name for a given user.
+    /// Builds the normalized SignalR group name (<c>user:{externalUserId}</c>) for a given user.
     /// </summary>
-    private static string BuildUserGroup(string userId) => $"user:{userId}";
+    /// <param name="externalUserId">The user's external Keycloak subject id (the connection's <c>sub</c> claim).</param>
+    private static string BuildUserGroup(string externalUserId) => $"user:{externalUserId}";
 
     /// <summary>
-    /// Returns the normalized user group name for inbound/outbound references.
+    /// Returns the normalized SignalR group name for a user. This is the single shared group-name convention
+    /// used by BOTH the hub (joining a connection on connect) and <c>RealtimePublisher</c> (targeting a
+    /// publish), so both sides must key off the same external Keycloak subject id.
     /// </summary>
-    public static string GetUserGroup(string userId) => BuildUserGroup(userId);
+    /// <param name="externalUserId">The user's external Keycloak subject id (the connection's <c>sub</c> claim).</param>
+    public static string GetUserGroup(string externalUserId) => BuildUserGroup(externalUserId);
 }
 
 

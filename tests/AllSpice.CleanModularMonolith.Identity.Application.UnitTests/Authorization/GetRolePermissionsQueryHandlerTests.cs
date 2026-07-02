@@ -40,7 +40,7 @@ public sealed class GetRolePermissionsQueryHandlerTests
             .ReturnsAsync([mapping]);
 
         var permRepo = new Mock<IPermissionRepository>();
-        permRepo.Setup(r => r.ListAsync(It.IsAny<CancellationToken>()))
+        permRepo.Setup(r => r.ListByIdsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([perm]);
 
         var handler = new GetRolePermissionsQueryHandler(roleRepo.Object, rolePermRepo.Object, permRepo.Object);

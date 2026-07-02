@@ -8,10 +8,19 @@ namespace AllSpice.CleanModularMonolith.Pdf;
 /// Abstract base class for PDF generators using PuppeteerSharp (headless Chromium).
 /// Provides shared browser management, PDF generation, and utility methods.
 /// </summary>
-public abstract class PdfGeneratorBase
+public abstract class PdfGeneratorBase : IAsyncDisposable
 {
     private static string? _cachedExecutablePath;
     private static readonly SemaphoreSlim _downloadLock = new(1, 1);
+
+    // A single long-lived Chromium instance is launched lazily and REUSED across PDF calls (one NewPageAsync
+    // per PDF, the page disposed each call) — launching a full browser per PDF is expensive. The browser is
+    // per-generator-instance and released via IAsyncDisposable on shutdown, so register concrete generators as
+    // singletons to actually reuse it across requests. _browserLock guards launch/relaunch only; page creation
+    // is concurrent (Chromium supports many isolated pages on one browser).
+    private readonly SemaphoreSlim _browserLock = new(1, 1);
+    private IBrowser? _browser;
+    private bool _disposed;
 
     protected const string BrowserPathEnv = "PUPPETEER_EXECUTABLE_PATH";
     protected const string PuppeteerPathEnv = "PUPPETEER_CACHE_DIR";
@@ -39,13 +48,7 @@ public abstract class PdfGeneratorBase
         string html,
         bool waitForCharts = false)
     {
-        var executablePath = await EnsureBrowserAsync();
-        await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions
-        {
-            Headless = true,
-            ExecutablePath = executablePath,
-            Args = ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-        });
+        var browser = await GetBrowserAsync();
 
 #if DEBUG
         var previewPath = Environment.GetEnvironmentVariable("PDF_PREVIEW");
@@ -115,6 +118,52 @@ public abstract class PdfGeneratorBase
         });
     }
 
+    /// <summary>
+    /// Lazily launches and returns the shared Chromium instance, relaunching it if a previous instance died
+    /// (crashed / was disconnected). Thread-safe: concurrent first-callers are serialized on <c>_browserLock</c>,
+    /// after which only one launch happens and subsequent calls reuse the connected browser.
+    /// </summary>
+    private async Task<IBrowser> GetBrowserAsync()
+    {
+        var existing = _browser;
+        if (existing is { IsConnected: true })
+        {
+            return existing;
+        }
+
+        await _browserLock.WaitAsync();
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            if (_browser is { IsConnected: true })
+            {
+                return _browser;
+            }
+
+            // Discard a dead/disconnected browser before relaunching.
+            if (_browser is not null)
+            {
+                try { await _browser.DisposeAsync(); }
+                catch { /* best-effort cleanup of an already-dead browser */ }
+                _browser = null;
+            }
+
+            var executablePath = await EnsureBrowserAsync();
+            _browser = await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                Headless = true,
+                ExecutablePath = executablePath,
+                Args = ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+            });
+            return _browser;
+        }
+        finally
+        {
+            _browserLock.Release();
+        }
+    }
+
     /// <summary>HTML-encode a string for safe embedding.</summary>
     protected static string Encode(string? value) =>
         System.Net.WebUtility.HtmlEncode(value ?? "");
@@ -134,12 +183,12 @@ public abstract class PdfGeneratorBase
             if (_cachedExecutablePath is not null)
                 return _cachedExecutablePath;
 
-            var envPath = Environment.GetEnvironmentVariable(BrowserPathEnv)
-                          ?? Environment.GetEnvironmentVariable(PuppeteerPathEnv);
-            if (!string.IsNullOrWhiteSpace(envPath) && File.Exists(envPath))
+            // PUPPETEER_EXECUTABLE_PATH points DIRECTLY at a Chromium/Chrome binary — validate it as a file.
+            var explicitPath = Environment.GetEnvironmentVariable(BrowserPathEnv);
+            if (!string.IsNullOrWhiteSpace(explicitPath) && File.Exists(explicitPath))
             {
-                _cachedExecutablePath = envPath;
-                return envPath;
+                _cachedExecutablePath = explicitPath;
+                return explicitPath;
             }
 
             foreach (var knownPath in GetKnownBrowserPaths())
@@ -156,24 +205,60 @@ public abstract class PdfGeneratorBase
             {
                 throw new InvalidOperationException(
                     $"Browser download disabled via {DisableDownloadEnv}. " +
-                    $"Set {BrowserPathEnv} or {PuppeteerPathEnv} to a valid Chromium executable path.");
+                    $"Set {BrowserPathEnv} to a Chromium executable, or {PuppeteerPathEnv} to a cache " +
+                    "directory that contains (or may receive) a downloaded browser.");
             }
 
-            var fetcher = new BrowserFetcher(new BrowserFetcherOptions
+            // PUPPETEER_CACHE_DIR is a DIRECTORY, not an executable (the previous File.Exists check on it was a
+            // dead branch that never matched). Point the fetcher at it so the browser is located there — and
+            // downloaded there only if absent, since DownloadAsync is a no-op when the platform build is already
+            // cached. This gives a correct "locate-or-download" against the cache directory.
+            var cacheDir = Environment.GetEnvironmentVariable(PuppeteerPathEnv);
+            var fetcherOptions = new BrowserFetcherOptions { Platform = GetDownloadPlatform() };
+            if (!string.IsNullOrWhiteSpace(cacheDir))
             {
-                Platform = RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-                    ? PuppeteerSharp.Platform.Linux
-                    : PuppeteerSharp.Platform.Win64
-            });
+                Directory.CreateDirectory(cacheDir);
+                fetcherOptions.Path = cacheDir;
+            }
 
-            var revisionInfo = await fetcher.DownloadAsync();
-            _cachedExecutablePath = revisionInfo.GetExecutablePath();
+            var fetcher = new BrowserFetcher(fetcherOptions);
+            var installedBrowser = await fetcher.DownloadAsync();
+            _cachedExecutablePath = installedBrowser.GetExecutablePath();
             return _cachedExecutablePath;
         }
         finally
         {
             _downloadLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Selects the browser build to download for the current OS/architecture. The previous logic yielded
+    /// <c>Win64</c> for anything that wasn't Linux, which produced an unusable Windows build on macOS.
+    /// </summary>
+    private static PuppeteerSharp.Platform GetDownloadPlatform()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return PuppeteerSharp.Platform.Linux;
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return RuntimeInformation.OSArchitecture == Architecture.Arm64
+                ? PuppeteerSharp.Platform.MacOSArm64
+                : PuppeteerSharp.Platform.MacOS;
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return Environment.Is64BitOperatingSystem
+                ? PuppeteerSharp.Platform.Win64
+                : PuppeteerSharp.Platform.Win32;
+        }
+
+        // Any other/unknown OS: Linux is the most portable managed build target.
+        return PuppeteerSharp.Platform.Linux;
     }
 
     private static IEnumerable<string> GetKnownBrowserPaths()
@@ -191,5 +276,36 @@ public abstract class PdfGeneratorBase
         }
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             yield return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+    }
+
+    /// <summary>
+    /// Releases the shared Chromium instance (and the launch lock) on shutdown. Best-effort: shutdown must not
+    /// throw over a browser that may already have exited.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+
+        await _browserLock.WaitAsync();
+        try
+        {
+            if (_browser is not null)
+            {
+                try { await _browser.DisposeAsync(); }
+                catch { /* best-effort: the browser process may already be gone */ }
+                _browser = null;
+            }
+        }
+        finally
+        {
+            _browserLock.Release();
+        }
+
+        _browserLock.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

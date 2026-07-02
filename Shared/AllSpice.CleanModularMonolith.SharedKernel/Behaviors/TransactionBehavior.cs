@@ -73,6 +73,16 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
                 typeof(TRequest).Name,
                 result.Status,
                 dirtyContexts[0].Instance.GetType().Name);
+
+            // Clearing the change tracker is not optional here: the module DbContext is scoped to the request,
+            // so the staged (Added/Modified/Deleted) entities stay tracked after we return. A SUBSEQUENT
+            // ITransactional command in the same scope would then see them as dirty and commit them — a
+            // wrong-data commit. Disposal alone doesn't protect us because the scope can outlive this command.
+            foreach (var dirty in dirtyContexts)
+            {
+                dirty.Instance.ChangeTracker.Clear();
+            }
+
             return response;
         }
 
@@ -140,6 +150,12 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
         catch
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+
+            // RollbackAsync reverts the database but leaves the entities tracked in their staged state on the
+            // scoped context. Clear them so they can't be re-flushed and committed by a later ITransactional
+            // command sharing this scope (same wrong-data-commit hazard as the failure-Result path above).
+            db.ChangeTracker.Clear();
+
             _logger.LogWarning("Rolled back transaction {TransactionId} for {RequestType}",
                 transaction.TransactionId, typeof(TRequest).Name);
             throw;

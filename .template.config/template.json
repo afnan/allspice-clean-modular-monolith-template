@@ -30,7 +30,7 @@
       "valueSource": "name",
       "valueTransform": "lowerCaseForm",
       "replaces": "{{ProjectNameLower}}",
-      "description": "Lower-cased project name used for the Keycloak realm, Redis instance name and cache-key prefix."
+      "description": "Lower-cased project name used for the Keycloak realm, the '-public' portal client id, and the notifications mail domain (noreply@<name>.local)."
     }
   },
   "forms": {

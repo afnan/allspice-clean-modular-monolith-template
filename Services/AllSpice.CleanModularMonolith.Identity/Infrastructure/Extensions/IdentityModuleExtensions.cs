@@ -122,7 +122,7 @@ public static class IdentityModuleExtensions
 
         builder.Services.AddMediator();
 
-        builder.Services.AddValidatorsFromAssembly(AppAssemblyReference.Assembly);
+        builder.Services.AddValidatorsFromAssembly(typeof(AppAssemblyReference).Assembly);
 
         builder.Services
             .AddOptions<KeycloakOptions>()
@@ -140,6 +140,15 @@ public static class IdentityModuleExtensions
         // Token provider (singleton — caches tokens across requests)
         builder.Services.AddSingleton<KeycloakTokenProvider>();
         builder.Services.AddTransient<KeycloakTokenHandler>();
+
+        // Dedicated HTTP client for the client-credentials token call. It reuses the SAME primary
+        // handler as the admin API clients (CreateKeycloakHandler) so AllowUntrustedCertificates is
+        // honored against self-signed Keycloak over HTTPS — the default client would fail TLS here.
+        // It deliberately does NOT add KeycloakTokenHandler: that handler injects the very Bearer this
+        // call fetches, so attaching it would be circular. KeycloakTokenProvider builds the absolute
+        // token URL and sets its own timeout, so no base-address/header configuration is needed.
+        builder.Services.AddHttpClient(KeycloakTokenProvider.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(CreateKeycloakHandler);
 
         // HTTP clients with token handler for auto Bearer injection
         builder.Services.AddHttpClient(KeycloakHttpClientName, ConfigureKeycloakClient)

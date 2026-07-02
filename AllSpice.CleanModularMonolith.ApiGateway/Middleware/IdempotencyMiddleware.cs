@@ -15,9 +15,11 @@ namespace AllSpice.CleanModularMonolith.ApiGateway.Middleware;
 /// </summary>
 /// <remarks>
 /// Scope: the cache key is derived from method + path + authenticated subject + the client key, so the same
-/// key from different users/endpoints never collides. Only 2xx responses are cached; non-success responses
-/// are not, so the client can retry them fresh. Complements the durable outbox (which dedupes *messages*);
-/// this dedupes *HTTP commands*.
+/// key from different users/endpoints never collides. Unauthenticated requests are NOT cached at all (they
+/// have no stable subject to scope the key to, so bucketing them under a shared "anonymous" namespace would
+/// let one anonymous caller read another's cached response). Only 2xx responses are cached; non-success
+/// responses are not, so the client can retry them fresh. Complements the durable outbox (which dedupes
+/// *messages*); this dedupes *HTTP commands*.
 /// <para>
 /// <b>TOCTOU caveat (best-effort):</b> at-most-once is guaranteed only for retries after the in-progress
 /// marker has been written; two simultaneous first requests with the same key can both pass the null-check
@@ -53,11 +55,18 @@ public sealed class IdempotencyMiddleware(
             return;
         }
 
-        // Use the stable, unique identity claim (not the display name, which can be null even for authenticated
-        // users and would cause two authenticated users to share the "anonymous" key namespace).
+        // Use the stable, unique identity claim (NameIdentifier/sub). Unauthenticated requests have no such
+        // subject: rather than bucketing them all under a shared "anonymous" namespace — where a second
+        // anonymous client reusing an Idempotency-Key could be served the FIRST caller's cached response
+        // (information disclosure) — skip idempotency entirely and just process the request.
         var subject = context.User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? context.User.FindFirstValue("sub")
-            ?? "anonymous";
+            ?? context.User.FindFirstValue("sub");
+        if (string.IsNullOrEmpty(subject))
+        {
+            await next(context);
+            return;
+        }
+
         var cacheKey = BuildKey(method, context.Request.Path, subject, keyValues.ToString());
 
         // The distributed cache (Redis in production) is a best-effort dependency, not a hard one: if it is
@@ -236,19 +245,15 @@ public sealed class IdempotencyMiddleware(
         }
     }
 
-    private static async Task WriteInProgressConflictAsync(HttpContext context)
-    {
-        context.Response.StatusCode = StatusCodes.Status409Conflict;
-        var problem = new
-        {
-            type = "https://tools.ietf.org/html/rfc9110#section-15.5.10",
-            title = "Idempotent request in progress",
-            status = StatusCodes.Status409Conflict,
-            detail = "A request with this Idempotency-Key is still being processed. Please retry shortly."
-        };
-        await context.Response.WriteAsJsonAsync(
-            problem, options: null, contentType: "application/problem+json", cancellationToken: context.RequestAborted);
-    }
+    private static Task WriteInProgressConflictAsync(HttpContext context) =>
+        ProblemJsonWriter.WriteAsync(
+            context,
+            StatusCodes.Status409Conflict,
+            title: "Idempotent request in progress",
+            detail: "A request with this Idempotency-Key is still being processed. Please retry shortly.",
+            type: "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+            code: "idempotency_in_progress",
+            cancellationToken: context.RequestAborted);
 
     private static byte[] Serialize(CachedResponse value) =>
         JsonSerializer.SerializeToUtf8Bytes(value, SerializerOptions);

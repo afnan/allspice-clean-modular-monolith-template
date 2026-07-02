@@ -15,6 +15,15 @@ public sealed class KeycloakTokenProvider(
     TimeProvider timeProvider,
     ILogger<KeycloakTokenProvider> logger) : IDisposable
 {
+    /// <summary>
+    /// Name of the dedicated <see cref="HttpClient"/> used for the client-credentials token call.
+    /// Registered in <c>IdentityModuleExtensions</c> with the SAME primary handler as the admin API
+    /// clients so <see cref="KeycloakOptions.AllowUntrustedCertificates"/> is honored (self-signed
+    /// Keycloak over HTTPS). It deliberately omits the Bearer-injecting token handler — this call is
+    /// what obtains that Bearer, so attaching it would be circular.
+    /// </summary>
+    public const string HttpClientName = "keycloak-token";
+
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
     // Refresh slightly before expiry. Deliberately small (not 5 minutes): Keycloak's default access-token
@@ -82,7 +91,7 @@ public sealed class KeycloakTokenProvider(
 
         try
         {
-            var client = _httpClientFactory.CreateClient();
+            var client = _httpClientFactory.CreateClient(HttpClientName);
             client.Timeout = RequestTimeout;
 
             var content = new FormUrlEncodedContent(new Dictionary<string, string>

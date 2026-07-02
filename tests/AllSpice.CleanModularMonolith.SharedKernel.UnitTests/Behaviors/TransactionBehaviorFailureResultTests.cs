@@ -78,6 +78,19 @@ public sealed class TransactionBehaviorFailureResultTests : IDisposable
             "an Invalid result must not commit staged writes");
     }
 
+    [Fact]
+    public async Task Clears_the_change_tracker_when_the_handler_returns_a_failure_result()
+    {
+        var behavior = CreateBehavior();
+
+        await behavior.Handle(
+            new FakeCommand(), StageRowThenReturn("leaked-row", Result.Conflict()), CancellationToken.None);
+
+        // The staged-but-discarded entity must not remain tracked on the scoped context. Otherwise a
+        // SUBSEQUENT ITransactional command sharing the same scope would see it as dirty and commit it.
+        Assert.Empty(_db.ChangeTracker.Entries());
+    }
+
     private TransactionBehavior<FakeCommand, Result> CreateBehavior() =>
         new([_db], Mock.Of<IDomainEventDispatcher>(), [], new PostCommitActions(),
             NullLogger<TransactionBehavior<FakeCommand, Result>>.Instance);

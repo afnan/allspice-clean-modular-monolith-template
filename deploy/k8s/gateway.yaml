@@ -4,22 +4,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: allspice-gateway
+  name: gateway
   labels:
-    app: allspice-gateway
+    app: gateway
 spec:
   replicas: 2 # The migration runner serializes via a Postgres advisory lock, so multiple replicas are safe.
   selector:
     matchLabels:
-      app: allspice-gateway
+      app: gateway
   template:
     metadata:
       labels:
-        app: allspice-gateway
+        app: gateway
     spec:
       containers:
         - name: gateway
-          image: allspice-gateway:latest # replace with your registry/repository:tag
+          image: gateway:latest # replace with your registry/repository:tag
           ports:
             - containerPort: 8080
           env:
@@ -30,7 +30,7 @@ spec:
           # Connection strings, Keycloak, Redis, mail provider keys, blob storage — supply from a Secret.
           envFrom:
             - secretRef:
-                name: allspice-gateway-secrets
+                name: gateway-secrets
           # Liveness: restart the pod if the process is hung.
           livenessProbe:
             httpGet:
@@ -61,10 +61,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: allspice-gateway
+  name: gateway
 spec:
   selector:
-    app: allspice-gateway
+    app: gateway
   ports:
     - name: http
       port: 80
