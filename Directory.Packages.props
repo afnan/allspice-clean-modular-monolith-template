@@ -22,7 +22,7 @@
          affected range. Microsoft.AspNetCore.OpenApi 10.0.9 specifies >= 2.0.0; 2.8.0 is compatible.
          Applied via a direct PackageReference in ApiGateway (which also fixes the UnitTests project via
          the ProjectReference chain). -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.8.0" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="3.7.0" />
     <!-- Security-patch override for SQLitePCLRaw.lib.e_sqlite3 (GHSA-2m69-gcr7-jv3q). All 2.x versions
          (<= 2.1.11) are vulnerable; 3.50.3 is the first version outside the affected range. Applied via a
          direct PackageReference in the SQLite-backed test projects. NU1608 is suppressed only in those four
