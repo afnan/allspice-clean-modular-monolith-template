@@ -1,5 +1,3 @@
-using System.Reflection;
-
 namespace AllSpice.CleanModularMonolith.Identity.Application;
 
 /// <summary>
@@ -8,7 +6,6 @@ namespace AllSpice.CleanModularMonolith.Identity.Application;
 /// </summary>
 internal static class AssemblyReference
 {
-    public static readonly Assembly Assembly = typeof(AssemblyReference).Assembly;
 }
 
 

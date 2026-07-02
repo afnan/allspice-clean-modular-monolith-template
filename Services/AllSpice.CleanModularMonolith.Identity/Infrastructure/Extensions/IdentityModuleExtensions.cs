@@ -122,7 +122,7 @@ public static class IdentityModuleExtensions
 
         builder.Services.AddMediator();
 
-        builder.Services.AddValidatorsFromAssembly(AppAssemblyReference.Assembly);
+        builder.Services.AddValidatorsFromAssembly(typeof(AppAssemblyReference).Assembly);
 
         builder.Services
             .AddOptions<KeycloakOptions>()
