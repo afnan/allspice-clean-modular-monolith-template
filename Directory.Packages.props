@@ -16,7 +16,7 @@
     <!-- Patched override for the transitive MessagePack 2.5.192 (known vulns, NU1902/NU1903) pulled by
          Aspire's StreamJsonRpc in the AppHost. Applied via a direct PackageReference there (transitive
          pinning is disabled repo-wide). Same 2.5.x line as the transitive; not on the shipped runtime path. -->
-    <PackageVersion Include="MessagePack" Version="2.5.302" />
+    <PackageVersion Include="MessagePack" Version="3.1.7" />
     <!-- Security-patch overrides for transitive vulnerabilities (GHSA-v5pm-xwqc-g5wc).
          Microsoft.OpenApi 2.0.0–2.7.4 is vulnerable (circular schema ref / DoS). 2.8.0 is outside the
          affected range. Microsoft.AspNetCore.OpenApi 10.0.9 specifies >= 2.0.0; 2.8.0 is compatible.
