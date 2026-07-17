@@ -1,0 +1,29 @@
+# Full repo file listing (treat as complete; the repo is NOT otherwise accessible).
+# Searching this listing substitutes for Grep/Glob absence checks.
+
+Services/AllSpice.CleanModularMonolith.Billing/Domain/Entities/Invoice.cs
+Services/AllSpice.CleanModularMonolith.Billing/Domain/Entities/InvoiceLine.cs
+Services/AllSpice.CleanModularMonolith.Billing/Domain/Exceptions/BillingDomainException.cs
+Services/AllSpice.CleanModularMonolith.Billing/Domain/Specifications/InvoiceByIdSpec.cs
+Services/AllSpice.CleanModularMonolith.Billing/Application/Abstractions/IInvoiceRepository.cs
+Services/AllSpice.CleanModularMonolith.Billing/Application/Features/Invoices/FinalizeInvoice/FinalizeInvoiceCommand.cs
+Services/AllSpice.CleanModularMonolith.Billing/Application/Features/Invoices/FinalizeInvoice/FinalizeInvoiceHandler.cs
+Services/AllSpice.CleanModularMonolith.Billing/Application/Mappers/InvoiceMapper.cs
+Services/AllSpice.CleanModularMonolith.Billing/Api/Endpoints/FinalizeInvoiceEndpoint.cs
+Services/AllSpice.CleanModularMonolith.Billing/Api/Endpoints/GetInvoicesEndpoint.cs
+Services/AllSpice.CleanModularMonolith.Billing/Infrastructure/Authorization/BillingPermissionManifest.cs
+Services/AllSpice.CleanModularMonolith.Billing/Infrastructure/Migrations/20260716_AddFinalizedAt.cs
+Services/AllSpice.CleanModularMonolith.Billing/AllSpice.CleanModularMonolith.Billing.csproj
+Directory.Packages.props
+tests/AllSpice.CleanModularMonolith.Billing.Application.UnitTests/Mappers/InvoiceMapperTests.cs
+tests/AllSpice.CleanModularMonolith.Billing.Domain.UnitTests/InvoiceTests.cs
+tests/AllSpice.CleanModularMonolith.Architecture.Tests/ArchitectureRulesTests.cs
+tests/AllSpice.CleanModularMonolith.Architecture.Tests/PermissionKeyConsistencyTests.cs
+
+# Notes on file contents (for absence checks):
+# - BillingPermissionManifest.cs declares: billing:invoices.view. It does NOT declare billing:invoices.manage.
+# - tests/*.Application.UnitTests contains NO file matching *FinalizeInvoiceHandler*.
+# - InvoiceMapper.cs already has ToDto(Invoice) returning InvoiceDto with number, totalAmount, status.
+# - IInvoiceRepository.cs is the bespoke repository (extends IRepository<Invoice>) with GetByIdAsync(InvoiceId, ct).
+# - FinalizeInvoiceCommand.cs is: public sealed record FinalizeInvoiceCommand(Guid InvoiceId) : ICommand<Result<InvoiceDto>>;
+#   It does NOT implement ITransactional.

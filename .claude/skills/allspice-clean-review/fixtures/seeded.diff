@@ -1,0 +1,128 @@
+diff --git a/Services/AllSpice.CleanModularMonolith.Billing/Domain/Entities/InvoiceLine.cs b/Services/AllSpice.CleanModularMonolith.Billing/Domain/Entities/InvoiceLine.cs
+new file mode 100644
+--- /dev/null
++++ b/Services/AllSpice.CleanModularMonolith.Billing/Domain/Entities/InvoiceLine.cs
+@@ -0,0 +1,13 @@
++namespace AllSpice.CleanModularMonolith.Billing.Domain.Entities;
++
++// V1: primary constructor on an entity (public ctor bypasses factory + guards)
++public sealed class InvoiceLine(Guid invoiceId, string description, decimal amount) : Entity
++{
++    public Guid InvoiceId { get; } = invoiceId;
++    public string Description { get; } = description;
++    public decimal Amount { get; private set; } = amount;
++
++    public void Reprice(decimal newAmount)
++    {
++        if (newAmount <= 0) throw new Exception("Amount must be positive"); // V2: bare Exception in Domain
++        Amount = newAmount;
++    }
++}
+diff --git a/Services/AllSpice.CleanModularMonolith.Billing/Application/Features/Invoices/FinalizeInvoice/FinalizeInvoiceHandler.cs b/Services/AllSpice.CleanModularMonolith.Billing/Application/Features/Invoices/FinalizeInvoice/FinalizeInvoiceHandler.cs
+new file mode 100644
+--- /dev/null
++++ b/Services/AllSpice.CleanModularMonolith.Billing/Application/Features/Invoices/FinalizeInvoice/FinalizeInvoiceHandler.cs
+@@ -0,0 +1,31 @@
++namespace AllSpice.CleanModularMonolith.Billing.Application.Features.Invoices.FinalizeInvoice;
++
++using Ardalis.Result;
++
++// OK (negative control): primary constructor on a DI type is the convention
++// V3a: handler depends on the DbContext, not the bespoke IInvoiceRepository
++public sealed class FinalizeInvoiceHandler(BillingDbContext db) : ICommandHandler<FinalizeInvoiceCommand, Result<InvoiceDto>>
++{
++    private readonly BillingDbContext _db = db;
++
++    public async ValueTask<Result<InvoiceDto>> Handle(FinalizeInvoiceCommand command, CancellationToken ct)
++    {
++        // V3b: inline EF/LINQ in a handler instead of a specification via the repository
++        var invoice = await _db.Invoices
++            .Where(i => i.Id == command.InvoiceId)
++            .Include(i => i.Lines)
++            .FirstOrDefaultAsync(ct);
++
++        if (invoice is null)
++            return Result.NotFound();
++
++        if (invoice.IsFinalized)
++            return Result.Conflict("Invoice already finalized");
++
++        invoice.Finalize(DateTimeOffset.UtcNow); // V5: direct clock read; inject TimeProvider, pass nowUtc
++        await _db.SaveChangesAsync(ct);
++
++        // V4 context: FinalizeInvoiceCommand does NOT implement ITransactional (see repo listing),
++        // so this mutation runs outside TransactionBehavior.
++        return Result.Success(InvoiceMapper.ToDto(invoice)); // OK (negative control): reuses the mapper
++    }
++}
+diff --git a/Services/AllSpice.CleanModularMonolith.Billing/Api/Endpoints/FinalizeInvoiceEndpoint.cs b/Services/AllSpice.CleanModularMonolith.Billing/Api/Endpoints/FinalizeInvoiceEndpoint.cs
+new file mode 100644
+--- /dev/null
++++ b/Services/AllSpice.CleanModularMonolith.Billing/Api/Endpoints/FinalizeInvoiceEndpoint.cs
+@@ -0,0 +1,29 @@
++namespace AllSpice.CleanModularMonolith.Billing.Api.Endpoints;
++
++public sealed class FinalizeInvoiceEndpoint(IMediator mediator) : Endpoint<FinalizeInvoiceRequest, InvoiceDto>
++{
++    public override void Configure()
++    {
++        Post("/billing/invoices/{id}/finalize");
++        // V6: no Policies(PermissionPolicy.For("billing:invoices.manage")) at all,
++        // and the key is not declared in BillingPermissionManifest either (see listing).
++    }
++
++    public override async Task HandleAsync(FinalizeInvoiceRequest req, CancellationToken ct)
++    {
++        var result = await mediator.Send(new FinalizeInvoiceCommand(req.Id), ct);
++        if (result.IsSuccess)
++        {
++            await SendOkAsync(result.Value, ct);
++            return;
++        }
++
++        // V7: hand-rolled status switch instead of result.ExecuteFailureAsync(HttpContext)
++        var status = result.Status switch
++        {
++            ResultStatus.NotFound => 404,
++            ResultStatus.Conflict => 409,
++            _ => 400
++        };
++        await SendAsync(new InvoiceDto(), status, ct);
++    }
++}
+diff --git a/Services/AllSpice.CleanModularMonolith.Billing/Api/Endpoints/GetInvoicesEndpoint.cs b/Services/AllSpice.CleanModularMonolith.Billing/Api/Endpoints/GetInvoicesEndpoint.cs
+--- a/Services/AllSpice.CleanModularMonolith.Billing/Api/Endpoints/GetInvoicesEndpoint.cs
++++ b/Services/AllSpice.CleanModularMonolith.Billing/Api/Endpoints/GetInvoicesEndpoint.cs
+@@ -10,6 +10,8 @@ public sealed class GetInvoicesEndpoint(IMediator mediator) : Endpoint<GetInvoi
+     public override void Configure()
+     {
+         Get("/billing/invoices");
++        // V8: scope creep, caching change not in the plan
++        ResponseCache(600);
+         Policies(PermissionPolicy.For("billing:invoices.view"));
+     }
+
+diff --git a/Services/AllSpice.CleanModularMonolith.Billing/AllSpice.CleanModularMonolith.Billing.csproj b/Services/AllSpice.CleanModularMonolith.Billing/AllSpice.CleanModularMonolith.Billing.csproj
+--- a/Services/AllSpice.CleanModularMonolith.Billing/AllSpice.CleanModularMonolith.Billing.csproj
++++ b/Services/AllSpice.CleanModularMonolith.Billing/AllSpice.CleanModularMonolith.Billing.csproj
+@@ -12,4 +12,5 @@
+   <ItemGroup>
+     <PackageReference Include="Ardalis.Result" />
++    <PackageReference Include="Humanizer" Version="2.14.1" /> <!-- V9: inline Version, belongs in Directory.Packages.props -->
+   </ItemGroup>
+ </Project>
+diff --git a/Services/AllSpice.CleanModularMonolith.Billing/Infrastructure/Migrations/20260716_AddFinalizedAt.cs b/Services/AllSpice.CleanModularMonolith.Billing/Infrastructure/Migrations/20260716_AddFinalizedAt.cs
+new file mode 100644
+--- /dev/null
++++ b/Services/AllSpice.CleanModularMonolith.Billing/Infrastructure/Migrations/20260716_AddFinalizedAt.cs
+@@ -0,0 +1,10 @@
++// <auto-generated />
++// NC (negative control): generated migration, ugly style, must NOT be flagged for style
++namespace AllSpice.CleanModularMonolith.Billing.Infrastructure.Migrations
++{
++    public partial class AddFinalizedAt : Migration
++    {
++        protected override void Up(MigrationBuilder migrationBuilder) { migrationBuilder.AddColumn<DateTimeOffset>(name: "FinalizedAtUtc", table: "Invoices", nullable: true); }
++        protected override void Down(MigrationBuilder migrationBuilder) { migrationBuilder.DropColumn(name: "FinalizedAtUtc", table: "Invoices"); }
++    }
++}
