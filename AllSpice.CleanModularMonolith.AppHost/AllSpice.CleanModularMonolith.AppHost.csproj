@@ -19,6 +19,8 @@
          with a patched version. Transitive pinning is disabled repo-wide, so a direct reference is required.
          MessagePack is NOT on the shipped app's runtime path (it never reaches the gateway). -->
     <PackageReference Include="MessagePack" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" VersionOverride="10.0.11" />
   </ItemGroup>
 
   <ItemGroup>
