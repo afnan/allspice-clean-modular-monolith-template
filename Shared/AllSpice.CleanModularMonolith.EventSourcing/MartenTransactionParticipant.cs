@@ -2,6 +2,7 @@ using AllSpice.CleanModularMonolith.SharedKernel.EventSourcing;
 using AllSpice.CleanModularMonolith.SharedKernel.Events;
 using AllSpice.CleanModularMonolith.SharedKernel.Exceptions;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
+using JasperFx;
 using Marten;
 using Marten.Exceptions;
 using Marten.Services;
@@ -104,13 +105,26 @@ public sealed class MartenTransactionParticipant<TStore, TContext>(
         {
             await _session.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (ConcurrentUpdateException ex)
+        catch (ConcurrencyException ex)
         {
-            // Another request appended to the same stream between our FetchForWriting and this flush.
+            // Event-stream expected-version conflict raised by JasperFx.Events.EventStreamUnexpectedMaxEventIdException
+            // or JasperFx.Events.DcbConcurrencyException (both derive from JasperFx.ConcurrencyException): another
+            // request appended to the same stream between our FetchForWriting and this flush.
             throw new ConcurrencyConflictException(
                 "The aggregate was modified by another request after it was loaded. Reload and retry.", ex);
         }
-        catch (ExistingStreamIdCollisionException ex)
+        catch (ConcurrentUpdateException ex)
+        {
+            // Marten document optimistic-concurrency conflict (e.g. an inline projection document guarded by
+            // UseOptimisticConcurrency) raised inside the same SaveChangesAsync call.
+            throw new ConcurrencyConflictException(
+                "The aggregate was modified by another request after it was loaded. Reload and retry.", ex);
+        }
+        catch (Marten.Exceptions.ExistingStreamIdCollisionException ex)
+        {
+            throw new ConflictException("Event stream", ex.Id);
+        }
+        catch (JasperFx.Events.ExistingStreamIdCollisionException ex)
         {
             throw new ConflictException("Event stream", ex.Id);
         }
