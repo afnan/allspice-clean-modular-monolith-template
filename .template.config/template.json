@@ -56,7 +56,8 @@
             "**/obj/**",
             "CLAUDE.md",
             "TODOS.md",
-            "docs/superpowers/**"
+            "docs/superpowers/**",
+            ".superpowers/**"
           ]
         }
       ]
