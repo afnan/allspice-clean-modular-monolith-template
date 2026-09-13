@@ -3,6 +3,7 @@ using AllSpice.CleanModularMonolith.SharedKernel.Exceptions;
 using Marten;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 // Marten declares its own ITransactionParticipant; alias SharedKernel's so it resolves unambiguously
 // in this file, which also `using Marten;` for IDocumentStore/QuerySession.
 using ITransactionParticipant = AllSpice.CleanModularMonolith.SharedKernel.Persistence.ITransactionParticipant;
@@ -183,6 +184,22 @@ public sealed class MartenEnlistmentTests(ProbeHostFixture fixture) : IClassFixt
 
         Assert.NotNull(state);
         Assert.True(state.IsArchived);
+    }
+
+    [Fact]
+    public async Task ApplyEventStoreSchemaAsync_throws_when_the_store_has_no_event_types_or_projections_registered()
+    {
+        var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+        builder.Services.AddDbContext<ProbeDbContext>(o => o.UseNpgsql(fixture.ConnectionString));
+        // Deliberately no `configure` callback — this is the failure ApplyEventStoreSchemaAsync must catch.
+        builder.AddModuleEventStore<IBareProbeStore, ProbeDbContext>(fixture.ConnectionString, "bare");
+
+        using var host = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => host.Services.ApplyEventStoreSchemaAsync<IBareProbeStore>());
+
+        Assert.Contains("LiveStreamAggregation", exception.Message);
     }
 
     private async Task SeedAsync(Guid id, int increments = 0)

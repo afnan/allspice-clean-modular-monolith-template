@@ -11,10 +11,15 @@ namespace AllSpice.CleanModularMonolith.EventSourcing;
 /// (<c>AccountRepository : MartenEventSourcedRepository&lt;Account, ILedgerEventStore&gt;, IAccountRepository</c>).
 /// <para>
 /// <see cref="LoadAsync"/> uses <c>FetchForWriting</c>, which records the stream's current version so a
-/// concurrent append is detected at flush (→ <c>ConcurrencyConflictException</c>). Unregistered aggregate
-/// types are built by Marten's <i>live aggregation</i> — replaying the stream through the aggregate's
-/// <c>Apply(TEvent)</c> methods — so the write model needs no projection registration. The stream version
-/// is stamped from <c>IEventStream.CurrentVersion</c>, not from a property convention.
+/// concurrent append is detected at flush (→ <c>ConcurrencyConflictException</c>). <c>FetchForWriting&lt;T&gt;</c>
+/// resolves and builds <typeparamref name="TAggregate"/> at read time via Marten's <i>live aggregation</i> —
+/// replaying the stream through the aggregate's <c>Apply(TEvent)</c> methods — with no projection
+/// registration needed for that resolution to work. The store's <b>schema migration</b> is a separate
+/// concern: an event type or projection (<c>opts.Projections.LiveStreamAggregation&lt;TAggregate&gt;()</c> is
+/// the natural form, one per event-sourced aggregate) must still be registered in the module's
+/// <c>AddModuleEventStore</c> <c>configure</c> callback, or <c>ApplyEventStoreSchemaAsync</c> creates no
+/// <c>mt_events</c>/<c>mt_streams</c> tables at all — see that method's guard. The stream version is stamped
+/// from <c>IEventStream.CurrentVersion</c>, not from a property convention.
 /// </para>
 /// </summary>
 public abstract class MartenEventSourcedRepository<TAggregate, TStore>(IModuleEventStoreSession<TStore> session)
@@ -89,6 +94,11 @@ public abstract class MartenEventSourcedRepository<TAggregate, TStore>(IModuleEv
         _session.MarkPending();
     }
 
+    /// <summary>
+    /// Reads the stream on its own query session, outside the module transaction — appends staged by
+    /// <see cref="AddAsync"/>/<see cref="SaveAsync"/> in the same scope but not yet flushed are not visible.
+    /// Excludes archived streams, since <c>FetchStreamAsync</c> excludes archived events by default.
+    /// </summary>
     public async Task<IReadOnlyList<StoredEvent>> HistoryAsync(Guid id, CancellationToken cancellationToken = default)
     {
         Guard.Against.Default(id);

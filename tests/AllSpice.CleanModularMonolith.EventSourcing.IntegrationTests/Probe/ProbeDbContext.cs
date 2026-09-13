@@ -23,3 +23,9 @@ public sealed class ProbeDbContext(DbContextOptions<ProbeDbContext> options) : D
 public interface IProbeEventStore : Marten.IDocumentStore
 {
 }
+
+/// <summary>A second ancillary store wired with NO configure callback — proves ApplyEventStoreSchemaAsync
+/// fails fast instead of silently creating no event tables.</summary>
+public interface IBareProbeStore : Marten.IDocumentStore
+{
+}
