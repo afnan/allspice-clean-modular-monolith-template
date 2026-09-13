@@ -5,9 +5,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <!-- Suppress NU1903 for SSH.NET transitive vulnerability from Testcontainers.PostgreSql. The project uses
-         Testcontainers only for isolated integration tests; the vulnerability does not reach production code. -->
-    <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +19,8 @@
     <PackageReference Include="WolverineFx.Postgresql" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <!-- Security-patch pinned in Directory.Packages.props (GHSA-q939-rpr3-3284). -->
+    <PackageReference Include="SSH.NET" />
   </ItemGroup>
 
   <ItemGroup>
