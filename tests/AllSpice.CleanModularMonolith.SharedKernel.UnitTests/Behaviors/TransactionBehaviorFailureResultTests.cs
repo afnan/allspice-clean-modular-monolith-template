@@ -92,7 +92,7 @@ public sealed class TransactionBehaviorFailureResultTests : IDisposable
     }
 
     private TransactionBehavior<FakeCommand, Result> CreateBehavior() =>
-        new([_db], Mock.Of<IDomainEventDispatcher>(), [], new PostCommitActions(),
+        new([_db], [], Mock.Of<IDomainEventDispatcher>(), [], new PostCommitActions(),
             NullLogger<TransactionBehavior<FakeCommand, Result>>.Instance);
 
     private MessageHandlerDelegate<FakeCommand, Result> StageRowThenReturn(string name, Result result) =>

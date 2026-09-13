@@ -30,6 +30,7 @@ public sealed class UnitOfWorkAtomicityTests(PostgresFixture pg)
             var sp = scope.ServiceProvider;
             var behavior = new TransactionBehavior<AtomicityTestCommand, Result>(
                 sp.GetServices<IModuleDbContext>(),
+                sp.GetServices<ITransactionParticipant>(), // none registered here — empty set
                 sp.GetRequiredService<IDomainEventDispatcher>(),
                 sp.GetServices<IOutboxFlusher>(), // none registered here — empty set, so the flush step is a no-op
                 new PostCommitActions(),
