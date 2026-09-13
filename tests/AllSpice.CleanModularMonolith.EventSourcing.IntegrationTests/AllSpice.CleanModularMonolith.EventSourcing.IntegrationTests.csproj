@@ -13,10 +13,7 @@
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-    <PackageReference Include="WolverineFx" />
-    <PackageReference Include="WolverineFx.RuntimeCompilation" />
-    <PackageReference Include="WolverineFx.EntityFrameworkCore" />
-    <PackageReference Include="WolverineFx.Postgresql" />
+    <PackageReference Include="Marten" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <!-- Security-patch pinned in Directory.Packages.props (GHSA-q939-rpr3-3284). -->
@@ -28,8 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Services\AllSpice.CleanModularMonolith.Identity\AllSpice.CleanModularMonolith.Identity.csproj" />
-    <ProjectReference Include="..\..\Services\AllSpice.CleanModularMonolith.Notifications\AllSpice.CleanModularMonolith.Notifications.csproj" />
+    <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.EventSourcing\AllSpice.CleanModularMonolith.EventSourcing.csproj" />
     <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.SharedKernel\AllSpice.CleanModularMonolith.SharedKernel.csproj" />
   </ItemGroup>
 

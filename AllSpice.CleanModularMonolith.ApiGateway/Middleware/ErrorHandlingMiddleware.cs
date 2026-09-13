@@ -70,6 +70,7 @@ public class ErrorHandlingMiddleware(
             UnauthorizedException => HttpStatusCode.Unauthorized,
             ForbiddenException => HttpStatusCode.Forbidden,
             ConflictException => HttpStatusCode.Conflict,
+            ConcurrencyConflictException => HttpStatusCode.Conflict,
             BusinessRuleViolationException => HttpStatusCode.UnprocessableEntity,
             IdentityServerUnreachableException => HttpStatusCode.ServiceUnavailable,
             UnauthorizedAccessException => HttpStatusCode.Unauthorized,
