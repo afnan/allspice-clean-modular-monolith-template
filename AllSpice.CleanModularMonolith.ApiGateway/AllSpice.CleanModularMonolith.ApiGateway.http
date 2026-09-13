@@ -48,3 +48,42 @@ Idempotency-Key: 3f1a6b2c-0001-demo-key-aaaaaaaaaaaa
 }
 
 ###
+
+### Ledger (event-sourced reference module) — open an account; requires ledger:accounts.write
+POST {{host}}/api/ledger/accounts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "ownerUserId": "11111111-1111-1111-1111-111111111111",
+  "currency": "AUD"
+}
+
+### Deposit — replace {accountId}; send twice with the same Idempotency-Key to see a replay, not a double deposit
+POST {{host}}/api/ledger/accounts/{accountId}/deposits
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Idempotency-Key: ledger-demo-0001
+
+{
+  "amount": 100.00,
+  "reference": "INV-1001"
+}
+
+### Withdraw more than the balance → 422 insufficient_funds
+POST {{host}}/api/ledger/accounts/{accountId}/withdrawals
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "amount": 999.00,
+  "reference": "PAYOUT-1"
+}
+
+### Current state (inline projection)
+GET {{host}}/api/ledger/accounts/{accountId}
+Authorization: Bearer {{token}}
+
+### Audit trail — the raw event stream with correlation id / idempotency key per event
+GET {{host}}/api/ledger/accounts/{accountId}/history
+Authorization: Bearer {{token}}

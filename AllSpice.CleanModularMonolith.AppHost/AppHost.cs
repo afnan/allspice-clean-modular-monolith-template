@@ -110,6 +110,8 @@ var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
 #region Database Creation
 var notificationsDatabase = postgres.AddDatabase("notificationsdb");
 var identityDatabase = postgres.AddDatabase("identitydb");
+// ledgerdb hosts the Ledger module's Marten event store (schema "ledger") AND its co-located outbox.
+var ledgerDatabase = postgres.AddDatabase("ledgerdb");
 var keycloakDb = postgres.AddDatabase("keycloakdb");
 // messagingdb is the Wolverine MAIN store for shared infrastructure only (inbox, durable local queues,
 // scheduled, dead-letter). Each module's transactional outbox envelopes live co-located in the module's
@@ -226,6 +228,7 @@ var keycloakEndpoint = keycloak.GetEndpoint("http");
 var apiGateway = builder.AddProject<Projects.AllSpice_CleanModularMonolith_ApiGateway>("apigateway")
     .WithReference(notificationsDatabase)
     .WithReference(identityDatabase)
+    .WithReference(ledgerDatabase)
     .WithReference(messagingDatabase)
     .WithEnvironment("ConnectionStrings__redis", redisEndpoint)
     .WithEnvironment("Cors__WebOrigin", builder.Configuration["Cors:WebOrigin"] ?? "https://localhost:7001")

@@ -27,6 +27,7 @@ public static class GatewayServiceCollectionExtensions
                     typeof(Program).Assembly,
                     typeof(AllSpice.CleanModularMonolith.Notifications.Infrastructure.Extensions.NotificationsModuleExtensions).Assembly,
                     typeof(AllSpice.CleanModularMonolith.Identity.Infrastructure.Extensions.IdentityModuleExtensions).Assembly,
+                    typeof(AllSpice.CleanModularMonolith.Ledger.Infrastructure.Extensions.LedgerModuleExtensions).Assembly,
                 ];
             })
             .SwaggerDocument(options =>

@@ -1,6 +1,10 @@
 using AllSpice.CleanModularMonolith.ApiGateway.Identity;
+using AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.EventSourcing;
 using AllSpice.CleanModularMonolith.ApiGateway.Infrastructure.Messaging;
+using AllSpice.CleanModularMonolith.EventSourcing;
 using AllSpice.CleanModularMonolith.Identity.Infrastructure.Persistence;
+using AllSpice.CleanModularMonolith.Ledger.Infrastructure.Extensions;
+using AllSpice.CleanModularMonolith.Ledger.Infrastructure.Persistence;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Messaging.Consumers;
 using AllSpice.CleanModularMonolith.Notifications.Infrastructure.Persistence;
 using AllSpice.CleanModularMonolith.SharedKernel.Behaviors;
@@ -46,8 +50,13 @@ public static class GatewayModuleRegistrationExtensions
         builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
         builder.Services.AddSharedKernelInterceptors();
 
+        // Request-scoped event metadata for event-sourced modules. Registered BEFORE the modules so the
+        // EventSourcing TryAdd fallback (NullEventMetadataProvider) does not win.
+        builder.Services.AddScoped<IEventMetadataProvider, HttpEventMetadataProvider>();
+
         builder.AddNotificationsModuleServices(logger);
         builder.AddIdentityModuleServices(logger);
+        builder.AddLedgerModuleServices(logger);
 
         // messagingdb is the Wolverine MAIN store: it holds ONLY shared messaging infrastructure
         // (inbox, durable local queues, scheduled messages, dead-letter, node/agent coordination).
@@ -56,14 +65,17 @@ public static class GatewayModuleRegistrationExtensions
         var messagingConnectionString = builder.Configuration.GetConnectionString("messagingdb");
         var identityConnectionString = builder.Configuration.GetConnectionString("identitydb");
         var notificationsConnectionString = builder.Configuration.GetConnectionString("notificationsdb");
+        var ledgerConnectionString = builder.Configuration.GetConnectionString("ledgerdb");
         if (string.IsNullOrWhiteSpace(messagingConnectionString)
             || string.IsNullOrWhiteSpace(identityConnectionString)
-            || string.IsNullOrWhiteSpace(notificationsConnectionString))
+            || string.IsNullOrWhiteSpace(notificationsConnectionString)
+            || string.IsNullOrWhiteSpace(ledgerConnectionString))
         {
             throw new InvalidOperationException(
-                "Connection strings 'messagingdb', 'identitydb' and 'notificationsdb' are required. messagingdb " +
-                "holds shared Wolverine infrastructure (inbox/queues/scheduled/dead-letter); each module database " +
-                "hosts its own co-located transactional outbox. Ensure the AppHost references all three on the gateway.");
+                "Connection strings 'messagingdb', 'identitydb', 'notificationsdb' and 'ledgerdb' are required. " +
+                "messagingdb holds shared Wolverine infrastructure (inbox/queues/scheduled/dead-letter); each " +
+                "module database hosts its own co-located transactional outbox. Ensure the AppHost references " +
+                "all four on the gateway.");
         }
 
         builder.Host.UseWolverine(opts =>
@@ -83,6 +95,8 @@ public static class GatewayModuleRegistrationExtensions
                 .Enroll<IdentityDbContext>();
             opts.PersistMessagesWithPostgresql(notificationsConnectionString, "wolverine", MessageStoreRole.Ancillary)
                 .Enroll<NotificationsDbContext>();
+            opts.PersistMessagesWithPostgresql(ledgerConnectionString, "wolverine", MessageStoreRole.Ancillary)
+                .Enroll<LedgerDbContext>();
 
             // Make every transport durable by default.
             opts.Policies.UseDurableLocalQueues();

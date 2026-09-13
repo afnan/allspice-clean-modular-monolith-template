@@ -1,3 +1,5 @@
+using AllSpice.CleanModularMonolith.Ledger.Infrastructure.Extensions;
+using JasperFx;
 using Microsoft.Extensions.DependencyInjection;
 using Wolverine.Persistence.Durability;
 
@@ -8,6 +10,7 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)
     .ReadFrom.Services(services)
     .Enrich.FromLogContext());
+builder.Host.ApplyJasperFxExtensions();
 
 try
 {
@@ -21,6 +24,7 @@ try
   // Ensure module databases
   await app.EnsureNotificationsModuleDatabaseAsync();
   await app.EnsureIdentityModuleDatabaseAsync();
+  await app.EnsureLedgerModuleDatabaseAsync();
   await app.ReconcileAuthorizationCatalogAsync();
 
   // Provision each Wolverine message store's schema. The main store (messagingdb) auto-builds, but the
@@ -41,7 +45,10 @@ try
        .RequireAuthorization("allow-anonymous");
   }
 
-  app.Run();
+  // JasperFx command runner: `dotnet run` with no args starts the host exactly as before; with args it runs a
+  // maintenance command instead — e.g. `dotnet run -- projections rebuild` (Marten) or `codegen write`
+  // (Wolverine). See ARCHITECTURE.md "Event sourcing".
+  return await app.RunJasperFxCommands(args);
 }
 catch (Exception ex)
 {
