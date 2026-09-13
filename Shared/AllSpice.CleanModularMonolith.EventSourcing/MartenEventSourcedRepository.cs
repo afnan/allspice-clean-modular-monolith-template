@@ -3,6 +3,7 @@ using AllSpice.CleanModularMonolith.SharedKernel.Events;
 using Ardalis.GuardClauses;
 using JasperFx.Events;
 using Marten;
+using Marten.Events.Archiving;
 
 namespace AllSpice.CleanModularMonolith.EventSourcing;
 
@@ -97,14 +98,23 @@ public abstract class MartenEventSourcedRepository<TAggregate, TStore>(IModuleEv
     /// <summary>
     /// Reads the stream on its own query session, outside the module transaction — appends staged by
     /// <see cref="AddAsync"/>/<see cref="SaveAsync"/> in the same scope but not yet flushed are not visible.
-    /// Excludes archived streams, since <c>FetchStreamAsync</c> excludes archived events by default.
+    /// <para>
+    /// This is the <b>audit trail</b>, so it deliberately INCLUDES archived streams. Marten's
+    /// <c>FetchStreamAsync</c> filters archived events out, which would make history vanish for exactly the
+    /// aggregates an auditor cares about (a closed account), so the raw event LINQ with
+    /// <c>MaybeArchived()</c> is used instead.
+    /// </para>
     /// </summary>
     public async Task<IReadOnlyList<StoredEvent>> HistoryAsync(Guid id, CancellationToken cancellationToken = default)
     {
         Guard.Against.Default(id);
 
         await using var query = _session.OpenQuerySession();
-        var events = await query.Events.FetchStreamAsync(id, token: cancellationToken).ConfigureAwait(false);
+        var events = await query.Events.QueryAllRawEvents()
+            .Where(e => e.StreamId == id && e.MaybeArchived())
+            .OrderBy(e => e.Version)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         return events
             .Select(e => new StoredEvent(

@@ -167,6 +167,7 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 - ❌ **Don't event-source by default** (golden rule 8), and never store personal data in an event — events cannot be deleted.
 - ❌ **Don't edit, delete or re-type stored events.** Add a new stored name + upcaster (`MapEventType`/`Upcast`).
 - ❌ **Don't list or search by replaying streams** — build a projection. `HistoryAsync` is for one aggregate's audit trail.
+- ❌ **Don't filter archived streams out of `HistoryAsync`.** Archiving (`MarkForArchive`) removes a stream from Marten's default queries and projections; history is the audit trail and must keep returning archived streams (raw event query + `MaybeArchived()`). `LoadAsync` still replays an archived stream, so commands against it are rejected by the aggregate's own rule (`EnsureOpen`), not by a 404.
 - ❌ **Don't open Marten sessions yourself** (`store.LightweightSession()` in a handler). Go through the repository so the session enlists in the module transaction.
 - ❌ **Don't validate inside `Apply`.** Invariants live in command methods; `Apply` must always succeed on replay.
 - ❌ **Don't give an event-sourced aggregate a field/property initializer or constructor-dependent state.**

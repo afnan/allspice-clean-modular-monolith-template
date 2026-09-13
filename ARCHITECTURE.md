@@ -136,6 +136,11 @@ rolls back on failure. So: events + inline projection + EF rows + outbox envelop
 queried through `Session.OpenQuerySession()` (module repositories, not the store directly); lists never
 replay streams. `HistoryAsync` returns the raw stream with
 metadata (version, sequence, timestamp, correlation id, `idempotency-key` header) — the audit trail.
+Archiving (`MarkForArchive` → `ArchiveStream`) removes a stream from Marten's default queries and
+projections, so `HistoryAsync` queries raw events with `MaybeArchived()` and deliberately **includes archived
+streams** — the audit trail must survive closing. `LoadAsync` (`FetchForWriting`) still replays an archived
+stream, so a later command loads the aggregate in its terminal state and is rejected by the aggregate's own
+rule (e.g. `Account.EnsureOpen`), not by a 404.
 
 **Concurrency.** A concurrent append fails at flush with Marten's `ConcurrencyException`, translated to
 `ConcurrencyConflictException` → `409 concurrency_conflict`. EF's `DbUpdateConcurrencyException` maps to the
@@ -195,7 +200,8 @@ Email with provider fallback + in-app channel:
 
 `Services/AllSpice.CleanModularMonolith.Ledger` — `Account` (open / deposit / withdraw / close), events
 `AccountOpened`, `FundsDeposited` (v2) / `FundsDepositedV1` (legacy, upcast), `FundsWithdrawn`,
-`AccountClosed` (archives the stream). `LedgerDbContext` has no entities: it owns the transaction and hosts the
+`AccountClosed` (archives the stream — it drops out of the summary projection's default queries, but
+`GET …/{accountId}/history` still returns the full trail and a further command is refused by `EnsureOpen`). `LedgerDbContext` has no entities: it owns the transaction and hosts the
 co-located outbox — its EF migration is therefore empty by design (the outbox envelope tables are
 `ExcludeFromMigrations`, provisioned separately by Wolverine's `Admin.MigrateAsync`). `AccountOpened` →
 `NotificationRequestedIntegrationEvent` proves event-sourced write + outbox atomicity without a new Contracts

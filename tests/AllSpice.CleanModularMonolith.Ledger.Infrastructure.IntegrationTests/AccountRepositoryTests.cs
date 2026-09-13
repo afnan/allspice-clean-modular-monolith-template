@@ -1,10 +1,12 @@
 using AllSpice.CleanModularMonolith.EventSourcing;
 using AllSpice.CleanModularMonolith.Ledger.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Ledger.Domain.Aggregates;
+using AllSpice.CleanModularMonolith.Ledger.Domain.Enums;
 using AllSpice.CleanModularMonolith.Ledger.Domain.Events;
 using AllSpice.CleanModularMonolith.Ledger.Domain.Events.Legacy;
 using AllSpice.CleanModularMonolith.Ledger.Domain.ValueObjects;
 using AllSpice.CleanModularMonolith.Ledger.Infrastructure.Persistence;
+using AllSpice.CleanModularMonolith.SharedKernel.Exceptions;
 using JasperFx;
 using JasperFx.Events;
 using Marten;
@@ -64,6 +66,42 @@ public sealed class AccountRepositoryTests(LedgerHostFixture fixture) : IClassFi
 
         await using var query = fixture.Host.Services.GetRequiredService<ILedgerEventStore>().QuerySession();
         Assert.True((await query.Events.FetchStreamStateAsync(id))!.IsArchived);
+    }
+
+    [Fact]
+    public async Task Load_returns_the_closed_account_for_an_archived_stream_and_history_returns_the_full_stream()
+    {
+        var id = await OpenAsync(deposits: [10m], withdrawals: [10m]);
+
+        await using (var scope = fixture.Host.Services.CreateAsyncScope())
+        {
+            var repo = scope.ServiceProvider.GetRequiredService<IAccountRepository>();
+            var account = (await repo.LoadAsync(id))!;
+            account.Close(Now);
+            await repo.SaveAsync(account);
+            await CommitAsync(scope);
+        }
+
+        await using var verify = fixture.Host.Services.CreateAsyncScope();
+        var reader = verify.ServiceProvider.GetRequiredService<IAccountRepository>();
+
+        // Archiving removes the stream from Marten's default QUERIES and projections, but FetchForWriting
+        // still replays it: LoadAsync returns the aggregate in its terminal state. So a command against a
+        // closed account is rejected by the aggregate's own EnsureOpen rule, not by a 404. Pinned because
+        // the opposite (null → 404) would silently move the rule out of the domain.
+        var reloaded = await reader.LoadAsync(id);
+        Assert.NotNull(reloaded);
+        Assert.Equal(AccountStatus.Closed, reloaded.Status);
+        Assert.Throws<BusinessRuleViolationException>(() => reloaded.Deposit(Money.Of(1m, Currency.Aud), "after-close", Now));
+
+        // History is the AUDIT TRAIL: it must survive closing, or the accounts an auditor most wants to
+        // inspect are exactly the ones that return nothing.
+        var history = await reader.HistoryAsync(id);
+        Assert.Equal(4, history.Count); // opened + deposit + withdrawal + closed
+        Assert.IsType<AccountClosed>(history[^1].Data);
+        Assert.Equal([1, 2, 3, 4], history.Select(e => e.Version));
+
+        await verify.ServiceProvider.GetRequiredService<LedgerDbContext>().Database.CurrentTransaction!.RollbackAsync();
     }
 
     [Fact]
