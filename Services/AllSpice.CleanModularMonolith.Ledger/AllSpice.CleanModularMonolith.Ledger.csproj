@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- MSG0005: Mediator.SourceGenerator flags a domain event with no registered handler. The Application
+         layer (Task 8) adds handlers for AccountOpened/FundsDeposited/FundsWithdrawn/AccountClosed; until
+         then these events are legitimately handler-less and would fail TreatWarningsAsErrors. Remove this
+         once Task 8 lands. -->
+    <NoWarn>$(NoWarn);MSG0005</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Ardalis.GuardClauses" />
+    <PackageReference Include="Ardalis.Result" />
+    <PackageReference Include="Ardalis.SmartEnum" />
+    <PackageReference Include="FastEndpoints" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Marten" />
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="WolverineFx.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
+    <PackageReference Include="Mediator.Abstractions" />
+    <PackageReference Include="Mediator.SourceGenerator">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.ApiContracts\AllSpice.CleanModularMonolith.ApiContracts.csproj" />
+    <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.EventSourcing\AllSpice.CleanModularMonolith.EventSourcing.csproj" />
+    <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.Identity.Abstractions\AllSpice.CleanModularMonolith.Identity.Abstractions.csproj" />
+    <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.SharedKernel\AllSpice.CleanModularMonolith.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.Notifications.Contracts\AllSpice.CleanModularMonolith.Notifications.Contracts.csproj" />
+    <ProjectReference Include="..\..\Shared\AllSpice.CleanModularMonolith.Web\AllSpice.CleanModularMonolith.Web.csproj" />
+  </ItemGroup>
+
+</Project>
