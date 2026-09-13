@@ -6,10 +6,12 @@
     "API",
     "Modular Monolith",
     "Clean Architecture",
-    "CQRS"
+    "CQRS",
+    "Event Sourcing"
   ],
   "identity": "AllSpice.CleanModularMonolith",
   "name": "AllSpice Clean Modular Monolith",
+  "description": "A .NET 10 clean-architecture modular monolith: CQRS (Mediator), FastEndpoints, EF Core + PostgreSQL, Wolverine transactional outbox, Keycloak, Aspire, and opt-in event sourcing (Marten) per aggregate.",
   "shortName": "allspice-modular",
   "sourceName": "AllSpice.CleanModularMonolith",
   "tags": {

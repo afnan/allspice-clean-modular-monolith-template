@@ -33,8 +33,10 @@ provisions infrastructure (Postgres, Redis, Keycloak, Azurite, Papercut SMTP) an
 ```
 Services/{Module}/
   Domain/          -- Aggregates, ValueObjects, Enums, Events, Specifications
+                      (event-sourced aggregates derive from EventSourcedAggregate; their Events are the stream)
   Application/     -- Features (Commands/Queries with Handlers + Validators), Contracts, DTOs
-  Infrastructure/  -- Persistence (EF DbContext, Configurations), Services, Messaging, Jobs, Extensions
+  Infrastructure/  -- Persistence (EF DbContext, Configurations), Services, Messaging, Jobs, Extensions,
+                      Projections (Marten store config lives here)
   Api/             -- FastEndpoints endpoint classes
 ```
 
@@ -80,6 +82,7 @@ Services/{Module}/
 | Error contract | RFC7807 problem+json with a machine-readable `code` (auto-derived from `DomainException` type) |
 | PII in logs | `[SensitiveData]` on request properties → redacted by `LoggingBehavior`; responses never logged |
 | Architecture enforcement | **NetArchTest** fitness tests (`tests/...Architecture.Tests`) assert the golden rules at build time |
+| Event store (opt-in) | **Marten** — one store per module in the module DB (schema `<module>`), enlisted in the module EF transaction via `MartenTransactionParticipant`; inline projections; `FetchForWriting` concurrency (ADR-0009) |
 
 ## Shared libraries
 
@@ -93,6 +96,7 @@ Services/{Module}/
 - **ApiContracts** — response DTOs returned by endpoints (shared request/response shapes).
 - **Web** — `Ardalis.Result` HTTP mapping (incl. `ExecuteFailureAsync`), `ClaimsPrincipalExtensions`.
 - **Pdf** — `PdfGeneratorBase`, `PdfTheme`, `PdfFooterBuilder`.
+- **EventSourcing** — `AddModuleEventStore<TStore, TContext>`, `MartenTransactionParticipant`, `MartenEventSourcedRepository`, `IEventMetadataProvider`. The only project outside module Infrastructure layers allowed to reference Marten.
 
 ## CQRS flow
 
@@ -109,6 +113,67 @@ multi-generation events), then commits; on failure it rolls back.
 Wolverine integration events via `IIntegrationEventPublisher` — never a direct write to another module's
 DbContext (`TransactionBehavior` fails fast if a command dirties more than one). Domain events are in-process
 and same-module only.
+
+## Event sourcing (opt-in per aggregate)
+
+Most aggregates are EF Core rows. An aggregate is event-sourced only when its history is the business record
+(AGENTS.md golden rule 8). The reference implementation is the `Ledger` module.
+
+**Write path.** `Account : EventSourcedAggregate` → command method guards → `Raise(event)` → `When` routes to
+`Apply(TEvent)` (pure state), records the event as uncommitted **and** registers it as a domain event.
+`IAccountRepository : IEventSourcedRepository<Account>` (bespoke, golden rule 4) is Marten-backed:
+`LoadAsync` = `FetchForWriting` (tracks the expected version), `AddAsync` = `StartStream`, `SaveAsync` =
+`AppendMany` (+ `ArchiveStream` when the aggregate called `MarkForArchive`).
+
+**Transaction.** The module transaction is opened *lazily*: by `TransactionBehavior` at commit, or **earlier**
+by `MartenTransactionParticipant` on the first repository write-intent. The Marten session is opened with
+`SessionOptions.ForTransaction(npgsqlTx, shouldAutoCommit: false)` — it never commits. `TransactionBehavior`
+(1) counts a participant's owner as the dirty module, (2) reuses an early transaction, (3) flushes EF then the
+participant on each drain-loop iteration and dispatches domain events from both, (4) discards participants and
+rolls back on failure. So: events + inline projection + EF rows + outbox envelope = one commit.
+
+**Read path.** Inline single-stream projections (`AccountSummary`) are updated in the same transaction and
+queried through `store.QuerySession()`; lists never replay streams. `HistoryAsync` returns the raw stream with
+metadata (version, sequence, timestamp, correlation id, `idempotency-key` header) — the audit trail.
+
+**Concurrency.** A concurrent append fails at flush with Marten's `ConcurrencyException`, translated to
+`ConcurrencyConflictException` → `409 concurrency_conflict`. EF's `DbUpdateConcurrencyException` maps to the
+same exception. A stream-id collision on `AddAsync` maps to `ConflictException` → 409.
+
+**Schema & rebuild.** `AddModuleEventStore` fixes: `AutoCreate.None`, `EventAppendMode.Rich`, STJ,
+correlation + header metadata, Guid streams. `Ensure{Module}ModuleDatabaseAsync` applies the schema at
+startup — `ApplyEventStoreSchemaAsync<TStore>` throws `InvalidOperationException` at startup if the store's
+`configure` callback registered no event type or projection (Marten would otherwise silently create no
+`mt_events`/`mt_streams` tables at all). Rebuild projections with the JasperFx runner:
+`dotnet run --project <Gateway> -- projections rebuild` (or `-p AccountSummary`).
+
+**Versioning.** Keep the old CLR shape as `XxxV1` with its stored name pinned (`MapEventType<FundsDepositedV1>`
+is implied by the `Upcast<…>("funds_deposited", …)` registration); give the new shape a new stored name
+(`MapEventType<FundsDeposited>("funds_deposited_v2")`); register the upcaster. Never edit or delete events.
+
+**Metadata.** `IEventMetadataProvider` (gateway: `HttpEventMetadataProvider`) stamps `CorrelationId` and the
+`Idempotency-Key` on every event. Events carry **no personal data**.
+
+**No-constructor replay.** Marten's live aggregation (`FetchForWriting`/`LiveStreamAggregation`) allocates an
+event-sourced aggregate without running any constructor, then replays history straight through `Apply(TEvent)`.
+No state may depend on a field/property initializer or constructor logic — every property must be assigned by
+an `Apply` method, and any collection must be lazily initialized. `EventSourcedAggregate` and
+`HasDomainEventsBase` already do this for their uncommitted/domain-event lists.
+
+## Ledger module (reference)
+
+`Services/AllSpice.CleanModularMonolith.Ledger` — `Account` (open / deposit / withdraw / close), events
+`AccountOpened`, `FundsDeposited` (v2) / `FundsDepositedV1` (legacy, upcast), `FundsWithdrawn`,
+`AccountClosed` (archives the stream). `LedgerDbContext` has no entities: it owns the transaction and hosts the
+co-located outbox — its EF migration is therefore empty by design (the outbox envelope tables are
+`ExcludeFromMigrations`, provisioned separately by Wolverine's `Admin.MigrateAsync`). `AccountOpened` →
+`NotificationRequestedIntegrationEvent` proves event-sourced write + outbox atomicity without a new Contracts
+project. Endpoints under `/api/ledger/accounts` gated by `ledger:accounts.read|write`: `POST
+/api/ledger/accounts` (201 + Location), `POST …/{accountId}/deposits|withdrawals|close` (204), `GET
+…/{accountId}` (summary), `GET …/{accountId}/history` (audit trail). The Ledger `.csproj` carries a permanent
+project-scoped `<NoWarn>$(NoWarn);MSG0005</NoWarn>` — Mediator flags an `IDomainEvent` with no handler, and
+stream events other than `AccountOpened` intentionally have none. It exists to be copied or deleted — see
+GETTING_STARTED.md.
 
 ## Identity module
 
@@ -152,11 +217,18 @@ changes use **EF Core migrations** — `MigrateAsync` runs at startup with retry
 provisioned at startup via `IMessageStore.Admin.MigrateAsync`. Design-time `DbContextFactory` classes read
 connection details from `EF_DESIGN_*` env vars (no hardcoded password; they fail fast if none is provided).
 
+An event-sourced module additionally has a **Marten schema** (`<module>`) in the same database;
+`Ensure{Module}ModuleDatabaseAsync` applies it with `ApplyAllConfiguredChangesToDatabaseAsync` after the EF
+migration (Marten uses its own advisory lock). `AutoCreate.None` at runtime — schema changes are applied at
+startup, never lazily.
+
 > **Wolverine 6 codegen:** Wolverine 6 removed the runtime code compiler from core, so any Wolverine **host**
 > (the gateway, and Wolverine-starting integration tests) must reference **`WolverineFx.RuntimeCompilation`**
 > for the default `TypeLoadMode.Dynamic` — without it, messaging fails to start (`no IAssemblyGenerator`). The
-> gateway already references it. For production cold-start/AOT you can instead pre-generate code
-> (`dotnet run -- codegen write` + `TypeLoadMode.Static`).
+> gateway already references it. The gateway now runs JasperFx commands (`Program.cs` →
+> `RunJasperFxCommands`): `dotnet run` with no args starts the host as before; `dotnet run -- <command>` runs a
+> maintenance command instead — e.g. `codegen write` (Wolverine, for production cold-start/AOT with
+> `TypeLoadMode.Static`) or `projections rebuild` (Marten, see "Event sourcing" below).
 
 ```bash
 EF_DESIGN_DB_PASSWORD=<local-pg-password> dotnet ef migrations add <Name> \
@@ -177,8 +249,20 @@ mapped in **every** environment (orchestrators need them in production); keep th
 
 - **xUnit + Moq + coverlet**; integration tests use **Testcontainers** (Postgres) and SQLite.
 - **Architecture-fitness tests** (`tests/...Architecture.Tests`, NetArchTest) turn the golden rules into
-  build-time assertions: domain purity, module isolation, layer/naming conventions, sealed domain events. They
-  run as part of `dotnet test` and in CI. When a rule legitimately changes, update the test in the same change.
+  build-time assertions: domain purity, module isolation, layer/naming conventions, sealed domain events,
+  Marten confined to Infrastructure, Ledger isolation, stream events sealed. They run as part of `dotnet test`
+  and in CI. When a rule legitimately changes, update the test in the same change.
+  - Marten's compile-time source generator emits an aggregate "Evolver" type (`<global__…AccountEvolver…>`)
+    into the aggregate's own Domain namespace of any project that references Marten and has `Apply` methods.
+    The domain-purity rules exclude source-generated types (names starting with `<`) for exactly this reason
+    — don't delete that exclusion.
+- `EventSourcing.IntegrationTests` / `Ledger.Infrastructure.IntegrationTests` (Testcontainers) prove
+  enlistment, concurrency, projection consistency and upcasting. Full event-sourcing test inventory:
+  `EventSourcing.IntegrationTests` (participant/repository/fail-fast schema guard on Postgres),
+  `Ledger.Domain.UnitTests`, `Ledger.Application.UnitTests`, `Ledger.Infrastructure.IntegrationTests`
+  (projection, archive, production-config upcast), and
+  `Foundation.IntegrationTests/EventSourcedOutboxAtomicityTests` (post-flush rollback of stream + row +
+  envelope through the real `TransactionBehavior`).
 - **CI** (`.github/workflows/ci.yml`) builds (warnings-as-errors), runs all tests with coverage, and fails on
   any known-vulnerable NuGet package. **Dependabot** keeps NuGet/Actions/Docker dependencies current.
 - Key decisions are recorded as ADRs under [`docs/adr/`](./docs/adr).

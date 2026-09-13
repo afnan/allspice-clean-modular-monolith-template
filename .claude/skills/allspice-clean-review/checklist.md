@@ -145,6 +145,20 @@ and premature generality as hard as duplication.
   synchronously; fire-and-forget publishes; a non-idempotent integration-event
   consumer (the outbox can redeliver).
 
+## Event sourcing (opt-in, ADR-0009)
+
+- Is event sourcing **justified** for this aggregate (golden rule 8)? Flag CRUD/reference data, externally
+  mirrored data, or PII-heavy aggregates being event-sourced.
+- Aggregate derives from `EventSourcedAggregate`; events are `sealed record … : IDomainEvent` with ids /
+  amounts / timestamps only — **no personal data**.
+- `Apply(TEvent)` methods are pure (no validation, no throws); dispatcher is `When`, never `Apply`.
+- Bespoke `IXxxRepository : IEventSourcedRepository<Xxx>`; handlers `LoadAsync` → mutate → `SaveAsync`.
+  No direct `IDocumentSession`/`LightweightSession()` in handlers.
+- Reads use projections; only an explicit history/audit query touches the stream.
+- Changed an event's shape? Requires a new stored name (`MapEventType`) + `Upcast` + tests; never an edit.
+- Marten appears only in `Infrastructure` (architecture test); `ApplyEventStoreSchemaAsync` is called in `Ensure…`.
+- Tests: Domain given/when/then; Testcontainers integration for round trip + concurrency + projection.
+
 ## Api layer (the edge)
 
 - **FastEndpoints** (not MVC controllers). The endpoint maps request ->

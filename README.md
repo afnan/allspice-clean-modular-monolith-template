@@ -1,6 +1,6 @@
 # AllSpice Clean Modular Monolith
 
-A production-ready .NET 10 modular monolith template (`dotnet new allspice-modular`) using Clean Architecture, CQRS, and event-driven patterns. Ships with full Keycloak integration, multi-provider email delivery, PuppeteerSharp PDF generation, and a complete Identity + Notifications module stack.
+A production-ready .NET 10 modular monolith template (`dotnet new allspice-modular`) using Clean Architecture, CQRS, event-driven messaging, and **opt-in event sourcing (Marten)** for the aggregates that need it. Ships with full Keycloak integration, multi-provider email delivery, PuppeteerSharp PDF generation, and a complete Identity + Notifications module stack plus a small event-sourced **Ledger** reference module.
 
 ## Why this template
 
@@ -30,6 +30,7 @@ Most starters give you folders. This one encodes the decisions **and enforces th
 - **PuppeteerSharp PDF library** — headless Chromium, A4 output, reusable theme CSS, header/footer page-frame
 - **Realtime hub** sharing SignalR infrastructure across modules with automatic user groups
 - **Wolverine messaging** with PostgreSQL durable outbox for reliable event-driven cross-module communication
+- **Opt-in event sourcing (Marten)** — per aggregate, not per module. `EventSourcedAggregate` + a bespoke repository; the Marten session **enlists in the module's EF transaction**, so events, inline projections, EF rows and the outbox envelope commit atomically. Ships with concurrency (409), event versioning via upcasters, idempotency/correlation metadata on every event, stream archiving and `projections rebuild`. Guard-railed by golden rule 8 + architecture tests — see [ADR-0009](docs/adr/0009-opt-in-event-sourcing-marten-enlisted.md)
 - **Quartz.NET scheduling** with per-module jobs (Keycloak user sync, stale-pending notifications monitor)
 - **Aspire AppHost** to spin up PostgreSQL, Redis, Keycloak, Papercut SMTP, and Azurite in one command
 - **Central package management** with .NET 10, Clean Architecture patterns powered by Ardalis libraries
@@ -75,7 +76,9 @@ Spins up PostgreSQL, Redis, Keycloak, Papercut SMTP, and Azurite (dev only).
 |- {{ProjectName}}.ServiceDefaults/      -- OpenTelemetry, resilience, service discovery, Quartz hosting
 |- Services/{{ProjectName}}.Identity/    -- User aggregate, Keycloak sync, RBAC
 |- Services/{{ProjectName}}.Notifications/ -- Multi-channel delivery, templates, preferences
+|- Services/{{ProjectName}}.Ledger/       -- Event-sourced Account (reference module; deletable)
 |- Shared/{{ProjectName}}.SharedKernel/  -- Base entities, domain events, EfRepository, pipeline behaviors
+|- Shared/{{ProjectName}}.EventSourcing/ -- Marten participant/repository base (only place Marten lives outside module Infrastructure)
 |- Shared/{{ProjectName}}.Pdf/           -- PuppeteerSharp PDF generation, theme CSS, footer builder
 |- Shared/{{ProjectName}}.RealTime/      -- SignalR hub, IRealtimePublisher
 |- Shared/{{ProjectName}}.Notifications.Contracts/ -- Integration event DTOs
@@ -91,6 +94,7 @@ Spins up PostgreSQL, Redis, Keycloak, Papercut SMTP, and Azurite (dev only).
 | --- | --- |
 | **Identity** | User aggregate, `KeycloakTokenProvider` (client credentials flow), `KeycloakDirectoryClient` (Admin REST API), `KeycloakUserSyncJob` (mirrors IdP users locally), `KeycloakRoleClient` + `RoleSyncJob` (mirrors realm roles), permission-based RBAC (catalog + role→permission map, `[HasPermission]` gates, admin CRUD endpoints), health checks |
 | **Notifications** | Email (Resend/SendGrid; MailKit dev-only), InApp (SignalR), HTML templates (embedded resources + DB seeding), `NotificationContentBuilder` with `{{token}}` replacement, Quartz stale-pending monitor, Wolverine consumer |
+| **Ledger** | Reference **event-sourced** module: `Account` aggregate (open/deposit/withdraw/close), Marten store in `ledgerdb` schema `ledger`, inline `AccountSummary` projection, `/history` audit endpoint, `FundsDepositedV1 → FundsDeposited` upcaster, `AccountOpened` → Notifications integration event. Delete it if you don't need a sample — see GETTING_STARTED.md |
 | **ApiGateway** | FastEndpoints (explicit assembly discovery), YARP reverse proxy, SignalR hub mapping, Redis output caching, centralized Wolverine durable outbox registration |
 | **AppHost** | Aspire orchestrator: PostgreSQL, Redis, Keycloak (dev + prod modes), Papercut SMTP |
 

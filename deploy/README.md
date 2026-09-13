@@ -25,6 +25,9 @@ docker run --rm -p 8080:8080 \
 Health probes: `GET /alive` (liveness) and `GET /health` (readiness — fails until DB connectivity +
 migrations are healthy).
 
+Event-sourced modules also apply their Marten schema at startup (`ApplyAllConfiguredChangesToDatabaseAsync`);
+the runtime role needs DDL rights on the module schema (already true for EF migrations).
+
 ## Kubernetes
 
 `deploy/k8s/gateway.yaml` is a starting-point Deployment + Service with liveness/readiness probes,

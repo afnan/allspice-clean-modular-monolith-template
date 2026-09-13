@@ -186,3 +186,16 @@ Postgres/Wolverine (Aspire or Testcontainers), not unit tests.
   indexes; the join table has no FKs to `authz_roles`/`authz_permissions`. Security is unaffected today (the
   `PermissionMapStore` inner-joins, so orphan rows drop out and default-deny holds), but the Plan B mutation API
   should add the FKs + cascade delete so orphan mappings can't accumulate. Surfaced by the Plan A whole-branch review.
+
+## Event sourcing (ADR-0009) — deferred
+
+- [ ] `dotnet new` symbol to exclude the Ledger sample (`//#if` in gateway/AppHost/slnx; doubles the smoke test).
+- [ ] Async projections / Marten daemon guidance + `AddAsyncDaemon` when an inline projection spans streams.
+- [ ] Crypto-shredding helper for PII in events (rule only today).
+- [ ] Strong-typed ids for event-sourced aggregates (Guid stream ids today).
+
+## AppHost / infrastructure
+
+- [ ] **AppHost Postgres image: Aspire 13.4.6 defaults to postgres 18 while existing dev volumes may be 17
+  (container exits 1).** Decide: pin `.WithImageTag("17")` or document recreating the dev volume.
+  (Pre-existing, surfaced by the Ledger event-sourcing smoke-test attempt.)

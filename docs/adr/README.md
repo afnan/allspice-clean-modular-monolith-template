@@ -16,3 +16,4 @@ When you make a decision that changes a pattern here, add a new ADR (supersede, 
 | [0006](0006-timeprovider-clock.md) | `TimeProvider` for all clock access | Accepted |
 | [0007](0007-architecture-fitness-tests.md) | Architecture-fitness tests enforce the golden rules | Accepted |
 | [0008](0008-in-app-permission-based-authorization.md) | In-app permission-based authorization (RBAC) | Accepted |
+| [0009](0009-opt-in-event-sourcing-marten-enlisted.md) | Opt-in event sourcing per aggregate (Marten enlisted in the module transaction) | Accepted |
