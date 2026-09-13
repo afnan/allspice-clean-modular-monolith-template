@@ -2931,7 +2931,6 @@ using AllSpice.CleanModularMonolith.Ledger.Application.Contracts.Persistence;
 using AllSpice.CleanModularMonolith.Ledger.Application.Features.Accounts.Commands.OpenAccount;
 using AllSpice.CleanModularMonolith.Ledger.Domain.Aggregates;
 using Ardalis.Result;
-using Microsoft.Extensions.Time.Testing;
 
 namespace AllSpice.CleanModularMonolith.Ledger.Application.UnitTests.Accounts;
 
@@ -2943,7 +2942,7 @@ public class OpenAccountCommandHandlerTests
 
     public OpenAccountCommandHandlerTests()
     {
-        _handler = new OpenAccountCommandHandler(_repository.Object, new FakeTimeProvider(Now));
+        _handler = new OpenAccountCommandHandler(_repository.Object, new FixedTimeProvider(Now));
     }
 
     [Fact]
@@ -2973,7 +2972,6 @@ using AllSpice.CleanModularMonolith.Ledger.Application.Features.Accounts.Command
 using AllSpice.CleanModularMonolith.Ledger.Domain.Aggregates;
 using AllSpice.CleanModularMonolith.Ledger.Domain.ValueObjects;
 using Ardalis.Result;
-using Microsoft.Extensions.Time.Testing;
 
 namespace AllSpice.CleanModularMonolith.Ledger.Application.UnitTests.Accounts;
 
@@ -2985,7 +2983,7 @@ public class DepositFundsCommandHandlerTests
 
     public DepositFundsCommandHandlerTests()
     {
-        _handler = new DepositFundsCommandHandler(_repository.Object, new FakeTimeProvider(Now));
+        _handler = new DepositFundsCommandHandler(_repository.Object, new FixedTimeProvider(Now));
     }
 
     [Fact]
@@ -3100,7 +3098,7 @@ public class GetAccountHistoryQueryHandlerTests
 }
 ```
 
-The repo has no fake `TimeProvider` and this does not warrant a package. Replace every `new FakeTimeProvider(Now)` above with `new FixedTimeProvider(Now)`, drop the `using Microsoft.Extensions.Time.Testing;` lines, and add this helper to the test project as `FixedTimeProvider.cs`:
+The repo has no fake `TimeProvider` and this does not warrant a package; the tests above use this helper, added to the test project as `FixedTimeProvider.cs`:
 
 ```csharp
 namespace AllSpice.CleanModularMonolith.Ledger.Application.UnitTests;
