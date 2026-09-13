@@ -124,6 +124,10 @@ public sealed class TransactionBehaviorParticipantTests : IDisposable
         var result = await behavior.Handle(new FakeCommand(), async (_, ct) =>
         {
             await participant.OpenEarlyAsync(ct);
+            // Written directly through the early transaction (bypassing Stage/FlushAsync, which never runs on
+            // this path) so the assertion below can only pass if the early transaction was actually ROLLED
+            // BACK — a participant whose FlushAsync never runs proves nothing about commit vs. rollback.
+            await participant.WriteNowAsync("rolled-back", ct);
             participant.Stage("never");
             return Result.Conflict("busy");
         }, CancellationToken.None);
@@ -133,6 +137,7 @@ public sealed class TransactionBehaviorParticipantTests : IDisposable
         Assert.Equal(0, participant.FlushCount);
         Assert.Null(_db.Database.CurrentTransaction);
         Assert.Equal(0, await CountFlushesAsync("never"));
+        Assert.Equal(0, await CountFlushesAsync("rolled-back"));
     }
 
     [Fact]
@@ -154,6 +159,59 @@ public sealed class TransactionBehaviorParticipantTests : IDisposable
         Assert.Null(_db.Database.CurrentTransaction);
         await using var fresh = new TestModuleDbContext(Options(_connection));
         Assert.False(await fresh.Items.AnyAsync(i => i.Name == "doomed"));
+    }
+
+    [Fact]
+    public async Task Rollback_with_a_cancelled_token_still_cleans_up_and_surfaces_the_original_exception()
+    {
+        // A token that gets cancelled the instant the participant's flush fails — simulating a caller-cancelled
+        // request racing a genuine domain failure. EF's own BeginTransactionAsync/SaveChangesAsync reject an
+        // ALREADY-cancelled token outright (proven separately), so the token must still be live when the
+        // handler runs and only flip at the moment of failure, to isolate the behavior under test: does the
+        // ROLLBACK step (which used to run with this same, now-cancelled, token) mask the original exception
+        // and skip cleanup?
+        using var cts = new CancellationTokenSource();
+        var participant = new FakeParticipant(_db) { ThrowOnFlush = true, CancelOnFlushThrow = cts };
+        var behavior = CreateBehavior(participant);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await behavior.Handle(new FakeCommand(), (_, _) =>
+            {
+                _db.Items.Add(new TestEntity { Name = "doomed-cancelled" });
+                participant.Stage("doomed-cancelled");
+                return ValueTask.FromResult(Result.Success());
+            }, cts.Token));
+
+        // The ORIGINAL exception (from the participant's flush) must surface, not an OperationCanceledException
+        // from a rollback call that itself observed the now-cancelled token.
+        Assert.Equal("flush failed", ex.Message);
+        Assert.True(participant.Discarded);
+        Assert.Empty(_db.ChangeTracker.Entries());
+        Assert.Null(_db.Database.CurrentTransaction);
+        await using var fresh = new TestModuleDbContext(Options(_connection));
+        Assert.False(await fresh.Items.AnyAsync(i => i.Name == "doomed-cancelled"));
+    }
+
+    [Fact]
+    public async Task Successful_commit_releases_a_different_modules_dangling_early_transaction()
+    {
+        var otherParticipant = new FakeParticipant(_otherDb);
+        var behavior = CreateBehavior(otherParticipant, dbContexts: [_db, _otherDb]);
+
+        var result = await behavior.Handle(new FakeCommand(), async (_, ct) =>
+        {
+            // Simulates a read/write-intent load on ANOTHER module that opened its transaction early but,
+            // this time, ended up with nothing to append — while THIS module's write proceeds and commits.
+            await otherParticipant.OpenEarlyAsync(ct);
+            _db.Items.Add(new TestEntity { Name = "row" });
+            return Result.Success();
+        }, CancellationToken.None);
+
+        Assert.Equal(ResultStatus.Ok, result.Status);
+        await using var fresh = new TestModuleDbContext(Options(_connection));
+        Assert.True(await fresh.Items.AnyAsync(i => i.Name == "row"));
+        Assert.Null(_db.Database.CurrentTransaction);
+        Assert.Null(_otherDb.Database.CurrentTransaction);
     }
 
     [Fact]
@@ -226,6 +284,11 @@ public sealed class TransactionBehaviorParticipantTests : IDisposable
         public int FlushCount { get; private set; }
         public bool Discarded { get; private set; }
         public bool ThrowOnFlush { get; init; }
+
+        /// <summary>When set, cancelled the instant <see cref="ThrowOnFlush"/> fires — simulating a client
+        /// cancellation racing a genuine domain failure, so the token is live for every call up to that point.</summary>
+        public CancellationTokenSource? CancelOnFlushThrow { get; init; }
+
         public Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? EarlyTransaction { get; private set; }
         public Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? TransactionSeenAtFlush { get; private set; }
 
@@ -236,11 +299,20 @@ public sealed class TransactionBehaviorParticipantTests : IDisposable
 
         public void RaiseDomainEvent(IDomainEvent e) => _events.Add(e);
 
+        /// <summary>Writes a row immediately, through the owner's CURRENT transaction, bypassing Stage/Flush —
+        /// for tests that must prove a rollback happened on a path where FlushAsync itself never runs.</summary>
+        public Task WriteNowAsync(string note, CancellationToken cancellationToken) =>
+            owner.Database.ExecuteSqlRawAsync("INSERT INTO Flushes (Note) VALUES ({0})", [note], cancellationToken);
+
         public async ValueTask FlushAsync(CancellationToken cancellationToken)
         {
             TransactionSeenAtFlush = owner.Database.CurrentTransaction
                 ?? throw new InvalidOperationException("Flush called without a transaction");
-            if (ThrowOnFlush) throw new InvalidOperationException("flush failed");
+            if (ThrowOnFlush)
+            {
+                CancelOnFlushThrow?.Cancel();
+                throw new InvalidOperationException("flush failed");
+            }
             foreach (var note in _staged)
             {
                 await owner.Database.ExecuteSqlRawAsync("INSERT INTO Flushes (Note) VALUES ({0})", [note], cancellationToken);

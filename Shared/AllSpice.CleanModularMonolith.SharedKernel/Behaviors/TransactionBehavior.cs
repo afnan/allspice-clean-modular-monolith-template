@@ -59,6 +59,13 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
         }
         catch
         {
+            // The handler may have staged EF writes before throwing; a SUBSEQUENT ITransactional command
+            // sharing this scope must not see them as dirty and commit them.
+            foreach (var dirty in _dbContexts.Select(c => c.Instance))
+            {
+                dirty.ChangeTracker.Clear();
+            }
+
             await ReleaseOpenTransactionsAsync(discardParticipants: true).ConfigureAwait(false);
             throw;
         }
@@ -176,15 +183,24 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
         }
         catch (Exception ex)
         {
-            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-
-            // RollbackAsync reverts the database but leaves the entities tracked in their staged state on the
-            // scoped context. Clear them (and the participants) so they can't be re-flushed by a later
-            // ITransactional command sharing this scope.
-            db.ChangeTracker.Clear();
-            foreach (var participant in _participants)
+            try
             {
-                participant.Discard();
+                // Roll back with a fresh, non-cancellable token: if the caller's token is already cancelled,
+                // RollbackAsync(cancellationToken) can itself throw OperationCanceledException, which would
+                // mask the original exception AND (via the old code's ordering) skip the cleanup below — the
+                // very "staged state survives a failed command" hazard this whole block exists to prevent.
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            finally
+            {
+                // RollbackAsync reverts the database but leaves the entities tracked in their staged state on
+                // the scoped context. Clear them (and the participants) so they can't be re-flushed by a later
+                // ITransactional command sharing this scope. Runs even if the rollback itself threw.
+                db.ChangeTracker.Clear();
+                foreach (var participant in _participants)
+                {
+                    participant.Discard();
+                }
             }
 
             _logger.LogWarning("Rolled back transaction {TransactionId} for {RequestType}",
@@ -205,6 +221,12 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
         {
             await transaction.DisposeAsync().ConfigureAwait(false);
         }
+
+        // A DIFFERENT module's participant may still be holding a transaction it opened early (it loaded with
+        // write-intent but ended up with nothing to flush) — release it now that the committed module's
+        // transaction is done with. discardParticipants: false — that participant did no work, it merely
+        // opened and released a session; there's nothing on it to discard.
+        await ReleaseOpenTransactionsAsync(discardParticipants: false, except: db).ConfigureAwait(false);
 
         // The command's data AND the integration-event envelopes it enrolled are now committed atomically.
         // Release the envelopes so they are sent immediately instead of on the messaging layer's next durable
@@ -234,10 +256,12 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
 
     /// <summary>
     /// Rolls back and disposes any module transaction that is still open when there is nothing to commit
-    /// (a participant opened it early and the command then failed, or staged nothing). Best-effort per
-    /// context; the exception that caused the failure — if any — still propagates from the caller.
+    /// (a participant opened it early and the command then failed, or staged nothing) — or, when
+    /// <paramref name="except"/> is given, any OTHER module's early-opened transaction left dangling after a
+    /// successful commit (that participant loaded with write-intent but ended up with nothing to flush).
+    /// Best-effort per context; the exception that caused the failure — if any — still propagates from the caller.
     /// </summary>
-    private async ValueTask ReleaseOpenTransactionsAsync(bool discardParticipants)
+    private async ValueTask ReleaseOpenTransactionsAsync(bool discardParticipants, DbContext? except = null)
     {
         if (discardParticipants)
         {
@@ -249,6 +273,11 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
 
         foreach (var context in _dbContexts)
         {
+            if (except is not null && ReferenceEquals(context.Instance, except))
+            {
+                continue;
+            }
+
             IDbContextTransaction? open = context.Instance.Database.CurrentTransaction;
             if (open is null)
             {
