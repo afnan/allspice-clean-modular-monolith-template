@@ -24,6 +24,7 @@
     <Project Path="tests/AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests/AllSpice.CleanModularMonolith.Notifications.Domain.UnitTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.Ledger.Domain.UnitTests/AllSpice.CleanModularMonolith.Ledger.Domain.UnitTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.Ledger.Application.UnitTests/AllSpice.CleanModularMonolith.Ledger.Application.UnitTests.csproj" />
+    <Project Path="tests/AllSpice.CleanModularMonolith.Ledger.Infrastructure.IntegrationTests/AllSpice.CleanModularMonolith.Ledger.Infrastructure.IntegrationTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.Notifications.Application.UnitTests/AllSpice.CleanModularMonolith.Notifications.Application.UnitTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.Notifications.Infrastructure.IntegrationTests/AllSpice.CleanModularMonolith.Notifications.Infrastructure.IntegrationTests.csproj" />
     <Project Path="tests/AllSpice.CleanModularMonolith.ApiGateway.UnitTests/AllSpice.CleanModularMonolith.ApiGateway.UnitTests.csproj" />

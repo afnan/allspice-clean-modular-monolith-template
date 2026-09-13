@@ -19,5 +19,9 @@ global using Microsoft.Extensions.Logging;
 global using AllSpice.CleanModularMonolith.Ledger.Application.Contracts.Persistence;
 global using AllSpice.CleanModularMonolith.Ledger.Domain.Aggregates;
 
+// Infrastructure namespaces (for the convenience of Infrastructure and Api files only)
+global using AllSpice.CleanModularMonolith.Ledger.Infrastructure.Persistence;
+global using AllSpice.CleanModularMonolith.Ledger.Infrastructure.Repositories;
+
 // Type aliases
 global using AppAssemblyReference = AllSpice.CleanModularMonolith.Ledger.Application.AssemblyReference;
