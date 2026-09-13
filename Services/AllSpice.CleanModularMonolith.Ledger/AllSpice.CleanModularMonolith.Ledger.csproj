@@ -4,10 +4,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- MSG0005: Mediator.SourceGenerator flags a domain event with no registered handler. The Application
-         layer (Task 8) adds handlers for AccountOpened/FundsDeposited/FundsWithdrawn/AccountClosed; until
-         then these events are legitimately handler-less and would fail TreatWarningsAsErrors. Remove this
-         once Task 8 lands. -->
+    <!-- MSG0005: Mediator.SourceGenerator warns when an INotification (our IDomainEvent) has no handler.
+         Event-sourced stream events are persisted facts first and in-process notifications second — most
+         (FundsDeposited, FundsWithdrawn, AccountClosed) intentionally have no handler; only AccountOpened is
+         reacted to. This project-scoped suppression is therefore permanent for an event-sourced module; do
+         not remove it. Ordinary modules should not need it. -->
     <NoWarn>$(NoWarn);MSG0005</NoWarn>
   </PropertyGroup>
 
