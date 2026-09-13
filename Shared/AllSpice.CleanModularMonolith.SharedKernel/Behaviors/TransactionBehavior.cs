@@ -126,6 +126,13 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
         var db = dirtyContexts[0];
         var moduleParticipants = _participants.Where(p => ReferenceEquals(p.Owner, db)).ToList();
 
+        // Release any OTHER module's early-opened transaction BEFORE the transaction section, not after the
+        // commit. Those participants are non-pending by construction (a pending one would have made its owner
+        // dirty and tripped the multi-module guard above), so there is nothing to lose by discarding them —
+        // and leaving a foreign context inside an open transaction makes the integration-event publisher's
+        // "the one context with CurrentTransaction != null" lookup ambiguous for the whole drain loop.
+        await ReleaseOpenTransactionsAsync(discardParticipants: true, except: db).ConfigureAwait(false);
+
         // Reuse a transaction a participant opened early; otherwise open one now.
         var transaction = db.Database.CurrentTransaction
             ?? await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
@@ -222,11 +229,21 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
             await transaction.DisposeAsync().ConfigureAwait(false);
         }
 
-        // A DIFFERENT module's participant may still be holding a transaction it opened early (it loaded with
-        // write-intent but ended up with nothing to flush) — release it now that the committed module's
-        // transaction is done with. discardParticipants: false — that participant did no work, it merely
-        // opened and released a session; there's nothing on it to discard.
-        await ReleaseOpenTransactionsAsync(discardParticipants: false, except: db).ConfigureAwait(false);
+        // The committing module's participants were drained and cleared at flush, but each still holds a
+        // Marten session bound to the transaction we just committed and disposed. Discard them: the module
+        // DbContext is scoped to the request, so a SUBSEQUENT ITransactional command in the same scope would
+        // otherwise be handed that stale session — the same reuse hazard the ChangeTracker.Clear() calls on
+        // the failure paths guard against.
+        foreach (var participant in moduleParticipants)
+        {
+            participant.Discard();
+        }
+
+        // Still needed even though foreign transactions were released before the transaction section: a
+        // domain-event handler running INSIDE the drain loop may have read from another module through its
+        // event-store repository, which opens that module's transaction on first session use. Such a read is
+        // non-pending, so the cross-module write guard does not fire and the transaction would dangle.
+        await ReleaseOpenTransactionsAsync(discardParticipants: true, except: db).ConfigureAwait(false);
 
         // The command's data AND the integration-event envelopes it enrolled are now committed atomically.
         // Release the envelopes so they are sent immediately instead of on the messaging layer's next durable
@@ -257,15 +274,16 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
     /// <summary>
     /// Rolls back and disposes any module transaction that is still open when there is nothing to commit
     /// (a participant opened it early and the command then failed, or staged nothing) — or, when
-    /// <paramref name="except"/> is given, any OTHER module's early-opened transaction left dangling after a
-    /// successful commit (that participant loaded with write-intent but ended up with nothing to flush).
+    /// <paramref name="except"/> is given, every OTHER module's early-opened transaction, leaving the
+    /// committing module's own transaction (and its participants) alone. <paramref name="except"/> scopes the
+    /// participant discard the same way: only participants owned by a released context are discarded.
     /// Best-effort per context; the exception that caused the failure — if any — still propagates from the caller.
     /// </summary>
     private async ValueTask ReleaseOpenTransactionsAsync(bool discardParticipants, DbContext? except = null)
     {
         if (discardParticipants)
         {
-            foreach (var participant in _participants)
+            foreach (var participant in _participants.Where(p => !ReferenceEquals(p.Owner, except)))
             {
                 participant.Discard();
             }

@@ -63,6 +63,10 @@ public sealed class TransactionBehaviorParticipantTests : IDisposable
         Assert.Equal(1, participant.FlushCount);
         Assert.Equal(1, await CountFlushesAsync("appended"));
         Assert.Null(_db.Database.CurrentTransaction);
+        // The committed module's participants are discarded AFTER the commit: their work was already drained
+        // and written at flush, and the session they still hold is bound to a committed, disposed transaction.
+        // A later ITransactional command in this same scope must not be handed that stale session.
+        Assert.True(participant.Discarded);
     }
 
     [Fact]
@@ -212,6 +216,42 @@ public sealed class TransactionBehaviorParticipantTests : IDisposable
         Assert.True(await fresh.Items.AnyAsync(i => i.Name == "row"));
         Assert.Null(_db.Database.CurrentTransaction);
         Assert.Null(_otherDb.Database.CurrentTransaction);
+        // Releasing that transaction leaves the foreign participant's session bound to a dead transaction, so
+        // it is discarded along with it.
+        Assert.True(otherParticipant.Discarded);
+    }
+
+    [Fact]
+    public async Task Only_the_committing_modules_context_has_an_open_transaction_during_the_drain_loop()
+    {
+        // The integration-event publisher finds the outbox's transaction by looking for "the context with
+        // CurrentTransaction != null". Domain-event handlers run inside the drain loop, so a foreign module's
+        // early-opened transaction must already be gone by then or that lookup is ambiguous.
+        var otherParticipant = new FakeParticipant(_otherDb);
+        var participant = new FakeParticipant(_db);
+        var openContextsAtDispatch = new List<string>();
+        var dispatcher = new Mock<IDomainEventDispatcher>();
+        dispatcher
+            .Setup(d => d.DispatchAsync(It.IsAny<IEnumerable<IDomainEvent>>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                if (_db.Database.CurrentTransaction is not null) openContextsAtDispatch.Add("db");
+                if (_otherDb.Database.CurrentTransaction is not null) openContextsAtDispatch.Add("otherDb");
+                return Task.CompletedTask;
+            });
+        var behavior = new TransactionBehavior<FakeCommand, Result>(
+            [_db, _otherDb], [participant, otherParticipant], dispatcher.Object, [],
+            new PostCommitActions(), NullLogger<TransactionBehavior<FakeCommand, Result>>.Instance);
+
+        await behavior.Handle(new FakeCommand(), async (_, ct) =>
+        {
+            await otherParticipant.OpenEarlyAsync(ct); // foreign module: write-intent load, nothing appended
+            participant.Stage("mine");
+            participant.RaiseDomainEvent(new FakeDomainEvent());
+            return Result.Success();
+        }, CancellationToken.None);
+
+        Assert.Equal(["db"], openContextsAtDispatch);
     }
 
     [Fact]
