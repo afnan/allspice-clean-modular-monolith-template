@@ -31,6 +31,12 @@ but call out the conflict.
    without running both.
 7. **Commit messages carry no AI co-author trailer.** Do not add `Co-Authored-By: Claude ...` or any AI
    attribution. Branch before committing if you're on `main`; only commit/push when asked.
+8. **Event sourcing is opt-in per aggregate and must be justified.** Default to EF Core. Event-source an
+   aggregate only when at least one holds: its history/audit trail is a first-class requirement; temporal
+   ("as of") queries are needed; it is a financial/ledger-style append flow; several derived read models are
+   needed. **Not a fit:** CRUD/reference data, data mirrored from external systems (Keycloak users), aggregates
+   with PII churn, anything where only current state matters. Never put personal data in events. Marten is
+   referenced only from a module's `Infrastructure` (architecture test). See ADR-0009 and the `Ledger` module.
 
 ---
 
@@ -44,6 +50,8 @@ but call out the conflict.
 - **Flow:** FastEndpoint → `IMediator.Send(Command/Query)` → Handler (pipeline behaviors) → bespoke
   Repository (Ardalis.Specification) → module `DbContext`.
 - **Pipeline order:** Logging → DomainException → Performance → Validation → Transaction.
+- Event-sourced aggregates: `Handler → bespoke IXxxRepository : IEventSourcedRepository<T> → Marten store
+  enlisted in the module DbContext transaction`.
 - Full detail lives in [`ARCHITECTURE.md`](./ARCHITECTURE.md). Read it before designing anything non-trivial.
 
 ---
@@ -73,12 +81,18 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 - Validate invariants with **Ardalis.GuardClauses** in factories/methods; raise domain events via
   `RegisterDomainEvent`. Keep domain logic free of EF/HTTP/infrastructure types.
 - Use `Ardalis.SmartEnum` for closed sets; value objects derive from `ValueObject`.
+- **Event-sourced aggregate:** derive from `EventSourcedAggregate`; events are `sealed record … : IDomainEvent`
+  in `Domain/Events`; command methods guard then `Raise(...)`; `public void Apply(TEvent)` methods hold pure
+  state transitions (no validation, no throws); route in `protected override void When(IDomainEvent)` — never
+  name the dispatcher `Apply`. Set `Id` in the first `Apply`. Call `MarkForArchive()` on the terminal event.
 
 **Application** (`Application/Features/...`)
 - One folder per feature: `Command`/`Query` + `Handler` + `Validator`. Commands that mutate state implement
   `ITransactional`. Handlers return `Ardalis.Result` / `Result<T>`.
 - Validate inputs with **FluentValidation** (runs in `ValidationBehavior`). Guard handler args with GuardClauses.
 - Query objects use **Ardalis.Specification**; expose them through bespoke repository methods.
+- Event-sourced: `IXxxRepository : IEventSourcedRepository<Xxx>` + projection read methods; `LoadAsync` →
+  mutate → `SaveAsync`; queries read projections, never the stream (except an explicit history/audit query).
 
 **Infrastructure** (`Infrastructure/...`)
 - One `DbContext` per module; configurations in `Persistence/Configurations`. Soft delete is automatic for
@@ -90,6 +104,13 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 - Cross-cutting EF interceptors are attached through the SP-aware pooled registration (see §6); register new
   ones via `AddSharedKernelInterceptors` or the module's `AddDbContextPool((sp, options) => ...AddInterceptors(...))`.
 - Each module exposes `Add{Module}ModuleServices` + `Ensure{Module}ModuleDatabaseAsync` extensions.
+- Event-sourced: `IXxxEventStore : IDocumentStore` marker; `AddModuleEventStore<IXxxEventStore, XxxDbContext>(cs,
+  "<module>", XxxEventStoreConfiguration.Configure)`; projections in `Infrastructure/Projections`;
+  `XxxRepository : MartenEventSourcedRepository<Xxx, IXxxEventStore>`; `Ensure…` calls
+  `ApplyEventStoreSchemaAsync` after the EF migration. An event-sourced module's `.csproj` needs a permanent
+  project-scoped `<NoWarn>$(NoWarn);MSG0005</NoWarn>` — Mediator's source generator flags an `IDomainEvent`
+  (`INotification`) with no handler, and most stream events intentionally have none; ordinary modules don't
+  need this suppression.
 
 **Api** (`Api/Endpoints`)
 - Use **FastEndpoints** (not MVC controllers). Map `Result` failures with
@@ -134,13 +155,24 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 - ❌ Hardcoded passwords/secrets/connection strings (including design-time and AppHost dev defaults that leak
   to non-dev).
 - ❌ Pinning package versions in individual `.csproj` files — versions live in `Directory.Packages.props`.
-- ❌ MVC controllers, broad `catch`-and-swallow, blanket `NoWarn`.
+- ❌ MVC controllers, broad `catch`-and-swallow, blanket `NoWarn`. (The one sanctioned exception: an
+  event-sourced module's project-scoped `<NoWarn>$(NoWarn);MSG0005</NoWarn>` — see §3 Infrastructure — is
+  narrow and documented, not blanket.)
 - ❌ Reading the clock directly (`DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.UtcNow`) in domain/application/
   infrastructure code. Inject **`TimeProvider`** and call `GetUtcNow()`; in domain aggregates take an explicit
   `nowUtc` timestamp parameter sourced from it (so time is deterministic and testable). The only literal
   `TimeProvider.System` lives at the composition root (`AddSharedKernelInterceptors`).
 - ❌ Relying on EF Core to auto-discover DI-registered `IInterceptor`s — it does **not**; attach explicitly (§6).
 - ❌ Adding a Claude/AI `Co-Authored-By` trailer to commits.
+- ❌ **Don't event-source by default** (golden rule 8), and never store personal data in an event — events cannot be deleted.
+- ❌ **Don't edit, delete or re-type stored events.** Add a new stored name + upcaster (`MapEventType`/`Upcast`).
+- ❌ **Don't list or search by replaying streams** — build a projection. `HistoryAsync` is for one aggregate's audit trail.
+- ❌ **Don't filter archived streams out of `HistoryAsync`.** Archiving (`MarkForArchive`) removes a stream from Marten's default queries and projections; history is the audit trail and must keep returning archived streams (raw event query + `MaybeArchived()`). `LoadAsync` still replays an archived stream, so commands against it are rejected by the aggregate's own rule (`EnsureOpen`), not by a 404.
+- ❌ **Don't open Marten sessions yourself** (`store.LightweightSession()` in a handler). Go through the repository so the session enlists in the module transaction.
+- ❌ **Don't validate inside `Apply`.** Invariants live in command methods; `Apply` must always succeed on replay.
+- ❌ **Don't give an event-sourced aggregate a field/property initializer or constructor-dependent state.**
+  Marten's live aggregation rebuilds the aggregate without running any constructor; every property must be
+  assigned by an `Apply` method, and collections must be created lazily or in `Apply` (see `EventSourcedAggregate`).
 
 ---
 
@@ -162,8 +194,9 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 from inside an `ITransactional` command; consume it with a Wolverine handler in the target module. Put shared
 event DTOs in a `*.Contracts` library.
 
-**Model a rich aggregate (DDD checklist)** — the template ships only Identity + Notifications (deliberately no
-sample business domain). When you add your own aggregate, follow this shape:
+**Model a rich aggregate (DDD checklist)** — the template ships Identity + Notifications plus a deliberately
+small **Ledger** reference module (the event-sourcing example; delete it if unneeded). When you add your own
+aggregate, follow this shape:
 - **Identity:** base on `Entity`/`AuditableEntity`/`SoftDeletableEntity`; mark the root `IAggregateRoot`. For a
   typed key, derive from `Entity<TId>` with a `readonly record struct XxxId(Guid Value)` and map it in EF with
   `builder.Property(x => x.Id).HasConversion(id => id.Value, v => new XxxId(v))`.
@@ -186,6 +219,23 @@ EF_DESIGN_DB_PASSWORD=<local-pg-pw> dotnet ef migrations add <Name> \
   --context <Module>DbContext --output-dir Infrastructure/Migrations
 ```
 
+**Add an event-sourced aggregate** (only if golden rule 8 holds)
+1. Domain: `Xxx : EventSourcedAggregate`, events in `Domain/Events`, `Apply(TEvent)` per event, `When` switch.
+2. Application: `IXxxRepository : IEventSourcedRepository<Xxx>` (+ `GetSummaryAsync`), commands (`ITransactional`) that `LoadAsync` → mutate → `SaveAsync`, queries over the projection.
+3. Infrastructure: `IXxxEventStore : IDocumentStore`; `XxxEventStoreConfiguration.Configure` (projections, `MapEventType`, `Upcast`); `XxxSummary` + `XxxSummaryProjection : SingleStreamProjection<XxxSummary, Guid>`; `XxxRepository : MartenEventSourcedRepository<Xxx, IXxxEventStore>`; in `Add{Module}ModuleServices` call `AddModuleEventStore<…>`; in `Ensure…` call `ApplyEventStoreSchemaAsync<IXxxEventStore>()`.
+4. Tests: Domain given/when/then; Infrastructure integration on Testcontainers (round trip, concurrency, projection, upcast).
+
+If the module has **no EF entities** (only the event store, like `Ledger`), its EF migration will be **empty**
+— that's expected, not a bug: the outbox envelope tables are `ExcludeFromMigrations` and provisioned
+separately by Wolverine's `Admin.MigrateAsync`. Don't "fix" an empty migration by adding something to it.
+
+**Evolve an event (upcaster)** — keep the old CLR type as `XxxV1`; give the new shape a new stored name
+`opts.Events.MapEventType<Xxx>("xxx_v2")`; register `opts.Events.Upcast<XxxV1, Xxx>("xxx", XxxUpcasts.FromV1)`;
+unit-test `FromV1`; integration-test that an old row loads as the new type.
+
+**Rebuild a projection** — `dotnet run --project AllSpice.CleanModularMonolith.ApiGateway -- projections rebuild`
+(or `-p <ProjectionName>`). Requires the same connection strings as the host.
+
 ---
 
 ## 6. Cross-cutting utilities (use these instead of reinventing)
@@ -206,6 +256,10 @@ EF_DESIGN_DB_PASSWORD=<local-pg-pw> dotnet ef migrations add <Name> \
 | File/blob storage | `IFileStorageService` + `FileStorageServiceExtensions.CreateFileStorageService` (Azurite/Azure Blob) |
 | Bounded log/response text | `StringExtensions.Truncate` |
 | Startup migrations w/ retry | `MigrationRunner.RunForModuleAsync<TContext>` |
+| Event-sourced aggregate base | `EventSourcedAggregate` (SharedKernel) |
+| Event-sourced persistence | `IEventSourcedRepository<T>` + `MartenEventSourcedRepository<T, TStore>` (EventSourcing) |
+| Register a module event store | `AddModuleEventStore<TStore, TContext>` / `ApplyEventStoreSchemaAsync<TStore>` |
+| Optimistic-concurrency failure | `ConcurrencyConflictException` (409 `concurrency_conflict`) |
 
 **Attaching a new EF interceptor:** register it in `AddSharedKernelInterceptors` (as a singleton `IInterceptor`).
 It is applied because each module registers its `DbContext` with the **SP-aware** Wolverine overload:

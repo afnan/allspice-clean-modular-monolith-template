@@ -18,12 +18,16 @@ docker build -t gateway:latest .
 docker run --rm -p 8080:8080 \
   -e ConnectionStrings__identitydb="Host=...;Database=identitydb;Username=...;Password=..." \
   -e ConnectionStrings__notificationsdb="Host=...;Database=notificationsdb;Username=...;Password=..." \
+  -e ConnectionStrings__ledgerdb="Host=...;Database=ledgerdb;Username=...;Password=..." \
   -e ConnectionStrings__messagingdb="Host=...;Database=messagingdb;Username=...;Password=..." \
   gateway:latest
 ```
 
 Health probes: `GET /alive` (liveness) and `GET /health` (readiness — fails until DB connectivity +
 migrations are healthy).
+
+Event-sourced modules also apply their Marten schema at startup (`ApplyAllConfiguredChangesToDatabaseAsync`);
+the runtime role needs DDL rights on the module schema (already true for EF migrations).
 
 ## Kubernetes
 
@@ -35,6 +39,7 @@ non-root/read-only-root security context, and resource requests/limits. Supply r
 kubectl create secret generic gateway-secrets \
   --from-literal=ConnectionStrings__identitydb='...' \
   --from-literal=ConnectionStrings__notificationsdb='...' \
+  --from-literal=ConnectionStrings__ledgerdb='...' \
   --from-literal=ConnectionStrings__messagingdb='...'
 kubectl apply -f deploy/k8s/
 ```

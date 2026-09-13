@@ -25,7 +25,7 @@ dotnet run --project YourProject.AppHost
 ```
 
 This automatically provisions:
-- **PostgreSQL** — databases for Identity and Notifications modules
+- **PostgreSQL** — databases for the Identity, Notifications, and Ledger (reference, deletable) modules
 - **Redis** — output caching and distributed cache
 - **Keycloak** — identity provider (admin UI at `http://localhost:8080`)
 - **Papercut SMTP** — email testing (UI at `http://localhost:37408`)
@@ -142,7 +142,8 @@ Then:
 1. Open the Aspire dashboard (URL shown in terminal output)
 2. Verify all services are healthy (green)
 3. Test the API at `https://localhost:7113/swagger`, or run the requests in
-   `YourProject.ApiGateway.http` (list users, queue a notification, idempotent retry, health probes)
+   `YourProject.ApiGateway.http` (list users, queue a notification, idempotent retry, health probes,
+   open a ledger account, deposit, read `/history`)
 4. Check Papercut for test emails at `http://localhost:37408`
 
 > **Deploying?** The gateway is the single container to ship — see [`deploy/README.md`](./deploy/README.md)
@@ -184,6 +185,24 @@ Then:
    // Add .WithReference(newModuleDb) to apiGateway
    ```
 
+5. *(Optional — only if golden rule 8 applies)* event-source an aggregate: follow AGENTS.md §5 'Add an
+   event-sourced aggregate'.
+
+## 7. Removing the Ledger sample
+
+The Ledger module exists to show event sourcing done properly. If you don't need it: delete
+`Services/YourProject.Ledger`, `tests/YourProject.Ledger.*`, and `Shared/YourProject.ApiContracts/Ledger`;
+remove their `<Project>` entries from the `.slnx`, **and** the two direct `<ProjectReference>`s to
+`YourProject.Ledger.csproj` in `YourProject.ApiGateway/YourProject.ApiGateway.csproj` and
+`tests/YourProject.Architecture.Tests/YourProject.Architecture.Tests.csproj` (the solution won't build with a
+dangling reference to a deleted project); in the gateway remove `AddLedgerModuleServices`,
+`EnsureLedgerModuleDatabaseAsync`, the `ledgerdb` connection-string check + ancillary store, and the Ledger
+assembly in `GatewayServiceCollectionExtensions`; remove `ledgerdb` from `AppHost.cs`; drop the Ledger
+rows from `Architecture.Tests`; remove the Ledger requests from `YourProject.ApiGateway.http`. Keep the
+`YourProject.ApiGateway.csproj` → `YourProject.EventSourcing.csproj` reference and
+`Shared/YourProject.EventSourcing` itself, along with the SharedKernel types — `HttpEventMetadataProvider` in
+the gateway uses `EventSourcing`, and both are the reusable part for your own event-sourced module later.
+
 ## Architecture Overview
 
 ```
@@ -204,6 +223,12 @@ Notifications Module
 ├── InApp: SignalR with external ID resolution
 ├── HTML templates (embedded resources)
 └── Background dispatcher with retry/backoff
+
+Ledger Module (reference, deletable — see §7)
+├── Account aggregate: event-sourced via Marten (ADR-0009)
+├── Marten session enlisted in LedgerDbContext's transaction
+├── Inline AccountSummary projection + /history audit endpoint
+└── AccountOpened → Notifications integration event
 ```
 
 ## Troubleshooting

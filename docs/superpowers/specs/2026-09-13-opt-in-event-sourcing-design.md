@@ -1,8 +1,8 @@
 # Opt-in Event Sourcing — Design
 
 **Date:** 2026-09-13
-**Status:** Approved (design); pending implementation plan
-**ADR:** 0009 (to be written with the implementation)
+**Status:** Implemented (2026-09-14) — see docs/superpowers/plans/2026-09-13-opt-in-event-sourcing.md
+**ADR:** [0009](../../adr/0009-opt-in-event-sourcing-marten-enlisted.md)
 **Scope:** Add event sourcing to the template as a **per-aggregate opt-in** inside a normal module. The default
 persistence model (EF Core aggregates + bespoke repositories + `TransactionBehavior`) is unchanged and remains
 the recommended path for most aggregates.

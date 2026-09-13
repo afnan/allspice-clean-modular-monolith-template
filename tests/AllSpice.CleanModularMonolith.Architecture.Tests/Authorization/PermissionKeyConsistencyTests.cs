@@ -31,6 +31,7 @@ public sealed class PermissionKeyConsistencyTests
     [
         typeof(AllSpice.CleanModularMonolith.Identity.Domain.Aggregates.User.User).Assembly,
         typeof(AllSpice.CleanModularMonolith.Notifications.Domain.Aggregates.Notification).Assembly,
+        typeof(AllSpice.CleanModularMonolith.Ledger.Domain.Aggregates.Account).Assembly,
     ];
 
     [Fact]

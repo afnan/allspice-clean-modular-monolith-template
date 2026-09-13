@@ -45,7 +45,9 @@ avoid duplicating them here.
   dotnet new uninstall AllSpice.CleanModularMonolith
   ```
   Verify the smoke-test output renamed correctly and that `CLAUDE.md`/`.serena` did **not** come across while
-  `AGENTS.md`/`ARCHITECTURE.md` did, with their `sourceName` references rewritten.
+  `AGENTS.md`/`ARCHITECTURE.md` did, with their `sourceName` references rewritten. The generated project
+  includes the Ledger module and needs a `ledgerdb` connection string; `WolverineFx.Marten` is deliberately
+  absent (ADR-0009).
 
 ## Build & test (same as a generated project)
 
