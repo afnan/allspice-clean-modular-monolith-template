@@ -14,6 +14,7 @@
     <Project Path="Shared/AllSpice.CleanModularMonolith.Pdf/AllSpice.CleanModularMonolith.Pdf.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.RealTime/AllSpice.CleanModularMonolith.RealTime.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.SharedKernel/AllSpice.CleanModularMonolith.SharedKernel.csproj" />
+    <Project Path="Shared/AllSpice.CleanModularMonolith.EventSourcing/AllSpice.CleanModularMonolith.EventSourcing.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.Identity.Abstractions/AllSpice.CleanModularMonolith.Identity.Abstractions.csproj" />
     <Project Path="Shared/AllSpice.CleanModularMonolith.Web/AllSpice.CleanModularMonolith.Web.csproj" />
   </Folder>
