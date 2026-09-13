@@ -36,8 +36,10 @@
     <ProjectReference Include="..\AllSpice.CleanModularMonolith.ServiceDefaults\AllSpice.CleanModularMonolith.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Services\AllSpice.CleanModularMonolith.Notifications\AllSpice.CleanModularMonolith.Notifications.csproj" />
     <ProjectReference Include="..\Services\AllSpice.CleanModularMonolith.Identity\AllSpice.CleanModularMonolith.Identity.csproj" />
+    <ProjectReference Include="..\Services\AllSpice.CleanModularMonolith.Ledger\AllSpice.CleanModularMonolith.Ledger.csproj" />
     <ProjectReference Include="..\Shared\AllSpice.CleanModularMonolith.RealTime\AllSpice.CleanModularMonolith.RealTime.csproj" />
     <ProjectReference Include="..\Shared\AllSpice.CleanModularMonolith.Identity.Abstractions\AllSpice.CleanModularMonolith.Identity.Abstractions.csproj" />
+    <ProjectReference Include="..\Shared\AllSpice.CleanModularMonolith.EventSourcing\AllSpice.CleanModularMonolith.EventSourcing.csproj" />
   </ItemGroup>
 
 </Project>
