@@ -5,6 +5,8 @@ using AllSpice.CleanModularMonolith.Ledger.Domain.Events;
 using AllSpice.CleanModularMonolith.Ledger.Domain.Events.Legacy;
 using AllSpice.CleanModularMonolith.Ledger.Domain.ValueObjects;
 using AllSpice.CleanModularMonolith.Ledger.Infrastructure.Persistence;
+using JasperFx;
+using JasperFx.Events;
 using Marten;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,14 +71,32 @@ public sealed class AccountRepositoryTests(LedgerHostFixture fixture) : IClassFi
     {
         var id = await OpenAsync();
 
-        // Write a row under the OLD stored name the way a pre-versioning deployment would have.
-        var store = fixture.Host.Services.GetRequiredService<ILedgerEventStore>();
-        await using (var session = store.LightweightSession())
+        // Write a row under the OLD stored name the way a pre-versioning deployment would have — through a
+        // SEPARATE, throwaway store (same connection + schema) configured with ONLY the mapping a legacy
+        // writer would have had, NOT through fixture.Host's store. The host's store must stay on the
+        // unmodified, production LedgerEventStoreConfiguration.Configure — it only knows FundsDepositedV1 as
+        // an Upcast source, never as something it would itself append — so the read below exercises exactly
+        // the production upcast path, not a test-only writer mapping smuggled into the read side too.
+        // Note: this writer store stamps mt_dotnet_type as ...Legacy.FundsDepositedV1, whereas a real
+        // pre-versioning row would carry ...Events.FundsDeposited (the type as it was named before the
+        // rename to Legacy.FundsDepositedV1); irrelevant here because production resolves upcasting by the
+        // stored "type" NAME ("funds_deposited"), never by mt_dotnet_type.
+        await using (var writerStore = DocumentStore.For(opts =>
+        {
+            opts.Connection(fixture.ConnectionString);
+            opts.DatabaseSchemaName = LedgerEventStoreConfiguration.SchemaName;
+            opts.AutoCreateSchemaObjects = AutoCreate.None;
+            opts.UseSystemTextJsonForSerialization();
+            opts.Events.AppendMode = EventAppendMode.Rich;
+            opts.Events.MapEventType<FundsDepositedV1>("funds_deposited");
+        }))
+        await using (var session = writerStore.LightweightSession())
         {
             session.Events.Append(id, new FundsDepositedV1(id, 42m, "AUD", Now));
             await session.SaveChangesAsync();
         }
 
+        // From here on, everything reads through the PRODUCTION-configured host store/repository.
         await using var scope = fixture.Host.Services.CreateAsyncScope();
         var repo = scope.ServiceProvider.GetRequiredService<IAccountRepository>();
 
@@ -87,6 +107,10 @@ public sealed class AccountRepositoryTests(LedgerHostFixture fixture) : IClassFi
         var upcast = Assert.IsType<FundsDeposited>(history[^1].Data);
         Assert.Equal(FundsDepositedUpcasts.LegacyReference, upcast.Reference);
         Assert.Equal("funds_deposited", history[^1].EventType);
+
+        // The inline AccountSummaryProjection has no Apply(IEvent<FundsDepositedV1>, ...) overload — it only
+        // knows FundsDeposited (the current shape) — so a raw legacy-shape append never touches the summary
+        // document. GetSummaryAsync for this stream is intentionally stale/unaffected by this test.
 
         await scope.ServiceProvider.GetRequiredService<LedgerDbContext>().Database.CurrentTransaction!.RollbackAsync();
     }

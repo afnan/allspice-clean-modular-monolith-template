@@ -1,6 +1,5 @@
 using AllSpice.CleanModularMonolith.EventSourcing;
 using AllSpice.CleanModularMonolith.Ledger.Application.Contracts.Persistence;
-using AllSpice.CleanModularMonolith.Ledger.Domain.Events.Legacy;
 using AllSpice.CleanModularMonolith.Ledger.Infrastructure.Persistence;
 using AllSpice.CleanModularMonolith.Ledger.Infrastructure.Repositories;
 using AllSpice.CleanModularMonolith.SharedKernel.Persistence;
@@ -22,26 +21,20 @@ public sealed class LedgerHostFixture : IAsyncLifetime
 
     public IHost Host { get; private set; } = null!;
 
+    /// <summary>Exposed so a test can open a SEPARATE store over the same database (see the legacy-upcast test) — the
+    /// host's own store must stay configured with the unmodified, production <see cref="LedgerEventStoreConfiguration.Configure"/>.</summary>
+    public string ConnectionString { get; private set; } = null!;
+
     public async Task InitializeAsync()
     {
         await _postgres.StartAsync();
         var cs = _postgres.GetConnectionString();
+        ConnectionString = cs;
 
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
         builder.Services.AddDbContext<LedgerDbContext>(o => o.UseNpgsql(cs));
         builder.Services.AddScoped<IModuleDbContext>(sp => sp.GetRequiredService<LedgerDbContext>());
-        // Test-only addition: FundsDepositedV1 is registered ONLY as an Upcast source in production config
-        // (LedgerEventStoreConfiguration never calls AddEventType/MapEventType for it — it is never raised by
-        // real code), so Marten has no writable mapping for it and Append() stores it under its own default
-        // type name ("funds_deposited_v1"), never triggering the upcast. The legacy-upcast test needs to
-        // write a row under the OLD stored name ("funds_deposited") the way a pre-versioning deployment would
-        // have, so — and ONLY here, never in production config — explicitly map FundsDepositedV1 to that name
-        // so a direct Append() lands under it and is upcast to FundsDeposited on read, exactly like history.
-        builder.AddModuleEventStore<ILedgerEventStore, LedgerDbContext>(cs, LedgerEventStoreConfiguration.SchemaName, opts =>
-        {
-            LedgerEventStoreConfiguration.Configure(opts);
-            opts.Events.MapEventType<FundsDepositedV1>("funds_deposited");
-        });
+        builder.AddModuleEventStore<ILedgerEventStore, LedgerDbContext>(cs, LedgerEventStoreConfiguration.SchemaName, LedgerEventStoreConfiguration.Configure);
         builder.Services.AddScoped<IAccountRepository, AccountRepository>();
         Host = builder.Build();
 
