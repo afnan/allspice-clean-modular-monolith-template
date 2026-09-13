@@ -69,6 +69,7 @@ public class ErrorHandlingMiddleware(
             FluentValidation.ValidationException => HttpStatusCode.BadRequest,
             UnauthorizedException => HttpStatusCode.Unauthorized,
             ForbiddenException => HttpStatusCode.Forbidden,
+            ConcurrencyConflictException => HttpStatusCode.Conflict,
             ConflictException => HttpStatusCode.Conflict,
             BusinessRuleViolationException => HttpStatusCode.UnprocessableEntity,
             IdentityServerUnreachableException => HttpStatusCode.ServiceUnavailable,
