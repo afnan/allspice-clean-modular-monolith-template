@@ -29,6 +29,7 @@ public class ArchitectureRulesTests
     private const string IdentityRoot = "AllSpice.CleanModularMonolith.Identity";
     private const string NotificationsRoot = "AllSpice.CleanModularMonolith.Notifications";
     private const string LedgerRoot = "AllSpice.CleanModularMonolith.Ledger";
+    private const string SourceGeneratedTypePrefix = "<"; // Marten's source generator emits aggregate 'Evolver' types into the aggregate's namespace (e.g. `<global__…AccountEvolver…>`); they carry Marten/JasperFx dependencies by construction. The purity rules govern hand-written types, so compiler/source-generated types (names start with '<') are excluded.
 
     // Infrastructure concerns that must never leak into a Domain layer.
 
@@ -64,6 +65,7 @@ public class ArchitectureRulesTests
 
         var result = Types.InAssembly(assembly)
             .That().ResideInNamespaceStartingWith($"{moduleRoot}.Domain")
+            .And().DoNotHaveNameStartingWith(SourceGeneratedTypePrefix)
             .ShouldNot().HaveDependencyOnAny(InfrastructureDependencies)
             .GetResult();
 
@@ -157,6 +159,7 @@ public class ArchitectureRulesTests
         // EventSourcedAggregate; Application uses IEventSourcedRepository. Only Infrastructure may see Marten.
         var result = Types.InAssembly(ModuleAssembly(moduleRoot))
             .That().DoNotResideInNamespaceStartingWith($"{moduleRoot}.Infrastructure")
+            .And().DoNotHaveNameStartingWith(SourceGeneratedTypePrefix)
             .ShouldNot().HaveDependencyOnAny("Marten", "JasperFx", "Weasel")
             .GetResult();
 
