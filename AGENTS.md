@@ -155,7 +155,9 @@ dotnet run --project AllSpice.CleanModularMonolith.AppHost/AllSpice.CleanModular
 - ❌ Hardcoded passwords/secrets/connection strings (including design-time and AppHost dev defaults that leak
   to non-dev).
 - ❌ Pinning package versions in individual `.csproj` files — versions live in `Directory.Packages.props`.
-- ❌ MVC controllers, broad `catch`-and-swallow, blanket `NoWarn`.
+- ❌ MVC controllers, broad `catch`-and-swallow, blanket `NoWarn`. (The one sanctioned exception: an
+  event-sourced module's project-scoped `<NoWarn>$(NoWarn);MSG0005</NoWarn>` — see §3 Infrastructure — is
+  narrow and documented, not blanket.)
 - ❌ Reading the clock directly (`DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.UtcNow`) in domain/application/
   infrastructure code. Inject **`TimeProvider`** and call `GetUtcNow()`; in domain aggregates take an explicit
   `nowUtc` timestamp parameter sourced from it (so time is deterministic and testable). The only literal

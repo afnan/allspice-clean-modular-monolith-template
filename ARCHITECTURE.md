@@ -133,7 +133,8 @@ participant on each drain-loop iteration and dispatches domain events from both,
 rolls back on failure. So: events + inline projection + EF rows + outbox envelope = one commit.
 
 **Read path.** Inline single-stream projections (`AccountSummary`) are updated in the same transaction and
-queried through `store.QuerySession()`; lists never replay streams. `HistoryAsync` returns the raw stream with
+queried through `Session.OpenQuerySession()` (module repositories, not the store directly); lists never
+replay streams. `HistoryAsync` returns the raw stream with
 metadata (version, sequence, timestamp, correlation id, `idempotency-key` header) — the audit trail.
 
 **Concurrency.** A concurrent append fails at flush with Marten's `ConcurrencyException`, translated to
@@ -159,21 +160,6 @@ event-sourced aggregate without running any constructor, then replays history st
 No state may depend on a field/property initializer or constructor logic — every property must be assigned by
 an `Apply` method, and any collection must be lazily initialized. `EventSourcedAggregate` and
 `HasDomainEventsBase` already do this for their uncommitted/domain-event lists.
-
-## Ledger module (reference)
-
-`Services/AllSpice.CleanModularMonolith.Ledger` — `Account` (open / deposit / withdraw / close), events
-`AccountOpened`, `FundsDeposited` (v2) / `FundsDepositedV1` (legacy, upcast), `FundsWithdrawn`,
-`AccountClosed` (archives the stream). `LedgerDbContext` has no entities: it owns the transaction and hosts the
-co-located outbox — its EF migration is therefore empty by design (the outbox envelope tables are
-`ExcludeFromMigrations`, provisioned separately by Wolverine's `Admin.MigrateAsync`). `AccountOpened` →
-`NotificationRequestedIntegrationEvent` proves event-sourced write + outbox atomicity without a new Contracts
-project. Endpoints under `/api/ledger/accounts` gated by `ledger:accounts.read|write`: `POST
-/api/ledger/accounts` (201 + Location), `POST …/{accountId}/deposits|withdrawals|close` (204), `GET
-…/{accountId}` (summary), `GET …/{accountId}/history` (audit trail). The Ledger `.csproj` carries a permanent
-project-scoped `<NoWarn>$(NoWarn);MSG0005</NoWarn>` — Mediator flags an `IDomainEvent` with no handler, and
-stream events other than `AccountOpened` intentionally have none. It exists to be copied or deleted — see
-GETTING_STARTED.md.
 
 ## Identity module
 
@@ -205,9 +191,24 @@ Email with provider fallback + in-app channel:
 - **Channels:** Email, InApp (SignalR; `Recipient.UserId` MUST be a local `Guid`, resolved to external ID for SignalR).
 - **Identity:** `NotificationPreference.UserId` is a local `Guid`; the dispatcher fails closed on a non-Guid recipient.
 
+## Ledger module (reference)
+
+`Services/AllSpice.CleanModularMonolith.Ledger` — `Account` (open / deposit / withdraw / close), events
+`AccountOpened`, `FundsDeposited` (v2) / `FundsDepositedV1` (legacy, upcast), `FundsWithdrawn`,
+`AccountClosed` (archives the stream). `LedgerDbContext` has no entities: it owns the transaction and hosts the
+co-located outbox — its EF migration is therefore empty by design (the outbox envelope tables are
+`ExcludeFromMigrations`, provisioned separately by Wolverine's `Admin.MigrateAsync`). `AccountOpened` →
+`NotificationRequestedIntegrationEvent` proves event-sourced write + outbox atomicity without a new Contracts
+project. Endpoints under `/api/ledger/accounts` gated by `ledger:accounts.read|write`: `POST
+/api/ledger/accounts` (201 + Location), `POST …/{accountId}/deposits|withdrawals|close` (204), `GET
+…/{accountId}` (summary), `GET …/{accountId}/history` (audit trail). The Ledger `.csproj` carries a permanent
+project-scoped `<NoWarn>$(NoWarn);MSG0005</NoWarn>` — Mediator flags an `IDomainEvent` with no handler, and
+stream events other than `AccountOpened` intentionally have none. It exists to be copied or deleted — see
+GETTING_STARTED.md.
+
 ## Database strategy
 
-Each module owns its DbContext and an Aspire database resource (`identitydb`, `notificationsdb`). The Wolverine
+Each module owns its DbContext and an Aspire database resource (`identitydb`, `notificationsdb`, `ledgerdb`). The Wolverine
 outbox is a **true transactional outbox**: each module's outbox envelope tables are **co-located in its own
 database** (`MapWolverineEnvelopeStorage` + an enrolled ancillary store), so an integration event commits
 atomically with the state change that produced it. The dedicated `messagingdb` is the Wolverine **main store**
@@ -249,8 +250,9 @@ mapped in **every** environment (orchestrators need them in production); keep th
 
 - **xUnit + Moq + coverlet**; integration tests use **Testcontainers** (Postgres) and SQLite.
 - **Architecture-fitness tests** (`tests/...Architecture.Tests`, NetArchTest) turn the golden rules into
-  build-time assertions: domain purity, module isolation, layer/naming conventions, sealed domain events,
-  Marten confined to Infrastructure, Ledger isolation, stream events sealed. They run as part of `dotnet test`
+  build-time assertions: domain purity, module isolation, layer/naming conventions, sealed domain events
+  (including event-sourced stream events, which are domain events), Marten confined to Infrastructure, Ledger
+  isolation. They run as part of `dotnet test`
   and in CI. When a rule legitimately changes, update the test in the same change.
   - Marten's compile-time source generator emits an aggregate "Evolver" type (`<global__…AccountEvolver…>`)
     into the aggregate's own Domain namespace of any project that references Marten and has `Apply` methods.
