@@ -67,7 +67,8 @@ Shared/AllSpice.CleanModularMonolith.EventSourcing/ -- NEW project (references M
   MartenTransactionParticipant.cs                   -- scoped; opens session inside the module tx
   MartenEventSourcedRepository.cs                   -- base for bespoke repositories
   IEventMetadataProvider.cs / HttpEventMetadataProvider.cs (gateway)  -- correlation + idempotency headers
-  MartenExceptionTranslator.cs                      -- ConcurrencyException -> ConcurrencyConflictException
+  IModuleEventStoreSession.cs                       -- what repositories need from the participant
+  (Marten ConcurrencyException -> ConcurrencyConflictException translation lives inside the participant's FlushAsync)
 
 Services/AllSpice.CleanModularMonolith.Ledger/       -- NEW reference module (see §6)
 
@@ -139,11 +140,14 @@ transaction.
 
 ## 5. Domain & infrastructure surface
 
-### 5.1 `EventSourcedAggregate<TId>` (SharedKernel, no Marten)
+### 5.1 `EventSourcedAggregate` (SharedKernel, no Marten)
+
+Stream ids are **`Guid`** (`Entity<Guid>`). Strong-typed ids for event-sourced aggregates are deferred (TODOS):
+Marten's live aggregation with strong-typed identifiers could not be verified against the docs, and a Guid
+keeps the reference implementation free of that risk.
 
 ```csharp
-public abstract class EventSourcedAggregate<TId> : Entity<TId>, IAggregateRoot, IEventSourcedAggregate
-    where TId : IEquatable<TId>
+public abstract class EventSourcedAggregate : Entity<Guid>, IAggregateRoot, IEventSourcedAggregate
 {
     public long Version { get; private set; }                 // stream version when loaded; set by the store
     public IReadOnlyList<IDomainEvent> UncommittedEvents { get; }
@@ -169,26 +173,26 @@ public abstract class EventSourcedAggregate<TId> : Entity<TId>, IAggregateRoot, 
 - **Version** is set by the repository from `IEventStream<T>.CurrentVersion` after `FetchForWriting`, not by
   a Marten property convention, so it does not depend on undocumented behaviour.
 
-### 5.2 `IEventSourcedRepository<TAggregate, TId>` (SharedKernel)
+### 5.2 `IEventSourcedRepository<TAggregate>` (SharedKernel)
 
 ```csharp
-public interface IEventSourcedRepository<TAggregate, TId>
+public interface IEventSourcedRepository<TAggregate> where TAggregate : EventSourcedAggregate
 {
-    Task<TAggregate?> LoadAsync(TId id, CancellationToken ct);          // FetchForWriting (write-intent)
+    Task<TAggregate?> LoadAsync(Guid id, CancellationToken ct);         // FetchForWriting (write-intent)
     Task AddAsync(TAggregate aggregate, CancellationToken ct);          // StartStream
     Task SaveAsync(TAggregate aggregate, CancellationToken ct);         // AppendMany (+ ArchiveStream)
-    Task<IReadOnlyList<StoredEvent>> HistoryAsync(TId id, CancellationToken ct); // stream + metadata
+    Task<IReadOnlyList<StoredEvent>> HistoryAsync(Guid id, CancellationToken ct); // stream + metadata
 }
 ```
 
-Golden rule 4 holds: each aggregate gets a bespoke `IXxxRepository : IEventSourcedRepository<Xxx, XxxId>`
-(plus any projection queries) and `XxxRepository : MartenEventSourcedRepository<...>`. Handlers depend on the
-bespoke interface.
+Golden rule 4 holds: each aggregate gets a bespoke `IXxxRepository : IEventSourcedRepository<Xxx>`
+(plus any projection queries) and `XxxRepository : MartenEventSourcedRepository<Xxx, IXxxEventStore>`. Handlers
+depend on the bespoke interface.
 
 `StoredEvent` (SharedKernel) = `(long Version, long Sequence, DateTimeOffset Timestamp, string EventType,
 string? CorrelationId, IReadOnlyDictionary<string, object?> Headers, IDomainEvent Data)`.
 
-### 5.3 `MartenEventSourcedRepository<TAggregate, TId, TStore, TContext>` (EventSourcing project)
+### 5.3 `MartenEventSourcedRepository<TAggregate, TStore>` (EventSourcing project)
 
 - `LoadAsync`: `session = await participant.GetSessionAsync(ct)`; `stream = await session.Events
   .FetchForWriting<TAggregate>(id.Value, ct)`; returns `null` when `stream.Aggregate is null`; otherwise sets
@@ -257,13 +261,14 @@ This also makes Wolverine's `codegen write` genuinely available (ARCHITECTURE.md
 
 Convention (documented in AGENTS.md, demonstrated in Ledger):
 
-1. Keep the **old CLR type** for deserialization, renamed with a version suffix (`FundsDepositedV1`), and pin
-   its stored name explicitly: `opts.Events.MapEventType<FundsDepositedV1>("funds_deposited")`.
+1. Keep the **old CLR type** for deserialization, renamed with a version suffix (`FundsDepositedV1`, a plain
+   record — not an `IDomainEvent`, never raised).
 2. The **new** shape keeps the canonical CLR name (`FundsDeposited`) and gets a **new stored name**:
    `opts.Events.MapEventType<FundsDeposited>("funds_deposited_v2")` — avoiding a collision with the old
    stored name (Marten's default snake_case mapping would otherwise reuse `funds_deposited`).
-3. Register `opts.Events.Upcast<FundsDepositedV1, FundsDeposited>("funds_deposited", v1 => …)` so old events
-   load as the new type. `Apply` methods exist only for the current shape.
+3. Register `opts.Events.Upcast<FundsDepositedV1, FundsDeposited>("funds_deposited", FundsDepositedUpcasts.FromV1)`;
+   the stored-name argument binds the old rows to `FundsDepositedV1`, and the pure `FromV1` function (Domain)
+   produces the current shape. `Apply` methods exist only for the current shape.
 4. Never edit or delete stored events.
 
 ### 5.9 Idempotency, correlation, PII
@@ -289,8 +294,8 @@ every part of §4–§5 so a developer can copy the shape. It is not a product f
 
 ### 6.1 Domain
 
-- `Account : EventSourcedAggregate<AccountId>` (`readonly record struct AccountId(Guid Value)`).
-  - `static Account Open(AccountId id, Guid ownerUserId, Currency currency, DateTimeOffset nowUtc)`
+- `Account : EventSourcedAggregate` (Guid id, see §5.1).
+  - `static Account Open(Guid accountId, Guid ownerUserId, Currency currency, DateTimeOffset nowUtc)`
   - `void Deposit(Money amount, string reference, DateTimeOffset nowUtc)` — positive amount, same currency,
     account open.
   - `void Withdraw(Money amount, string reference, DateTimeOffset nowUtc)` — as above **and** sufficient
@@ -329,14 +334,16 @@ every part of §4–§5 so a developer can copy the shape. It is not a product f
 
 ### 6.4 API
 
+Routes carry the template's existing `/api` prefix (cf. `/api/notifications`, `/api/identity/...`).
+
 | Method | Route | Permission |
 | --- | --- | --- |
-| POST | `/ledger/accounts` | `ledger:accounts.write` |
-| POST | `/ledger/accounts/{id}/deposits` | `ledger:accounts.write` |
-| POST | `/ledger/accounts/{id}/withdrawals` | `ledger:accounts.write` |
-| POST | `/ledger/accounts/{id}/close` | `ledger:accounts.write` |
-| GET | `/ledger/accounts/{id}` | `ledger:accounts.read` |
-| GET | `/ledger/accounts/{id}/history` | `ledger:accounts.read` |
+| POST | `/api/ledger/accounts` | `ledger:accounts.write` |
+| POST | `/api/ledger/accounts/{id}/deposits` | `ledger:accounts.write` |
+| POST | `/api/ledger/accounts/{id}/withdrawals` | `ledger:accounts.write` |
+| POST | `/api/ledger/accounts/{id}/close` | `ledger:accounts.write` |
+| GET | `/api/ledger/accounts/{id}` | `ledger:accounts.read` |
+| GET | `/api/ledger/accounts/{id}/history` | `ledger:accounts.read` |
 
 Response DTOs in `ApiContracts/Ledger`. Concurrency conflicts → 409 `concurrency_conflict`; insufficient
 funds → 422 `insufficient_funds`.
@@ -375,7 +382,8 @@ deferred (TODOS.md).
 | `SharedKernel.UnitTests` | `TransactionBehavior` with a fake participant: pending-only participant opens/commits a tx; early-opened tx is reused not re-opened; failure Result → `Discard` + rollback; exception → `Discard` + rollback; `FlushAsync` runs each drain iteration; participant domain events are dispatched; participant owner counted in the one-module guard (two modules → throws). `EventSourcedAggregate`: `Raise` applies + records + registers; `SetVersion`/`ClearUncommittedEvents`; `MarkForArchive`. |
 | `Ledger.Domain.UnitTests` (new) | Given-events/When/Then for every command; invariants (`insufficient_funds`, closed account, currency mismatch, non-zero close); replay determinism; `FundsDepositedV1 → FundsDeposited` upcaster. |
 | `Ledger.Application.UnitTests` (new) | Handlers with mocked `IAccountRepository`; `AccountOpened` handler publishes `NotificationRequestedIntegrationEvent`. |
-| `Ledger.Infrastructure.IntegrationTests` (new, Testcontainers Postgres) | Round trip (open → deposit → load → balance); concurrent writer → `ConcurrencyConflictException`; inline projection equals stream state; archive on close (excluded from default queries); `HistoryAsync` metadata (correlation, idempotency header, versions); `ApplyAllConfiguredChangesToDatabaseAsync` idempotent; legacy `funds_deposited` row upcasts on load. |
+| `EventSourcing.IntegrationTests` (new, Testcontainers Postgres) | The de-risking gate, with a probe aggregate and **before** Ledger exists: add/load round trip + version; unknown stream → null; rollback discards events and EF rows together; concurrent writer → `ConcurrencyConflictException`; domain events taken from tracked aggregates and cleared after flush; `HistoryAsync` metadata; archive on retire. |
+| `Ledger.Infrastructure.IntegrationTests` (new, Testcontainers Postgres) | Inline projection equals stream state (balance, status, version); unknown summary → null; close archives + summary reads Closed; legacy `funds_deposited` row upcasts on load and in history; current deposits stored as `funds_deposited_v2`; `ApplyAllConfiguredChangesToDatabaseAsync` idempotent. |
 | `Foundation.IntegrationTests` | Extend `OutboxAtomicityTests`/`TwoModuleHost` with an event-sourced probe: (a) append + EF row + envelope commit together; (b) handler failure **after** append → no events, no projection document, no envelope, no row. |
 | `Architecture.Tests` | Marten referenced only from `*.Infrastructure*` namespaces and the `EventSourcing` project; Ledger does not depend on Identity/Notifications internals (Contracts allowed) and vice-versa; existing rules (sealed domain events, aggregates in Domain, handlers in Application) applied to Ledger. |
 
@@ -392,6 +400,7 @@ test in `CLAUDE.md` (generated project builds; `ledgerdb` present; no `{{…}}` 
 - A `dotnet new` switch to exclude the Ledger sample.
 - Snapshotting of the write model beyond Marten live aggregation (register the aggregate as an inline
   snapshot if streams grow long; documented, not shipped).
+- Strong-typed ids for event-sourced aggregates (Guid stream ids ship; see §5.1).
 - `WolverineFx.Marten` / Marten-hosted outbox.
 
 ---
