@@ -20,11 +20,16 @@ namespace AllSpice.CleanModularMonolith.SharedKernel.EventSourcing;
 /// </summary>
 public abstract class EventSourcedAggregate : Entity<Guid>, IAggregateRoot, IEventSourcedAggregate
 {
-    private readonly List<IDomainEvent> _uncommittedEvents = [];
+    // Nullable + lazily initialized, NOT a field initializer: Marten's live aggregation (FetchForWriting /
+    // LiveStreamAggregation) rebuilds an aggregate by allocating it without running any constructor — field
+    // initializers never execute on that path — then replays history straight through Apply(TEvent). A plain
+    // `= []` field initializer is therefore only honoured when the aggregate is built through ordinary `new`
+    // (ProbeCounter.Start's static factory), and stays null on every aggregate loaded via LoadAsync.
+    private List<IDomainEvent>? _uncommittedEvents;
 
     public long Version { get; private set; }
 
-    public IReadOnlyList<IDomainEvent> UncommittedEvents => _uncommittedEvents.AsReadOnly();
+    public IReadOnlyList<IDomainEvent> UncommittedEvents => (_uncommittedEvents ??= []).AsReadOnly();
 
     public bool IsMarkedForArchive { get; private set; }
 
@@ -33,7 +38,7 @@ public abstract class EventSourcedAggregate : Entity<Guid>, IAggregateRoot, IEve
     {
         ArgumentNullException.ThrowIfNull(@event);
         When(@event);
-        _uncommittedEvents.Add(@event);
+        (_uncommittedEvents ??= []).Add(@event);
         RegisterDomainEvent(@event);
     }
 
@@ -48,5 +53,5 @@ public abstract class EventSourcedAggregate : Entity<Guid>, IAggregateRoot, IEve
 
     void IEventSourcedAggregate.SetVersion(long version) => Version = version;
 
-    void IEventSourcedAggregate.ClearUncommittedEvents() => _uncommittedEvents.Clear();
+    void IEventSourcedAggregate.ClearUncommittedEvents() => _uncommittedEvents?.Clear();
 }
