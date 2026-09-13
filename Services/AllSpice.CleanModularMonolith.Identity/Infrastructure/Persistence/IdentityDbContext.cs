@@ -20,6 +20,16 @@ public sealed class IdentityDbContext : DbContext, IModuleDbContext
         configurationBuilder.ApplyUtcDateTimeOffsetConversions();
     }
 
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        // Suppress PendingModelChangesWarning from Wolverine 6.36.0's MapWolverineEnvelopeStorage,
+        // which adds new model entities for envelope storage that don't require explicit migrations
+        // (they are managed by Wolverine's own migration mechanism).
+        optionsBuilder.ConfigureWarnings(w =>
+            w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+    }
+
     DbContext IModuleDbContext.Instance => this;
 
     public DbSet<User> Users => Set<User>();
