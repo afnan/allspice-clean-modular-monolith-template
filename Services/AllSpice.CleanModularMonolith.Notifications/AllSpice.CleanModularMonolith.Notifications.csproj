@@ -20,6 +20,7 @@
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <PackageReference Include="MailKit" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" VersionOverride="1.18.0" />
     <PackageReference Include="Resend" />
     <PackageReference Include="SendGrid" />
     <PackageReference Include="WolverineFx" />
